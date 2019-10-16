@@ -1,0 +1,31 @@
+[package]
+name = "evolutionmp-client"
+version = "0.1.0"
+authors = ["Radviger"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+detour = { version = "*", features = ["nightly"] }
+winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi"] }
+ntapi = "*"
+windows-acl = "*"
+winreg = "*"
+bytebuffer = "*"
+libloading = "*"
+widestring = "*"
+fail = "*"
+bincode = "*"
+serde = "*"
+dirs = "*"
+libc = "*"
+
+[[bin]]
+name = "launcher"
+path = "src/launcher/main.rs"
+
+[lib]
+name = "evolutionmp"
+path = "src/evolutionmp/main.rs"
+crate_type = ["rlib", "cdylib"]
