@@ -1,6 +1,7 @@
 use crate::invoke;
 use crate::game::{Handle, Vector3, Hash};
 use std::ffi::CString;
+use winapi::_core::mem::ManuallyDrop;
 
 pub unsafe fn exists(handle: Handle) -> bool {
     invoke!(bool, 0x7239B21A38F536BA, handle)
@@ -23,7 +24,7 @@ pub unsafe fn is_dead(handle: Handle) -> bool {
 }
 
 pub unsafe fn get_position(handle: Handle) -> Vector3 {
-    invoke!(Vector3, 0x3FEF770D40960D5A, handle)
+    invoke!(Vector3, 0x3FEF770D40960D5A, handle, !is_dead(handle))
 }
 
 pub unsafe fn get_rotation(handle: Handle, order: u32) -> Vector3 {
@@ -58,6 +59,6 @@ pub unsafe fn get_model(handle: Handle) -> Hash {
     invoke!(Hash, 0x9F47B058362C84B5, handle)
 }
 
-pub unsafe fn is_animation_finished(handle: Handle, dictionary: CString, name: CString) -> bool {
+pub unsafe fn is_animation_finished(handle: Handle, dictionary: &str, name: &str) -> bool {
     invoke!(bool, 0x20B711662962B472, handle, dictionary, name)
 }

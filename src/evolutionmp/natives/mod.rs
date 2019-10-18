@@ -1,14 +1,15 @@
 use crate::pattern::Region;
 use crate::{info, error};
+use crate::game::Vector3;
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
+use std::ffi::{CString, CStr};
+use std::mem::ManuallyDrop;
+use std::os::raw::c_char;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::basetsd::DWORD64;
-use std::collections::HashMap;
 use winapi::ctypes::c_void;
-use std::ffi::CString;
-use std::mem::ManuallyDrop;
 use widestring::WideCString;
-use crate::game::Vector3;
 
 pub mod ui;
 pub mod system;
@@ -24,11 +25,11 @@ pub(crate) unsafe fn init(global_region: &Region) {
 }
 
 pub static mut ARG: UnsafeCell<NativeArgStack> = UnsafeCell::new(NativeArgStack {
-    stack: [0; 32]
+    stack: [0u64; 32]
 });
 
 pub static mut RETURN: UnsafeCell<NativeReturnStack> = UnsafeCell::new(NativeReturnStack {
-    stack: [0; 3]
+    stack: [0u64; 3]
 });
 
 pub static mut CONTEXT: UnsafeCell<NativeCallContext> = UnsafeCell::new(NativeCallContext {
@@ -56,15 +57,17 @@ struct NativeRegistrationTable {
     initialized: bool
 }
 
+pub type SetVectorResults = unsafe extern "stdcall" fn(*mut NativeCallContext);
+
 impl NativeRegistration {
     pub unsafe fn get_next_registration(&self) -> *mut NativeRegistration {
-        let mut addr: *mut u32 = std::mem::transmute(&self.next_registration_1);
+        let addr: *mut u32 = std::mem::transmute(&self.next_registration_1);
         let mask = (addr as u64 as u32 ^ *addr.offset(2)) as u64;
         std::mem::transmute((mask << 32 | mask) ^ *(addr as *mut u64))
     }
 
     pub unsafe fn get_num_entries(&self) -> usize {
-        let mut addr: *mut u32 = std::mem::transmute(&self.num_entries_1);
+        let addr: *mut u32 = std::mem::transmute(&self.num_entries_1);
         (addr as u64 as u32 ^ self.num_entries_1 ^ self.num_entries_2) as usize
     }
 
@@ -77,8 +80,35 @@ impl NativeRegistration {
 }
 
 pub trait NativeStackValue {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self where Self: Sized;
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack);
+    unsafe fn read_from_stack(stack: *const u64) -> Self where Self: Sized {
+        let size = std::mem::size_of::<Self>();
+        if size <= 8 {
+            ((stack as *const u8).add(8 - size) as *const Self).read()
+        } else {
+            panic!(
+                "Cannot read value of type `{}` from stack as it exceeds default reader's size limits ({} bytes)",
+                std::any::type_name::<Self>(),
+                size
+            )
+        }
+    }
+
+    unsafe fn write_to_stack(self, stack: *mut u64) where Self: Sized {
+        let size = std::mem::size_of::<Self>();
+        if size <= 8 {
+            ((stack as *mut u8).add(8 - size) as *mut Self).write(self)
+        } else {
+            panic!(
+                "Cannot write value of type `{}` to stack as it exceeds default writer's size limits ({} bytes)",
+                std::any::type_name::<Self>(),
+                size
+            )
+        }
+    }
+
+    fn get_stack_size(&self) -> usize {
+        1
+    }
 }
 
 #[repr(C)]
@@ -88,7 +118,7 @@ pub struct NativeReturnStack {
 
 impl NativeReturnStack {
     pub fn get<T>(&self) -> T where T: NativeStackValue {
-        T::read_from_stack(&self)
+        unsafe { T::read_from_stack(self.stack.as_ptr()) }
     }
 }
 
@@ -98,8 +128,8 @@ pub struct NativeArgStack {
 }
 
 impl NativeArgStack {
-    pub fn set<T>(&mut self, index: &mut usize, value: T) where T: NativeStackValue {
-        value.write_to_stack(index, self)
+    pub fn set<T>(&mut self, index: usize, value: T) where T: NativeStackValue {
+        unsafe { value.write_to_stack(self.stack.as_mut_ptr().add(index)) }
     }
 }
 
@@ -116,7 +146,8 @@ type NativeHandler = extern "C" fn(*mut NativeCallContext) -> *mut ();
 
 pub struct Natives {
     mappings: HashMap<u64, u64>,
-    table: *mut NativeRegistrationTable
+    table: *mut NativeRegistrationTable,
+    vector_fixer: SetVectorResults
 }
 
 unsafe impl Sync for Natives {}
@@ -126,10 +157,12 @@ impl Natives {
         let table = global_region.find("76 32 48 8B 53 40")
             .next().expect("native table")
             .add(9).rip(4).get_mut::<NativeRegistrationTable>();
+        let vector_fixer: SetVectorResults = std::mem::transmute(global_region.find("83 79 18 ? 48 8B D1 74 4A FF 4A 18")
+            .next().expect("vector fixer").as_mut_ptr());
 
         let mappings = crate::mappings::MAPPINGS.iter().map(|a| (a[0], a[1])).collect::<HashMap<_, _>>();
 
-        Natives { mappings, table }
+        Natives { mappings, table, vector_fixer }
     }
 
     pub unsafe fn get_handler(&self, native: u64) -> Option<NativeHandler> {
@@ -155,6 +188,10 @@ impl Natives {
 
         None
     }
+
+    pub unsafe fn set_vector_result(&self, context: *mut NativeCallContext) {
+        (self.vector_fixer)(context)
+    }
 }
 
 #[macro_export]
@@ -173,6 +210,8 @@ macro_rules! invoke {
         (*$crate::natives::RETURN.get()).get::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
+        use $crate::natives::NativeStackValue;
+
         let hash: u64 = $hash;
 
         let natives = $crate::natives::NATIVES.as_mut().expect("Natives aren't initialized yet");
@@ -180,118 +219,57 @@ macro_rules! invoke {
         let mut i = 0usize;
         $(
             let arg = $arg;
-            (*$crate::natives::ARG.get()).set(&mut i, arg);
-            i += 1;
+            let s = arg.get_stack_size();
+            (*$crate::natives::ARG.get()).set(i, arg);
+            i += s;
         )*
         {
             let mut ctx = $crate::natives::CONTEXT.get();
             (*ctx).arg_count = i as u32;
             (*ctx).data_count = 0;
             handler(ctx);
+            natives.set_vector_result(ctx);
         }
         (*$crate::natives::RETURN.get()).get::<$ret>()
     }};
 }
 
-impl NativeStackValue for CString {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        ManuallyDrop::into_inner(ManuallyDrop::<Self>::read_from_stack(stack).clone())
+impl NativeStackValue for &str {
+    unsafe fn read_from_stack(stack: *const u64) -> Self {
+        CStr::from_ptr(stack.read() as *const c_char as *mut _).to_str()
+            .expect("Failed to read C string")
     }
 
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = self.into_raw() as u64
-    }
-}
-
-impl NativeStackValue for ManuallyDrop<CString> {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        unsafe {
-            ManuallyDrop::new(CString::from_raw(std::mem::transmute(stack.stack[0])))
-        }
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = ManuallyDrop::into_inner(self).into_raw() as u64
+    unsafe fn write_to_stack(self, stack: *mut u64) {
+        let native = CString::new(self).expect("Failed to write C string");
+        stack.write(native.as_ptr() as u64);
+        std::mem::forget(native);
     }
 }
 
-impl NativeStackValue for WideCString {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        ManuallyDrop::into_inner(ManuallyDrop::<Self>::read_from_stack(stack).clone())
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = self.into_raw() as u64
-    }
-}
-
-impl NativeStackValue for ManuallyDrop<WideCString> {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        unsafe {
-            ManuallyDrop::new(WideCString::from_raw(std::mem::transmute(stack.stack[0])))
-        }
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = ManuallyDrop::into_inner(self).into_raw() as u64
-    }
-}
-
-impl NativeStackValue for u32 {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        stack.stack[0] as u32
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = self as u64
-    }
-}
-
-impl NativeStackValue for u64 {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        stack.stack[0]
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = self
-    }
-}
-
-impl NativeStackValue for f32 {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        f32::from_bits(stack.stack[0] as u32)
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = self.to_bits() as u64
-    }
-}
-
-impl NativeStackValue for bool {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        stack.stack[0] == 1
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {
-        stack.stack[0] = self as u64
-    }
-}
-
-impl NativeStackValue for () {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        ()
-    }
-
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {}
-}
+impl NativeStackValue for i32 {}
+impl NativeStackValue for u32 {}
+impl NativeStackValue for f32 {}
+impl NativeStackValue for bool {}
+impl NativeStackValue for () {}
 
 impl NativeStackValue for Vector3 {
-    fn read_from_stack(stack: &NativeReturnStack) -> Self {
-        let x = f32::from_bits(stack.stack[0] as u32);
-        let y = f32::from_bits(stack.stack[1] as u32);
-        let z = f32::from_bits(stack.stack[2] as u32);
+    unsafe fn read_from_stack(stack: *const u64) -> Self {
+        let stack = stack as *const f32;
+        let x = stack.offset(1).read();
+        let y = stack.offset(3).read();
+        let z = stack.offset(5).read();
         Vector3::new(x, y, z)
     }
 
-    fn write_to_stack(self, index: &mut usize, stack: &mut NativeArgStack) {}
+    unsafe fn write_to_stack(self, stack: *mut u64) {
+        let stack = stack as *mut f32;
+        stack.add(1).write(self.x);
+        stack.add(3).write(self.y);
+        stack.add(5).write(self.z);
+    }
+
+    fn get_stack_size(&self) -> usize {
+        3
+    }
 }

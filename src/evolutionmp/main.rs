@@ -11,7 +11,7 @@ use crate::win::ps::get_current_process;
 use std::ptr::null_mut;
 use ntapi::winapi::_core::time::Duration;
 use crate::pattern::{Region, RegionIterator};
-use winapi::um::winuser::{MessageBeep, MB_ICONSTOP, VK_RETURN};
+use winapi::um::winuser::{MessageBeep, MB_ICONSTOP, VK_RETURN, VK_NUMPAD5, VK_TAB, VK_SPACE};
 use ntapi::winapi::_core::panic::PanicInfo;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
 use winapi::ctypes::c_void;
@@ -31,6 +31,7 @@ use crate::hash::joaat;
 use crate::game::player::Player;
 use crate::game::entity::Entity;
 use crate::game::ui::{CursorSprite, LoadingPrompt};
+use crate::win::input::{InputHook, KeyEvent};
 
 pub mod win;
 pub mod hash;
@@ -63,12 +64,15 @@ fn attach(instance: HMODULE) {
 
         //global_region.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
         //global_region.find("72 1F E8 ? ? ? ? 8B 0D").next().expect("legals").nop(2); //Disable legals
-        global_region.find("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76").next().expect("movie").nop(13); //Disable movie
+        global_region.find("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76")
+            .next().expect("movie").nop(13); //Disable movie
+        global_region.find("72 6F 63 6B 73 74 61 72 5F 6C 6F 67 6F 73 00 62 69 6B")
+            .next().expect("news").replace("32 73 65 63 6F 6E 64 73 62 6C 61 63 6B 2E 62 69 6B 00");
 
         natives::init(&global_region);
 
         std::thread::spawn(move || {
-            let mut input = win::input::init().expect("Input hooking failed");
+            let mut input = win::input::InputHook::new().expect("Input hooking failed");
             let mut game_state = global_region.find("83 3D ? ? ? ? ? 8A D9 74 0A")
                 .next().expect("game state").add(2).rip(5).get::<GameState>();
 
@@ -76,17 +80,23 @@ fn attach(instance: HMODULE) {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            let mut set = false;
-
             loop {
                 while let Some(event) = input.next_event() {
-                    if event.key == VK_RETURN && !event.is_up {
-                        if !set {
-                            set = true;
-                            game::ui::set_cursor_sprite(CursorSprite::MiddleFinger);
-                        } else {
-                            set = false;
-                            game::ui::set_cursor_sprite(CursorSprite::Add);
+                    if !event.is_up {
+                        match event.key {
+                            VK_SPACE => {
+                                let ped = game::ped::Ped::local();
+                                game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, &format!("Привет, {}", ped.get_handle()));
+                                let pos = ped.get_position();
+                                let heading = ped.get_heading();
+                                Vehicle::new(0x91CA96EE, pos, heading, false, false);
+                            },
+                            VK_TAB => {
+                                let ped = game::ped::Ped::local();
+                                let veh = ped.is_in_any_vehicle(false);
+                                game::ui::show_subtitle(&format!("Vehicle: {}", veh), 50, true)
+                            }
+                            _ => {}
                         }
                     }
                 }

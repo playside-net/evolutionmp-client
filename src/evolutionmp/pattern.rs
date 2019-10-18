@@ -168,6 +168,12 @@ impl Region {
         }
     }
 
+    pub unsafe fn replace<P>(&self, pattern: P) where P: Into<Pattern> {
+        for (i, b) in pattern.into().nibbles.iter().map(|n|n.unwrap()).enumerate() {
+            self.base.add(i).write(b)
+        }
+    }
+
     pub unsafe fn protect(&self, size: usize, mode: DWORD, old_mode: &mut DWORD) -> bool {
         VirtualProtect(self.base as *mut _, size, mode, old_mode) == TRUE
     }

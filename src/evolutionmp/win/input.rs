@@ -25,20 +25,12 @@ impl EventPool {
 }
 
 #[derive(Debug)]
-pub struct KeyState {
-    last_up_time: u32,
-    is_with_alt: bool,
-    was_down_before: bool,
-    is_up_now: bool
-}
-
-#[derive(Debug)]
 pub struct KeyEvent {
     pub key: i32,
     pub repeats: u16,
     pub scan_code: u8,
     pub is_extended: bool,
-    pub is_with_alt: bool,
+    pub alt: bool,
     pub was_down_before: bool,
     pub is_up: bool
 }
@@ -52,7 +44,7 @@ pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lp
             repeats: (lparam & 0xFFFF) as u16,
             scan_code: ((lparam >> 16) & 0xFF) as u8,
             is_extended: ((lparam >> 24) & 1) == 1,
-            is_with_alt: alt,
+            alt,
             was_down_before: ((lparam >> 30) & 1) == 1,
             is_up: msg == WM_SYSKEYUP || msg == WM_KEYUP
         };
@@ -66,6 +58,26 @@ pub struct InputHook {
 }
 
 impl InputHook {
+    pub unsafe fn new() -> Option<InputHook> {
+        let (sender, receiver) = channel::<KeyEvent>();
+        EVENT_POOL.replace(EventPool { sender });
+        let mut handle: HWND = std::ptr::null_mut();
+        let window = CString::new("grcWindow").unwrap();
+        while handle.is_null() {
+            handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let proc = std::mem::transmute(SetWindowLongPtrA(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
+        WND_PROC = proc;
+        if proc.is_none() {
+            None
+        } else {
+            Some(InputHook {
+                receiver
+            })
+        }
+    }
+
     pub fn next_event(&mut self) -> Option<KeyEvent> {
         self.receiver.try_recv().ok()
     }
@@ -78,25 +90,5 @@ impl std::ops::Drop for InputHook {
             let handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
             SetWindowLongPtrA(handle, GWLP_WNDPROC, std::mem::transmute(WND_PROC.unwrap()));
         }
-    }
-}
-
-pub unsafe fn init() -> Option<InputHook> {
-    let (sender, receiver) = channel::<KeyEvent>();
-    EVENT_POOL.replace(EventPool { sender });
-    let mut handle: HWND = std::ptr::null_mut();
-    let window = CString::new("grcWindow").unwrap();
-    while handle.is_null() {
-        handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    let proc = std::mem::transmute(SetWindowLongPtrA(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
-    WND_PROC = proc;
-    if proc.is_none() {
-        None
-    } else {
-        Some(InputHook {
-            receiver
-        })
     }
 }

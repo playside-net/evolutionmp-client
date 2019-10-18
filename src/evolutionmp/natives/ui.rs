@@ -1,7 +1,6 @@
 use super::NativeStackValue;
 use crate::invoke;
-use std::ffi::CString;
-use widestring::WideCString;
+use std::io::Read;
 
 pub unsafe fn set_credits_active(active: bool) {
     invoke!((), 0xB938B7E6D3C0620C, active);
@@ -19,7 +18,7 @@ pub unsafe fn is_loading_prompt_visible() -> bool {
     invoke!(bool, 0xD422FCC5F239A915)
 }
 
-pub unsafe fn set_loading_prompt_text_entry(entry: CString) {
+pub unsafe fn set_loading_prompt_text_entry(entry: &str) {
     invoke!((), 0xABA17D7CE615ADBF, entry)
 }
 
@@ -27,10 +26,20 @@ pub unsafe fn show_loading_prompt(spinner_type: u32) {
     invoke!((), 0xBD12F8228410D9B4, spinner_type)
 }
 
-pub unsafe fn push_string(string: CString) {
-    invoke!((), 0x6C188BE134E074AA, string)
+pub unsafe fn push_string(string: &str) {
+    for s in string.as_bytes().chunks(99).map(|c|std::str::from_utf8_unchecked(c)) {
+        invoke!((), 0x6C188BE134E074AA, s)
+    }
 }
 
 pub unsafe fn set_cursor_sprite(sprite: u32) {
     invoke!((), 0x8DB8CFFD58B62552, sprite)
+}
+
+pub unsafe fn set_notification_text_entry(ty: &str) {
+    invoke!((), 0x202709F4C58A0424, ty)
+}
+
+pub unsafe fn show_notification(duration: bool, immediately: bool) {
+    invoke!((), 0x9D77056A530643F6, duration, immediately)
 }

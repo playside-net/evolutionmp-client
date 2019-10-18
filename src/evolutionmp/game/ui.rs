@@ -1,11 +1,21 @@
 use std::ffi::CString;
 use widestring::WideCString;
+use winapi::_core::mem::ManuallyDrop;
 
 pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {
     unsafe {
-        crate::natives::ui::set_loading_prompt_text_entry(CString::new("STRING").unwrap());
-        crate::natives::ui::push_string(CString::new(text).unwrap());
+        crate::natives::ui::set_loading_prompt_text_entry("STRING");
+        crate::natives::ui::push_string(text);
         crate::natives::ui::show_loading_prompt(ty as u32);
+    }
+}
+
+pub fn show_subtitle(text: &str, duration: i32, immediately: bool) {
+    unsafe {
+        use crate::invoke;
+        invoke!((), 0xB87A37EEB7FAA67D, "STRING");
+        crate::natives::ui::push_string(text);
+        invoke!((), 0x9D77056A530643F6, duration, immediately);
     }
 }
 

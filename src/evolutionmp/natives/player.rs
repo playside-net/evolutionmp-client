@@ -1,9 +1,8 @@
 use crate::invoke;
 use crate::game::Handle;
-use widestring::WideCString;
 
-pub unsafe fn get_name() -> WideCString {
-    invoke!(WideCString, 0x6D0DE6A7B5DA71F8)
+pub unsafe fn get_name<'a>() -> &'a str {
+    invoke!(&str, 0x6D0DE6A7B5DA71F8)
 }
 
 pub unsafe fn is_online() -> bool {
@@ -24,4 +23,12 @@ pub unsafe fn set_invincible(player: Handle, invincible: bool) {
 
 pub unsafe fn is_invincible(player: Handle) -> bool {
     invoke!(bool, 0xB721981B2B939E07, player)
+}
+
+pub unsafe fn get_ped(player: Handle) -> Handle {
+    invoke!(Handle, 0x43A66C31C68491C0, player)
+}
+
+pub unsafe fn get_local_ped() -> Handle {
+    invoke!(Handle, 0xD80958FC74E988A6)
 }

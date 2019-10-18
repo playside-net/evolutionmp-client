@@ -307,8 +307,7 @@ impl<'a, T> VirtualAlloc<'a, T> where T: VirtualData {
             if size != bytes_read {
                 Err(VirtualAllocError::ReadBytesMismatch(size, bytes_read))
             } else {
-                let mut value = T::read(data);
-                Ok(value)
+                Ok(T::read(data))
             }
         } else {
             Err(VirtualAllocError::ReadFailed(unsafe { GetLastError() }))

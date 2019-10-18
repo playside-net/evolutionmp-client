@@ -49,8 +49,8 @@ pub trait Entity {
         unsafe {
             crate::natives::entity::is_animation_finished(
                 self.get_handle(),
-                CString::new(dictionary).unwrap(),
-                CString::new(name).unwrap()
+                dictionary,
+                name
             )
         }
     }

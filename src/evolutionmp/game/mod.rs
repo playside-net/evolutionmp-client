@@ -1,11 +1,13 @@
 pub mod entity;
 pub mod player;
+pub mod ped;
 pub mod vehicle;
 pub mod ui;
 
-pub type Handle = u32;
+pub type Handle = i32;
 pub type Hash = u32;
 
+#[derive(Debug)]
 pub struct Vector3 {
     pub x: f32,
     pub y: f32,
@@ -18,6 +20,7 @@ impl Vector3 {
     }
 }
 
+#[derive(Debug)]
 pub struct Vector2 {
     pub x: f32,
     pub y: f32
