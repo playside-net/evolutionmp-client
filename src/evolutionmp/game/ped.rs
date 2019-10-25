@@ -9,13 +9,13 @@ pub struct Ped {
 impl Ped {
     pub fn from_player(player: &Player) -> Ped {
         Ped {
-            handle: unsafe { crate::natives::player::get_ped(player.get_handle()) }
+            handle: unsafe { crate::native::player::get_ped(player.get_handle()) }
         }
     }
 
     pub fn local() -> Ped {
         Ped {
-            handle: unsafe { crate::natives::player::get_local_ped() }
+            handle: unsafe { crate::native::player::get_local_ped() }
         }
     }
 

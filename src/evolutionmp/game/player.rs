@@ -8,7 +8,7 @@ pub struct Player {
 
 impl Player {
     pub fn local() -> Player {
-        let handle = unsafe { crate::natives::player::get_local_handle() };
+        let handle = unsafe { crate::native::player::get_local_handle() };
         Player { handle }
     }
 

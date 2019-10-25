@@ -234,7 +234,7 @@ impl ProcessHandle {
 
     pub fn virtual_alloc<T>(&self, value: &T, address: LPVOID, allocation_type: DWORD, protect: DWORD) -> Result<VirtualAlloc<T>, VirtualAllocError> where T: VirtualData {
         let size = value.get_size();
-        let mut alloc = unsafe { self.virtual_alloc_uninit::<T>(address, size, allocation_type, protect) }?;
+        let alloc = unsafe { self.virtual_alloc_uninit::<T>(address, size, allocation_type, protect) }?;
         alloc.write(value)?;
         Ok(alloc)
     }

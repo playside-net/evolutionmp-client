@@ -1,6 +1,6 @@
-use crate::pattern::Region;
+use crate::pattern::MemoryRegion;
 use crate::{info, error};
-use crate::game::Vector3;
+use crate::game::{Vector3, Vector2, Rgba, Rgb};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ffi::{CString, CStr};
@@ -9,18 +9,21 @@ use std::os::raw::c_char;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::basetsd::DWORD64;
 use winapi::ctypes::c_void;
-use widestring::WideCString;
+use std::time::Duration;
 
 pub mod ui;
+pub mod graphics;
+pub mod scaleform;
 pub mod system;
 pub mod entity;
 pub mod player;
 pub mod vehicle;
 pub mod socialclub;
+pub mod collection;
 
 pub static mut NATIVES: Option<Natives> = None;
 
-pub(crate) unsafe fn init(global_region: &Region) {
+pub(crate) unsafe fn init(global_region: &MemoryRegion) {
     NATIVES = Some(Natives::new(global_region));
 }
 
@@ -142,7 +145,7 @@ pub struct NativeCallContext {
     pub data: [u32; 48],
 }
 
-type NativeHandler = extern "C" fn(*mut NativeCallContext) -> *mut ();
+type NativeHandler = extern "C" fn(*mut NativeCallContext);
 
 pub struct Natives {
     mappings: HashMap<u64, u64>,
@@ -153,12 +156,13 @@ pub struct Natives {
 unsafe impl Sync for Natives {}
 
 impl Natives {
-    pub unsafe fn new(global_region: &Region) -> Natives {
-        let table = global_region.find("76 32 48 8B 53 40")
-            .next().expect("native table")
-            .add(9).rip(4).get_mut::<NativeRegistrationTable>();
-        let vector_fixer: SetVectorResults = std::mem::transmute(global_region.find("83 79 18 ? 48 8B D1 74 4A FF 4A 18")
-            .next().expect("vector fixer").as_mut_ptr());
+    pub unsafe fn new(global_region: &MemoryRegion) -> Natives {
+        let table = global_region.find_first_await("76 32 48 8B 53 40", 50, 1000)
+            .expect("native table").add(9).read_ptr(4).get_mut::<NativeRegistrationTable>();
+        let vector_fixer: SetVectorResults = std::mem::transmute(
+            global_region.find_first_await("83 79 18 ? 48 8B D1 74 4A FF 4A 18", 50, 1000)
+                .expect("vector fixer").as_mut_ptr()
+        );
 
         let mappings = crate::mappings::MAPPINGS.iter().map(|a| (a[0], a[1])).collect::<HashMap<_, _>>();
 
@@ -185,8 +189,6 @@ impl Natives {
                 return None;
             }
         }
-
-        None
     }
 
     pub unsafe fn set_vector_result(&self, context: *mut NativeCallContext) {
@@ -199,38 +201,38 @@ macro_rules! invoke {
     ($ret: ty, $hash:literal) => {{
         let hash: u64 = $hash;
 
-        let natives = $crate::natives::NATIVES.as_mut().expect("Natives aren't initialized yet");
+        let natives = $crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
         let handler = natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash));
         {
-            let mut ctx = $crate::natives::CONTEXT.get();
+            let mut ctx = $crate::native::CONTEXT.get();
             (*ctx).arg_count = 0;
             (*ctx).data_count = 0;
             handler(ctx);
         }
-        (*$crate::natives::RETURN.get()).get::<$ret>()
+        (*$crate::native::RETURN.get()).get::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
-        use $crate::natives::NativeStackValue;
+        use $crate::native::NativeStackValue;
 
         let hash: u64 = $hash;
 
-        let natives = $crate::natives::NATIVES.as_mut().expect("Natives aren't initialized yet");
+        let natives = $crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
         let handler = natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash));
         let mut i = 0usize;
         $(
             let arg = $arg;
             let s = arg.get_stack_size();
-            (*$crate::natives::ARG.get()).set(i, arg);
+            (*$crate::native::ARG.get()).set(i, arg);
             i += s;
         )*
         {
-            let mut ctx = $crate::natives::CONTEXT.get();
+            let mut ctx = $crate::native::CONTEXT.get();
             (*ctx).arg_count = i as u32;
             (*ctx).data_count = 0;
             handler(ctx);
             natives.set_vector_result(ctx);
         }
-        (*$crate::natives::RETURN.get()).get::<$ret>()
+        (*$crate::native::RETURN.get()).get::<$ret>()
     }};
 }
 
@@ -246,12 +248,6 @@ impl NativeStackValue for &str {
         std::mem::forget(native);
     }
 }
-
-impl NativeStackValue for i32 {}
-impl NativeStackValue for u32 {}
-impl NativeStackValue for f32 {}
-impl NativeStackValue for bool {}
-impl NativeStackValue for () {}
 
 impl NativeStackValue for Vector3 {
     unsafe fn read_from_stack(stack: *const u64) -> Self {
@@ -273,3 +269,71 @@ impl NativeStackValue for Vector3 {
         3
     }
 }
+
+impl NativeStackValue for Vector2 {
+    unsafe fn read_from_stack(stack: *const u64) -> Self {
+        let stack = stack as *const f32;
+        let x = stack.offset(1).read();
+        let y = stack.offset(3).read();
+        Vector2::new(x, y)
+    }
+
+    unsafe fn write_to_stack(self, stack: *mut u64) {
+        let stack = stack as *mut f32;
+        stack.add(1).write(self.x);
+        stack.add(3).write(self.y);
+    }
+
+    fn get_stack_size(&self) -> usize {
+        3
+    }
+}
+
+impl NativeStackValue for Rgba {
+    unsafe fn read_from_stack(stack: *const u64) -> Self {
+        panic!("Reading Rgba color from stack is not possible")
+    }
+
+    unsafe fn write_to_stack(self, stack: *mut u64) {
+        let stack = stack as *mut i32;
+        stack.add(1).write((self.r * 255.0) as i32);
+        stack.add(3).write((self.g * 255.0) as i32);
+        stack.add(5).write((self.b * 255.0) as i32);
+        stack.add(7).write((self.a * 255.0) as i32);
+    }
+
+    fn get_stack_size(&self) -> usize {
+        4
+    }
+}
+
+impl NativeStackValue for Rgb {
+    unsafe fn read_from_stack(stack: *const u64) -> Self {
+        let stack = stack as *mut i32;
+        let r = stack.offset(1).read();
+        let g = stack.offset(3).read();
+        let b = stack.offset(5).read();
+        Rgb::new(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
+    }
+
+    unsafe fn write_to_stack(self, stack: *mut u64) {
+        let stack = stack as *mut i32;
+        stack.add(1).write((self.r * 255.0) as i32);
+        stack.add(3).write((self.g * 255.0) as i32);
+        stack.add(5).write((self.b * 255.0) as i32);
+    }
+
+    fn get_stack_size(&self) -> usize {
+        3
+    }
+}
+
+impl NativeStackValue for i32 {}
+impl NativeStackValue for &mut i32 {}
+impl NativeStackValue for u32 {}
+impl NativeStackValue for &mut u32 {}
+impl NativeStackValue for f32 {}
+impl NativeStackValue for &mut f32 {}
+impl NativeStackValue for bool {}
+impl NativeStackValue for &mut bool {}
+impl NativeStackValue for () {}

@@ -1,6 +1,4 @@
-use super::NativeStackValue;
 use crate::invoke;
-use std::io::Read;
 
 pub unsafe fn set_credits_active(active: bool) {
     invoke!((), 0xB938B7E6D3C0620C, active);

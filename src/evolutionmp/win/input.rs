@@ -24,7 +24,7 @@ impl EventPool {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct KeyEvent {
     pub key: i32,
     pub repeats: u16,

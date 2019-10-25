@@ -10,7 +10,7 @@ use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCES
 use evolutionmp::win::ps::{ProcessIterator, get_process};
 use evolutionmp::registry::Registry;
 use winapi::um::tlhelp32::TH32CS_SNAPPROCESS;
-use ntapi::winapi::_core::time::Duration;
+use std::time::Duration;
 
 fn main() {
     let gta_exe = "GTA5.exe";
@@ -39,14 +39,26 @@ fn main() {
         let access = PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE;
         let proc = get_process(gta_exe, access).expect(&format!("{} not found", gta_exe));
         println!("Found GTA5.exe process with pid: {}", proc.get_pid());
-        match proc.inject_library(&client_dll) {
-            Ok(exit_code) => {
-                println!("Thread exit code: 0x{:016X}", exit_code);
-            },
-            Err(err) => {
-                eprintln!("{:?}", err);
+        loop {
+            match proc.inject_library(&client_dll) {
+                Ok(exit_code) => {
+                    match exit_code {
+                        0 => {}
+                        1 => {
+                            eprintln!("Module injection failed");
+                            return;
+                        }
+                        other => {
+                            println!("Injected module at 0x{:X}", other);
+                            break;
+                        }
+                    }
+                },
+                Err(err) => {
+                    eprintln!("Injection error: {:?}", err);
+                }
             }
-        }
+        };
 
         println!("Launcher process exited with code: {}", process.wait().unwrap());
     } else if registry.is_steam_key() {

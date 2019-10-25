@@ -8,7 +8,7 @@ pub struct Vehicle {
 
 impl Vehicle {
     pub fn new(model: Hash, pos: Vector3, heading: f32, is_network: bool, this_script_check: bool) -> Vehicle {
-        let handle = unsafe { crate::natives::vehicle::new(model, pos, heading, is_network, this_script_check) };
+        let handle = unsafe { crate::native::vehicle::new(model, pos, heading, is_network, this_script_check) };
         Vehicle { handle }
     }
 }

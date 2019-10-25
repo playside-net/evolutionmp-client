@@ -6,6 +6,10 @@ use winapi::um::winnt::CONTEXT;
 use winapi::um::tlhelp32::{Thread32First, Thread32Next, CreateToolhelp32Snapshot, THREADENTRY32};
 use winapi::shared::ntdef::NULL;
 use winapi::um::synchapi::WaitForSingleObject;
+use winapi::um::winnt::{NT_TIB};
+use winapi::um::fibersapi::IsThreadAFiber;
+use winapi::um::winbase::{SwitchToFiber, CreateFiber, ConvertThreadToFiber, DeleteFiber};
+use winapi::shared::basetsd::SIZE_T;
 
 pub struct ThreadHandle {
     inner: HANDLE
@@ -153,3 +157,61 @@ impl Drop for ThreadIterator {
         unsafe { CloseHandle(self.tool_help_snapshot) };
     }
 }
+
+#[derive(PartialEq)]
+pub struct Fiber {
+    handle: HANDLE
+}
+
+impl Fiber {
+    pub fn new<T>(stack_size: SIZE_T, param: &mut T, initializer: FiberInitializer<&mut T>) -> Fiber where T: Sized {
+        Fiber {
+            handle: unsafe { CreateFiber(
+                stack_size,
+                Some(std::mem::transmute(initializer as *mut ())),
+                param as *mut T as *mut _
+            ) }
+        }
+    }
+
+    pub fn is_thread_a_fiber() -> bool {
+        unsafe { IsThreadAFiber() == TRUE }
+    }
+
+    pub fn current() -> Option<Fiber> {
+        let offset = offset_of!(NT_TIB => u);
+        let handle = unsafe { ntapi::winapi_local::um::winnt::__readgsqword(offset.get_byte_offset() as u32) } as HANDLE;
+        if !handle.is_null() {
+            Some(Fiber { handle })
+        } else {
+            None
+        }
+    }
+
+    pub fn current_or_convert_thread() -> Option<Fiber> {
+        if Self::is_thread_a_fiber() {
+            Self::current()
+        } else {
+            let handle = unsafe { ConvertThreadToFiber(std::ptr::null_mut()) };
+            if !handle.is_null() {
+                Some(Fiber { handle })
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn make_current(&self) {
+        unsafe { SwitchToFiber(self.handle) }
+    }
+
+    pub fn is_current(&self) -> bool {
+        Self::current().map(|c|c.handle) == Some(self.handle)
+    }
+
+    pub fn delete(&mut self) {
+        unsafe { DeleteFiber(self.handle) }
+    }
+}
+
+pub type FiberInitializer<T> = unsafe extern "system" fn(T);

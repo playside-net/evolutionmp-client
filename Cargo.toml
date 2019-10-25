@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 detour = { version = "*", features = ["nightly"] }
-winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi"] }
-ntapi = "*"
+winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi", "fibersapi", "winerror"] }
+ntapi = { version = "*", features = ["nightly"] }
 windows-acl = "*"
 winreg = "*"
 bytebuffer = "*"
@@ -20,6 +20,7 @@ bincode = "*"
 serde = "*"
 dirs = "*"
 libc = "*"
+field-offset = "*"
 
 [[bin]]
 name = "launcher"
