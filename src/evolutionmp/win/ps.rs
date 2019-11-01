@@ -1,32 +1,29 @@
-use winapi::shared::ntdef::{HANDLE, NULL};
-use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, LPCVOID, __some_function, FARPROC, HINSTANCE};
-use std::ptr::null;
-use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, TH32CS_SNAPPROCESS, Process32FirstW, PROCESSENTRY32W, THREADENTRY32, MODULEENTRY32W, Process32NextW, TH32CS_SNAPALL, Thread32First, Thread32Next, Module32FirstW, Module32NextW};
-use winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
-use winapi::um::processthreadsapi::{OpenProcess, OpenProcessToken, GetCurrentProcess, GetProcessId, CreateThread, CreateRemoteThread, CreateRemoteThreadEx};
-use winapi::um::winnt::{PROCESS_ALL_ACCESS, TOKEN_QUERY, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, SE_PRIVILEGE_REMOVED, MEM_RELEASE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE, PAGE_EXECUTE_READWRITE, LPCWSTR};
-use winapi::_core::ptr::null_mut;
-use winapi::um::winbase::{LookupPrivilegeValueW, THREAD_PRIORITY_HIGHEST, INFINITE};
-use winapi::um::securitybaseapi::AdjustTokenPrivileges;
-use winapi::um::minwinbase::LPTHREAD_START_ROUTINE;
+use crate::win::thread::ThreadHandle;
+use std::ptr::{null, null_mut};
 use std::error::Error;
 use std::path::{Display, Path};
 use std::os::windows::ffi::OsStringExt;
 use std::os::windows::ffi::OsStrExt;
-use winapi::_core::mem::MaybeUninit;
-use winapi::shared::basetsd::SIZE_T;
+use std::ffi::{OsString, OsStr, CString, CStr};
+use std::cell::UnsafeCell;
+use std::marker::PhantomData;
+use std::io::Write;
+use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, TH32CS_SNAPPROCESS, Process32FirstW, PROCESSENTRY32W, THREADENTRY32, MODULEENTRY32W, Process32NextW, TH32CS_SNAPALL, Thread32First, Thread32Next, Module32FirstW, Module32NextW};
+use winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
+use winapi::um::processthreadsapi::{OpenProcess, OpenProcessToken, GetCurrentProcess, GetProcessId, CreateThread, CreateRemoteThread, CreateRemoteThreadEx};
+use winapi::um::winnt::{PROCESS_ALL_ACCESS, TOKEN_QUERY, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, SE_PRIVILEGE_REMOVED, MEM_RELEASE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE, PAGE_EXECUTE_READWRITE, LPCWSTR};
+use winapi::um::winbase::{LookupPrivilegeValueW, THREAD_PRIORITY_HIGHEST, INFINITE};
+use winapi::um::securitybaseapi::AdjustTokenPrivileges;
+use winapi::um::minwinbase::LPTHREAD_START_ROUTINE;
 use winapi::um::memoryapi::{VirtualFreeEx, VirtualAllocEx, WriteProcessMemory, ReadProcessMemory};
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
-use std::ffi::{OsString, OsStr, CString, CStr};
-use widestring::{WideCStr, WideCString};
 use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
-use ntapi::winapi::_core::marker::PhantomData;
-use winapi::ctypes::c_void;
-use ntapi::winapi::_core::cell::UnsafeCell;
-use bytebuffer::ByteBuffer;
 use winapi::um::winuser::{MessageBeep, MB_ICONEXCLAMATION, MB_ICONSTOP, MessageBoxW, MB_ICONHAND, MB_OKCANCEL, GetParent};
-use std::io::Write;
-use crate::win::thread::ThreadHandle;
+use winapi::shared::ntdef::{HANDLE, NULL};
+use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, LPCVOID, __some_function, FARPROC, HINSTANCE};
+use winapi::shared::basetsd::SIZE_T;
+use winapi::ctypes::c_void;
+use widestring::{WideCStr, WideCString};
 
 pub fn get_current_process() -> ProcessHandle {
     ProcessHandle::from(unsafe { GetCurrentProcess() })
@@ -240,9 +237,9 @@ impl ProcessHandle {
     }
 
     pub unsafe fn virtual_alloc_uninit<T>(&self, address: LPVOID, size: SIZE_T, allocation_type: DWORD, protect: DWORD) -> Result<VirtualAlloc<T>, VirtualAllocError> where T: VirtualData {
-        let inner = unsafe { VirtualAllocEx(self.inner, address, size, allocation_type, protect) };
+        let inner = VirtualAllocEx(self.inner, address, size, allocation_type, protect);
         if inner.is_null() {
-            Err(VirtualAllocError::AllocationFailed(unsafe { GetLastError() }))
+            Err(VirtualAllocError::AllocationFailed(GetLastError()))
         } else {
             Ok(VirtualAlloc {
                 process: self,

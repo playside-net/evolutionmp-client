@@ -10,6 +10,7 @@ use winapi::um::winnt::{NT_TIB};
 use winapi::um::fibersapi::IsThreadAFiber;
 use winapi::um::winbase::{SwitchToFiber, CreateFiber, ConvertThreadToFiber, DeleteFiber};
 use winapi::shared::basetsd::SIZE_T;
+use field_offset::offset_of;
 
 pub struct ThreadHandle {
     inner: HANDLE

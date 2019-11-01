@@ -34,10 +34,30 @@ pub unsafe fn set_cursor_sprite(sprite: u32) {
     invoke!((), 0x8DB8CFFD58B62552, sprite)
 }
 
+pub unsafe fn get_cursor_sprite() -> u32 {
+    super::CURSOR_SPRITE.read()
+}
+
 pub unsafe fn set_notification_text_entry(ty: &str) {
     invoke!((), 0x202709F4C58A0424, ty)
 }
 
 pub unsafe fn show_notification(duration: bool, immediately: bool) {
     invoke!((), 0x9D77056A530643F6, duration, immediately)
+}
+
+pub unsafe fn set_map_revealed(revealed: bool) {
+    invoke!((), 0xF8DEE0A5600CBB93, revealed)
+}
+
+pub unsafe fn set_big_map_active(toggle: bool, full: bool) {
+    invoke!((), 0x231C8F89D0539D8F, toggle, full)
+}
+
+pub unsafe fn is_big_map_active() -> bool {
+    super::EXPANDED_RADAR.read()
+}
+
+pub unsafe fn is_big_map_full() -> bool {
+    super::REVEAL_FULL_MAP.read()
 }

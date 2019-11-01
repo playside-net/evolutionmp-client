@@ -1,17 +1,16 @@
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, LONG};
-use std::any::Any;
 use crate::win::ps::{ModuleHandle, ModuleEntry};
-use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
-use winapi::um::memoryapi::VirtualProtect;
-use winapi::shared::basetsd::SIZE_T;
-use ntapi::winapi::_core::ptr::null_mut;
 use crate::win::user::{message_box, MessageBoxButtons, MessageBoxIcon};
-use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
-use winapi::ctypes::c_void;
 use crate::info;
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, LONG};
+use winapi::um::memoryapi::VirtualProtect;
+use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
 use winapi::um::libloaderapi::GetModuleHandleA;
-use winapi::_core::time::Duration;
-use std::time::Instant;
+use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
+use winapi::shared::basetsd::SIZE_T;
+use winapi::ctypes::c_void;
+use std::any::Any;
+use std::ptr::null_mut;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct Pattern {

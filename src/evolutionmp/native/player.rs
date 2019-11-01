@@ -1,8 +1,8 @@
 use crate::invoke;
 use crate::game::Handle;
 
-pub unsafe fn get_name<'a>() -> &'a str {
-    invoke!(&str, 0x6D0DE6A7B5DA71F8)
+pub unsafe fn get_name<'a>(player: Handle) -> &'a str {
+    invoke!(&str, 0x6D0DE6A7B5DA71F8, player)
 }
 
 pub unsafe fn is_online() -> bool {
@@ -10,7 +10,7 @@ pub unsafe fn is_online() -> bool {
 }
 
 pub unsafe fn get_local_handle() -> Handle {
-    invoke!(Handle, 0xA5EDC40EF369B48D)
+    invoke!(Handle, 0x4F8644AF03D0E0D6)
 }
 
 pub unsafe fn get_at(index: u32) -> Handle {
@@ -31,4 +31,12 @@ pub unsafe fn get_ped(player: Handle) -> Handle {
 
 pub unsafe fn get_local_ped() -> Handle {
     invoke!(Handle, 0xD80958FC74E988A6)
+}
+
+pub unsafe fn is_dead(player: Handle) -> bool {
+    invoke!(bool, 0x424D4687FA1E5652, player)
+}
+
+pub unsafe fn is_pressing_horn(player: Handle) -> bool {
+    invoke!(bool, 0xFA1E2BF8B10598F9, player)
 }

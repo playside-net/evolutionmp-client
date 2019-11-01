@@ -1,19 +1,18 @@
-use std::os::raw::c_char;
-use crate::game::Hash;
+use crate::hash::Hash;
 use crate::pattern::MemoryRegion;
 use crate::native::collection::PtrCollection;
-use std::ffi::CString;
-use std::time::{Instant, Duration};
-use winapi::shared::ntdef::{HANDLE, NULL};
-use winapi::shared::minwindef::{LPVOID, DWORD, TRUE};
 use crate::{GameState, GAME_STATE};
 use crate::win::input::KeyEvent;
 use crate::native::NativeCallContext;
 use crate::hash::joaat;
 use crate::win::thread::Fiber;
+use std::os::raw::c_char;
+use std::ffi::CString;
+use std::time::{Instant, Duration};
+use winapi::shared::ntdef::{HANDLE, NULL};
+use winapi::shared::minwindef::{LPVOID, DWORD, TRUE};
 use winapi::um::winuser::VK_RETURN;
-use winapi::_core::cell::UnsafeCell;
-use winapi::_core::mem::MaybeUninit;
+use detour::static_detour;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
@@ -26,7 +25,7 @@ static_detour! {
 
 fn wait_native(context: *mut NativeCallContext) {
     unsafe {
-        if *GAME_STATE == GameState::Playing {
+        if crate::game::get_state() == GameState::Playing {
             MAIN_FIBER = Fiber::current_or_convert_thread();
             if MAIN_FIBER.is_some() {
                 let thread = get_active_thread();
@@ -100,15 +99,15 @@ pub struct ThreadContext {
     wait_timer: f32,
     unknown1: u32,
     unknown2: u32,
-    _f2C: u32,
+    _f2c: u32,
     _f30: u32,
     _f34: u32,
     _f38: u32,
-    _f3C: u32,
+    _f3c: u32,
     _f40: u32,
     _f44: u32,
     _f48: u32,
-    _f4C: u32,
+    _f4c: u32,
     stack_size: u32,
     catch_ip: u32,
     catch_frame: u32,
@@ -136,24 +135,20 @@ impl ScriptContainer {
     }
 
     unsafe extern "system" fn fiber_loop(&mut self) {
-        let mut last_tick = Instant::now();
-
-        const TICK_INTERVAL: Duration = Duration::from_millis(((1000.0 / 60.0) * 1000.0) as u64);
+        if !(self as *mut Self).is_null() {
+            let ptr = self as *mut Self;
+            let mut wait = move |d| (*ptr).wait(d);
+            self.script.load(&mut wait);
+        }
 
         while !(self as *mut Self).is_null() {
-            let now = Instant::now();
-            let tick_delta = now - last_tick;
             let game_state = *crate::GAME_STATE;
             while let Some((event, time_caught)) = self.key_events.pop() {
                 self.script.on_key(event, time_caught);
             }
-            if tick_delta >= TICK_INTERVAL {
-                last_tick = now;
-                let ptr = self as *mut Self;
-                let wait = move |d| (*ptr).wait(d);
-                self.script.tick(&wait, tick_delta.as_secs_f64())
-            }
-            self.script.render(game_state);
+            let ptr = self as *mut Self;
+            let mut wait = move |d| (*ptr).wait(d);
+            self.script.frame(&mut wait, game_state);
             self.wait(Duration::from_millis(0))
         }
     }
@@ -170,9 +165,7 @@ impl ScriptContainer {
             if let Some(fiber) = &self.fiber {
                 fiber.make_current();
             } else {
-                self.fiber = unsafe {
-                    Some(Fiber::new(0, self, ScriptContainer::fiber_loop))
-                };
+                self.fiber = Some(Fiber::new(0, self, ScriptContainer::fiber_loop));
             }
             unsafe { MAIN_FIBER.as_mut().expect("Missing main fiber").make_current() };
         }
@@ -206,9 +199,9 @@ type TY = unsafe extern "system" fn(LPVOID) -> DWORD;
 pub type Wait = dyn FnMut(Duration);
 
 pub trait Script {
-    fn tick(&mut self, wait: &Wait, delta_time: f64);
-    fn render(&self, game_state: GameState);
-    fn on_key(&mut self, key: KeyEvent, time_caught: Instant);
+    fn load(&mut self, wait: &mut Wait) {}
+    fn frame(&mut self, wait: &mut Wait, game_state: GameState) {}
+    fn on_key(&mut self, key: KeyEvent, time_caught: Instant) {}
 }
 
 #[repr(C)]

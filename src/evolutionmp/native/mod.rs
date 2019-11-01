@@ -10,6 +10,7 @@ use winapi::shared::minwindef::DWORD;
 use winapi::shared::basetsd::DWORD64;
 use winapi::ctypes::c_void;
 use std::time::Duration;
+use byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
 
 pub mod ui;
 pub mod graphics;
@@ -20,11 +21,26 @@ pub mod player;
 pub mod vehicle;
 pub mod socialclub;
 pub mod collection;
+pub mod script;
+pub mod controls;
+pub mod streaming;
+pub mod ped;
+pub mod audio;
+pub mod stats;
 
 pub static mut NATIVES: Option<Natives> = None;
+pub static mut EXPANDED_RADAR: *const bool = std::ptr::null();
+pub static mut REVEAL_FULL_MAP: *const bool = std::ptr::null();
+pub static mut CURSOR_SPRITE: *const u32 = std::ptr::null();
 
-pub(crate) unsafe fn init(global_region: &MemoryRegion) {
-    NATIVES = Some(Natives::new(global_region));
+pub(crate) unsafe fn init(mem: &MemoryRegion) {
+    NATIVES = Some(Natives::new(mem));
+    let big_map = mem.find_first_await("33 C0 0F 57 C0 ? 0D", 50, 1000)
+        .expect("big map").add(7);
+    EXPANDED_RADAR = big_map.as_ptr().cast();
+    REVEAL_FULL_MAP = big_map.add(30).as_ptr().cast();
+    let cursor_sprite = mem.find_first_await("74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 50, 1000)
+        .expect("cursor sprite");
 }
 
 pub static mut ARG: UnsafeCell<NativeArgStack> = UnsafeCell::new(NativeArgStack {
@@ -86,7 +102,7 @@ pub trait NativeStackValue {
     unsafe fn read_from_stack(stack: *const u64) -> Self where Self: Sized {
         let size = std::mem::size_of::<Self>();
         if size <= 8 {
-            ((stack as *const u8).add(8 - size) as *const Self).read()
+            stack.cast::<Self>().read()
         } else {
             panic!(
                 "Cannot read value of type `{}` from stack as it exceeds default reader's size limits ({} bytes)",
@@ -99,7 +115,7 @@ pub trait NativeStackValue {
     unsafe fn write_to_stack(self, stack: *mut u64) where Self: Sized {
         let size = std::mem::size_of::<Self>();
         if size <= 8 {
-            ((stack as *mut u8).add(8 - size) as *mut Self).write(self)
+            stack.cast::<Self>().write(self)
         } else {
             panic!(
                 "Cannot write value of type `{}` to stack as it exceeds default writer's size limits ({} bytes)",
@@ -251,18 +267,16 @@ impl NativeStackValue for &str {
 
 impl NativeStackValue for Vector3 {
     unsafe fn read_from_stack(stack: *const u64) -> Self {
-        let stack = stack as *const f32;
-        let x = stack.offset(1).read();
-        let y = stack.offset(3).read();
-        let z = stack.offset(5).read();
+        let x = stack.add(0).cast::<f32>().read();
+        let y = stack.add(1).cast::<f32>().read();
+        let z = stack.add(2).cast::<f32>().read();
         Vector3::new(x, y, z)
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        let stack = stack as *mut f32;
-        stack.add(1).write(self.x);
-        stack.add(3).write(self.y);
-        stack.add(5).write(self.z);
+        stack.add(0).cast::<f32>().write(self.x);
+        stack.add(1).cast::<f32>().write(self.y);
+        stack.add(2).cast::<f32>().write(self.z);
     }
 
     fn get_stack_size(&self) -> usize {
@@ -336,4 +350,6 @@ impl NativeStackValue for f32 {}
 impl NativeStackValue for &mut f32 {}
 impl NativeStackValue for bool {}
 impl NativeStackValue for &mut bool {}
+impl NativeStackValue for u64 {}
+impl NativeStackValue for &mut u64 {}
 impl NativeStackValue for () {}

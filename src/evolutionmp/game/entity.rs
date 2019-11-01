@@ -1,5 +1,6 @@
+use crate::game::Vector3;
+use crate::hash::Hash;
 use super::Handle;
-use crate::game::{Hash, Vector3};
 use std::ffi::{CString, CStr};
 
 pub trait Entity {

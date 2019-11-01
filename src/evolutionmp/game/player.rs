@@ -19,4 +19,8 @@ impl Player {
     pub fn get_ped(&self) -> Ped {
         Ped::from_player(self)
     }
+
+    pub fn get_name<'a>(&self) -> &'a str {
+        unsafe { crate::native::player::get_name(self.handle) }
+    }
 }

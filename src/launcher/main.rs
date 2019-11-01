@@ -1,10 +1,3 @@
-extern crate winapi;
-extern crate winreg;
-extern crate ntapi;
-extern crate bytebuffer;
-extern crate libloading;
-extern crate widestring;
-
 use std::process::{Command, Stdio};
 use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE};
 use evolutionmp::win::ps::{ProcessIterator, get_process};

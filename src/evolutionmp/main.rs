@@ -1,32 +1,6 @@
-#![feature(abi_thiscall)]
-#![feature(maybe_uninit_ref)]
-
-extern crate winapi;
-extern crate ntapi;
-#[macro_use]
-extern crate detour;
-extern crate dirs;
-extern crate libc;
-extern crate widestring;
-#[macro_use]
-extern crate field_offset;
-
-use winapi::shared::minwindef::{HINSTANCE, DWORD, LPVOID, BOOL, TRUE, HMODULE};
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibraryAndExitThread};
 use crate::win::user::{MessageBoxButtons, MessageBoxIcon, message_box};
 use crate::win::ps::get_current_process;
-use std::ptr::null_mut;
-use ntapi::winapi::_core::time::Duration;
 use crate::pattern::{MemoryRegion, RegionIterator};
-use ntapi::winapi::_core::panic::PanicInfo;
-use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
-use winapi::ctypes::c_void;
-use std::path::Path;
-use std::io::prelude::*;
-use std::fs::File;
-use std::env::current_dir;
-use dirs::desktop_dir;
-use std::collections::HashMap;
 use crate::game::vehicle::Vehicle;
 use crate::hash::joaat;
 use crate::game::player::Player;
@@ -35,8 +9,21 @@ use crate::game::ui::{CursorSprite, LoadingPrompt};
 use crate::win::input::{InputHook, KeyEvent};
 use crate::game::scaleform::Scaleform;
 use crate::script::{Script, Wait};
+use crate::game::GameState;
+use std::ptr::null_mut;
+use std::time::Duration;
+use std::path::Path;
+use std::io::prelude::*;
+use std::fs::File;
+use std::env::current_dir;
+use std::collections::HashMap;
 use std::time::Instant;
+use winapi::shared::minwindef::{HINSTANCE, DWORD, LPVOID, BOOL, TRUE, HMODULE};
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibraryAndExitThread};
+use winapi::ctypes::c_void;
 use winapi::um::winuser::{VK_BACK, VK_NUMPAD5};
+use std::panic::PanicInfo;
+use dirs::desktop_dir;
 
 pub mod win;
 pub mod hash;
@@ -47,23 +34,12 @@ pub mod game;
 pub mod pattern;
 pub mod process;
 pub mod registry;
+pub mod mp;
 
 const DLL_PROCESS_ATTACH: u32 = 1;
 const DLL_THREAD_ATTACH: u32 = 2;
 const DLL_THREAD_DETACH: u32 = 3;
 const DLL_PROCESS_DETACH: u32 = 0;
-
-pub(crate) static mut GAME_STATE: *const GameState = std::ptr::null_mut();
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[repr(C)]
-pub enum GameState {
-    Playing,
-    Intro,
-    Legals = 3,
-    MainMenu = 5,
-    LoadingSpMp = 6
-}
 
 fn attach(instance: HMODULE) {
     unsafe {
@@ -82,18 +58,13 @@ fn attach(instance: HMODULE) {
         std::thread::spawn(move || {
             let mut input = win::input::InputHook::new().expect("Input hooking failed");
 
-            GAME_STATE = mem.find_first_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
-                    .expect("game state")
-                    .add(2)
-                    .read_ptr(5)
-                    .get::<GameState>();
-
-            while *GAME_STATE != GameState::MainMenu {
+            while game::get_state() != GameState::MainMenu {
                 std::thread::sleep(Duration::from_millis(50));
             }
+
             script::init(&mem);
-            info!("Scripts initialized", "Info");
-            script::register(ScriptTest {});
+
+            mp::init(&mem);
 
             loop {
                 while let Some(event) = input.next_event() {
@@ -112,17 +83,17 @@ fn detach() {
 
 #[macro_export]
 macro_rules! error {
-    ($text:expr,$caption:expr) => {
+    ($caption:expr,$($arg:tt)*) => {
         use crate::win::user::*;
-        unsafe { message_box(None, $text, $caption, MessageBoxButtons::Ok, Some(MessageBoxIcon::Error)) };
+        unsafe { message_box(None, format!($($arg)*), $caption, MessageBoxButtons::Ok, Some(MessageBoxIcon::Error)) };
     };
 }
 
 #[macro_export]
 macro_rules! info {
-    ($text:expr,$caption:expr) => {
+    ($caption:expr,$($arg:tt)*) => {
         use crate::win::user::*;
-        unsafe { message_box(None, $text, $caption, MessageBoxButtons::Ok, Some(MessageBoxIcon::Information)) };
+        unsafe { message_box(None, format!($($arg)*), $caption, MessageBoxButtons::Ok, Some(MessageBoxIcon::Information)) };
     };
 }
 
@@ -144,9 +115,7 @@ pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DWORD, reserved: LP
                     None => String::from("")
                 };
 
-                let message = format!("thread '{}' panicked at '{}'{}", thread, reason, location);
-
-                error!(message, "EvolutionMP Error");
+                error!("EvolutionMP Error", "thread '{}' panicked at '{}'{}", thread, reason, location);
 
                 /*let s = format!("{:?}", backtrace);
 
@@ -174,27 +143,6 @@ pub fn downcast_str(string: &(dyn std::any::Any + Send)) -> &str  {
                     "Box<Any>"
                 }
             }
-        }
-    }
-}
-
-pub struct ScriptTest {
-
-}
-
-impl Script for ScriptTest {
-    fn tick(&mut self, wait: &Wait, delta_time: f64) {
-
-    }
-
-    fn render(&self, game_state: GameState) {
-
-    }
-
-    fn on_key(&mut self, key: KeyEvent, time_caught: Instant) {
-        if key.key == VK_NUMPAD5 {
-            let handle = unsafe { native::player::get_local_handle() };
-            game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, &format!("Kek {}", handle));
         }
     }
 }

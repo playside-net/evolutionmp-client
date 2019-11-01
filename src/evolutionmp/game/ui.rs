@@ -16,11 +16,11 @@ pub fn show_subtitle(text: &str, duration: i32, immediately: bool) {
 }
 
 pub enum LoadingPrompt {
-    LoadingLeft = 0,
-    LoadingLeft2 = 1,
-    LoadingLeft3 = 2,
-    SavingLeft = 3,
-    LoadingRight = 4
+    LoadingLeft,
+    LoadingLeft2,
+    LoadingLeft3,
+    SavingLeft,
+    LoadingRight
 }
 
 pub fn hide_loading_prompt() {
@@ -36,17 +36,17 @@ pub fn set_cursor_sprite(sprite: CursorSprite) {
 }
 
 pub enum CursorSprite {
-    None = 0,
-    Normal = 1,
-    TransparentNormal = 2,
-    PreGrab = 3,
-    Grab = 4,
-    MiddleFinger = 5,
-    LeftArrow = 6,
-    RightArrow = 7,
-    UpArrow = 8,
-    DownArrow = 9,
-    HorizontalExpand = 10,
-    Add = 11,
-    Remove = 12
+    None,
+    Normal,
+    TransparentNormal,
+    PreGrab,
+    Grab,
+    MiddleFinger,
+    LeftArrow,
+    RightArrow,
+    UpArrow,
+    DownArrow,
+    HorizontalExpand,
+    Add,
+    Remove
 }
