@@ -24,3 +24,23 @@ pub unsafe fn get_using_vehicle(ped: Handle) -> Handle {
 pub unsafe fn get_entering_vehicle(ped: Handle) -> Handle {
     invoke!(Handle, 0xF92691AED837A5FC, ped)
 }
+
+pub unsafe fn clear_tasks_immediately(handle: Handle) {
+    invoke!((), 0xAAA34F8A7CB32098)
+}
+
+pub unsafe fn put_into_vehicle(handle: Handle, vehicle: Handle, seat: i32) {
+    invoke!((), 0xF75B0D629E1C063D, handle, vehicle, seat)
+}
+
+pub unsafe fn set_non_scenario_cops(enabled: bool) {
+    invoke!((), 0x8A4986851C4EF6E7, enabled)
+}
+
+pub unsafe fn set_scenario_cops(enabled: bool) {
+    invoke!((), 0x444CB7D7DBE6973D, enabled)
+}
+
+pub unsafe fn set_cops(enabled: bool) {
+    invoke!((), 0x102E68B2024D536D, enabled)
+}

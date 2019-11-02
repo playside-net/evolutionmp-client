@@ -1,4 +1,6 @@
 use crate::pattern::MemoryRegion;
+use crate::native::NativeStackValue;
+use winapi::_core::time::Duration;
 
 pub mod entity;
 pub mod player;
@@ -8,41 +10,44 @@ pub mod ui;
 pub mod scaleform;
 pub mod controls;
 pub mod stats;
-
-pub(crate) static mut GAME_STATE: *const GameState = std::ptr::null_mut();
-
-pub unsafe fn init(mem: &MemoryRegion) {
-    GAME_STATE = mem.find_first_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
-        .expect("game state")
-        .add(2)
-        .read_ptr(5)
-        .get::<GameState>();
-}
+pub mod dlc;
+pub mod streaming;
+pub mod gameplay;
+pub mod script;
+pub mod clock;
 
 pub type Handle = u32;
 
-#[derive(Debug)]
-pub struct Vector3 {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32
+#[derive(Debug, Copy, Clone)]
+pub struct Vector3<T> where T: NativeStackValue + Copy + Clone {
+    pub x: T,
+    pub y: T,
+    pub z: T
 }
 
-impl Vector3 {
-    pub fn new(x: f32, y: f32, z: f32) -> Vector3 {
+impl<T> Vector3<T> where T: NativeStackValue + Copy + Clone {
+    pub fn new(x: T, y: T, z: T) -> Vector3<T> {
         Vector3 { x, y, z }
+    }
+
+    pub fn union(value: T) -> Vector3<T> {
+        Self::new(value, value, value)
     }
 }
 
-#[derive(Debug)]
-pub struct Vector2 {
-    pub x: f32,
-    pub y: f32
+#[derive(Debug, Copy, Clone)]
+pub struct Vector2<T> where T: NativeStackValue + Copy + Clone {
+    pub x: T,
+    pub y: T
 }
 
-impl Vector2 {
-    pub fn new(x: f32, y: f32) -> Vector2 {
+impl<T> Vector2<T> where T: NativeStackValue + Copy + Clone {
+    pub fn new(x: T, y: T) -> Vector2<T> {
         Vector2 { x, y }
+    }
+
+    pub fn union(value: T) -> Vector2<T> {
+        Self::new(value, value)
     }
 }
 
@@ -85,6 +90,11 @@ pub enum GameState {
     LoadingSpMp = 6
 }
 
-pub fn get_state() -> GameState {
-    unsafe { *GAME_STATE }
+impl GameState {
+    pub fn is_loaded(&self) -> bool {
+        match self {
+            GameState::MainMenu | GameState::LoadingSpMp => true,
+            _ => false
+        }
+    }
 }

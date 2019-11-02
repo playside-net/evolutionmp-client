@@ -3,16 +3,21 @@
     <words>
       <w>cutscene</w>
       <w>deref</w>
+      <w>freemode</w>
+      <w>freezed</w>
+      <w>gameplay</w>
       <w>hotkey</w>
       <w>hotwire</w>
       <w>joaat</w>
       <w>leaderboard</w>
       <w>multiplayer</w>
+      <w>reticle</w>
       <w>rockstar</w>
       <w>scaleform</w>
       <w>selfie</w>
       <w>snapmatic</w>
       <w>socialclub</w>
+      <w>teleported</w>
     </words>
   </dictionary>
 </component>

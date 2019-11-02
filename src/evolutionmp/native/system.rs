@@ -1,9 +1,5 @@
 use crate::invoke;
 
-pub unsafe fn wait(ms: u32) {
-    invoke!((), 0x4EDE34FBADD967A6, ms)
-}
-
 pub unsafe fn get_timer_a() -> u32 {
     invoke!(u32, 0x83666F9FB8FEBD4B)
 }

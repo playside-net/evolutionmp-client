@@ -193,12 +193,16 @@ impl Fiber {
         if Self::is_thread_a_fiber() {
             Self::current()
         } else {
-            let handle = unsafe { ConvertThreadToFiber(std::ptr::null_mut()) };
-            if !handle.is_null() {
-                Some(Fiber { handle })
-            } else {
-                None
-            }
+            Self::convert_thread()
+        }
+    }
+
+    pub fn convert_thread() -> Option<Fiber> {
+        let handle = unsafe { ConvertThreadToFiber(std::ptr::null_mut()) };
+        if !handle.is_null() {
+            Some(Fiber { handle })
+        } else {
+            None
         }
     }
 

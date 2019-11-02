@@ -27,6 +27,10 @@ pub mod streaming;
 pub mod ped;
 pub mod audio;
 pub mod stats;
+pub mod gameplay;
+pub mod dlc;
+pub mod clock;
+pub mod decision_event;
 
 pub static mut NATIVES: Option<Natives> = None;
 pub static mut EXPANDED_RADAR: *const bool = std::ptr::null();
@@ -136,6 +140,10 @@ pub struct NativeReturnStack {
 }
 
 impl NativeReturnStack {
+    pub fn set<T>(&mut self, value: T) where T: NativeStackValue {
+        unsafe { value.write_to_stack(self.stack.as_mut_ptr()) }
+    }
+
     pub fn get<T>(&self) -> T where T: NativeStackValue {
         unsafe { T::read_from_stack(self.stack.as_ptr()) }
     }
@@ -149,6 +157,10 @@ pub struct NativeArgStack {
 impl NativeArgStack {
     pub fn set<T>(&mut self, index: usize, value: T) where T: NativeStackValue {
         unsafe { value.write_to_stack(self.stack.as_mut_ptr().add(index)) }
+    }
+
+    pub fn get<T>(&self, index: usize) -> T where T: NativeStackValue {
+        unsafe { T::read_from_stack(self.stack.as_ptr().add(index)) }
     }
 }
 
@@ -265,18 +277,18 @@ impl NativeStackValue for &str {
     }
 }
 
-impl NativeStackValue for Vector3 {
+impl<T> NativeStackValue for Vector3<T> where T: NativeStackValue + Copy + Clone {
     unsafe fn read_from_stack(stack: *const u64) -> Self {
-        let x = stack.add(0).cast::<f32>().read();
-        let y = stack.add(1).cast::<f32>().read();
-        let z = stack.add(2).cast::<f32>().read();
+        let x = T::read_from_stack(stack.add(0));
+        let y = T::read_from_stack(stack.add(1));
+        let z = T::read_from_stack(stack.add(2));
         Vector3::new(x, y, z)
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        stack.add(0).cast::<f32>().write(self.x);
-        stack.add(1).cast::<f32>().write(self.y);
-        stack.add(2).cast::<f32>().write(self.z);
+        self.x.write_to_stack(stack.add(0));
+        self.y.write_to_stack(stack.add(1));
+        self.z.write_to_stack(stack.add(2));
     }
 
     fn get_stack_size(&self) -> usize {
@@ -284,18 +296,16 @@ impl NativeStackValue for Vector3 {
     }
 }
 
-impl NativeStackValue for Vector2 {
+impl<T> NativeStackValue for Vector2<T> where T: NativeStackValue + Copy + Clone {
     unsafe fn read_from_stack(stack: *const u64) -> Self {
-        let stack = stack as *const f32;
-        let x = stack.offset(1).read();
-        let y = stack.offset(3).read();
+        let x = T::read_from_stack(stack.add(0));
+        let y = T::read_from_stack(stack.add(1));
         Vector2::new(x, y)
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        let stack = stack as *mut f32;
-        stack.add(1).write(self.x);
-        stack.add(3).write(self.y);
+        self.x.write_to_stack(stack.add(0));
+        self.y.write_to_stack(stack.add(1));
     }
 
     fn get_stack_size(&self) -> usize {
@@ -353,3 +363,6 @@ impl NativeStackValue for &mut bool {}
 impl NativeStackValue for u64 {}
 impl NativeStackValue for &mut u64 {}
 impl NativeStackValue for () {}
+
+impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
+impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}

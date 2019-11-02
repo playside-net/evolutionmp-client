@@ -1,4 +1,3 @@
-use crate::win::user::{MessageBoxButtons, MessageBoxIcon, message_box};
 use crate::win::ps::get_current_process;
 use crate::pattern::{MemoryRegion, RegionIterator};
 use crate::game::vehicle::Vehicle;
@@ -8,7 +7,7 @@ use crate::game::entity::Entity;
 use crate::game::ui::{CursorSprite, LoadingPrompt};
 use crate::win::input::{InputHook, KeyEvent};
 use crate::game::scaleform::Scaleform;
-use crate::script::{Script, Wait};
+use crate::runtime::Script;
 use crate::game::GameState;
 use std::ptr::null_mut;
 use std::time::Duration;
@@ -28,13 +27,13 @@ use dirs::desktop_dir;
 pub mod win;
 pub mod hash;
 pub mod native;
-pub mod script;
+pub mod runtime;
 pub mod mappings;
 pub mod game;
 pub mod pattern;
 pub mod process;
 pub mod registry;
-pub mod mp;
+pub mod multiplayer;
 
 const DLL_PROCESS_ATTACH: u32 = 1;
 const DLL_THREAD_ATTACH: u32 = 2;
@@ -46,30 +45,36 @@ fn attach(instance: HMODULE) {
         DisableThreadLibraryCalls(instance);
         let mem = MemoryRegion::image();
 
-        //global_region.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-        //global_region.find("72 1F E8 ? ? ? ? 8B 0D").next().expect("legals").nop(2); //Disable legals
+        //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
         mem.find_first_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
             .expect("movie").nop(13); //Disable movie
-        /*mem.find("72 6F 63 6B 73 74 61 72 5F 6C 6F 67 6F 73 00 62 69 6B")
-            .next().expect("news").replace("32 73 65 63 6F 6E 64 73 62 6C 61 63 6B 2E 62 69 6B 00");*/
 
-        native::init(&mem);
+        let game_state = mem.find_first_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
+            .expect("game state")
+            .add(2)
+            .read_ptr(5);
 
         std::thread::spawn(move || {
             let mut input = win::input::InputHook::new().expect("Input hooking failed");
 
-            while game::get_state() != GameState::MainMenu {
+            while !(*game_state.cast::<GameState>()).is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            script::init(&mem);
+            native::init(&mem);
 
-            mp::init(&mem);
+            while *game_state.cast::<GameState>() != GameState::Playing {
+                game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
+                std::thread::sleep(Duration::from_millis(50));
+            }
+
+            runtime::init(&mem);
+            multiplayer::init(&mem);
 
             loop {
                 while let Some(event) = input.next_event() {
-                    for s in &mut script::SCRIPTS {
-                        s.key(event);
+                    for s in &mut runtime::SCRIPTS {
+                        s.input(event);
                     }
                 }
             }

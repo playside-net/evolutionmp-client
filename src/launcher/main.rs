@@ -4,6 +4,8 @@ use evolutionmp::win::ps::{ProcessIterator, get_process};
 use evolutionmp::registry::Registry;
 use winapi::um::tlhelp32::TH32CS_SNAPPROCESS;
 use std::time::Duration;
+use winapi::um::consoleapi::AllocConsole;
+use winapi::um::wincon::FreeConsole;
 
 fn main() {
     let gta_exe = "GTA5.exe";
@@ -30,7 +32,8 @@ fn main() {
         }
 
         let access = PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE;
-        let proc = get_process(gta_exe, access).expect(&format!("{} not found", gta_exe));
+        let proc = get_process(gta_exe, access)
+            .expect(&format!("{} not found", gta_exe));
         println!("Found GTA5.exe process with pid: {}", proc.get_pid());
         loop {
             match proc.inject_library(&client_dll) {

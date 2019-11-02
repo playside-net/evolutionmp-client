@@ -22,16 +22,20 @@ pub unsafe fn is_dead(handle: Handle) -> bool {
     invoke!(bool, 0x5F9532F3B5CC2551, handle)
 }
 
-pub unsafe fn get_position(handle: Handle) -> Vector3 {
-    invoke!(Vector3, 0x3FEF770D40960D5A, handle, !is_dead(handle))
+pub unsafe fn get_position(handle: Handle) -> Vector3<f32> {
+    invoke!(Vector3<f32>, 0x3FEF770D40960D5A, handle, !is_dead(handle))
 }
 
-pub unsafe fn get_rotation(handle: Handle, order: u32) -> Vector3 {
-    invoke!(Vector3, 0xAFBD61CC738D9EB9, handle, order)
+pub unsafe fn set_position_no_offset(handle: Handle, pos: Vector3<f32>, axis: Vector3<bool>) {
+    invoke!((), 0x239A3351AC1DA385, handle, pos, axis)
 }
 
-pub unsafe fn get_rotation_velocity(handle: Handle) -> Vector3 {
-    invoke!(Vector3, 0x213B91045D09B983, handle)
+pub unsafe fn get_rotation(handle: Handle, order: u32) -> Vector3<f32> {
+    invoke!(Vector3<f32>, 0xAFBD61CC738D9EB9, handle, order)
+}
+
+pub unsafe fn get_rotation_velocity(handle: Handle) -> Vector3<f32> {
+    invoke!(Vector3<f32>, 0x213B91045D09B983, handle)
 }
 
 pub unsafe fn get_heading(handle: Handle) -> f32 {
@@ -60,4 +64,31 @@ pub unsafe fn get_model(handle: Handle) -> Hash {
 
 pub unsafe fn is_animation_finished(handle: Handle, dictionary: &str, name: &str) -> bool {
     invoke!(bool, 0x20B711662962B472, handle, dictionary, name)
+}
+
+pub unsafe fn get_health(handle: Handle) -> u32 {
+    invoke!(u32, 0xEEF059FAD016D209, handle)
+}
+pub unsafe fn get_max_health(handle: Handle) -> u32 {
+    invoke!(u32, 0x15D757606D170C3C, handle)
+}
+
+pub unsafe fn set_health(handle: Handle, health: u32) {
+    invoke!((), 0x6B76DC1F3AE6E6A3, handle, health)
+}
+
+pub unsafe fn set_max_health(handle: Handle, health: u32) {
+    invoke!((), 0x166E7CF68597D8B5, handle, health)
+}
+
+pub unsafe fn set_dynamic(handle: Handle, dynamic: bool) {
+    invoke!((), 0x1718DE8E3F2823CA, handle, dynamic)
+}
+
+pub unsafe fn set_position_freezed(handle: Handle, freezed: bool) {
+    invoke!((), 0x428CA6DBD1094446, handle, freezed)
+}
+
+pub unsafe fn set_collision(handle: Handle, collision: bool, physics: bool) {
+    invoke!((), 0x1A9205C1B9EE827F, handle, collision, physics)
 }

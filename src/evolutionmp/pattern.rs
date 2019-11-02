@@ -167,7 +167,7 @@ impl MemoryRegion {
     }
 
     pub unsafe fn read_ptr(&self, offset: usize) -> MemoryRegion {
-        self.add(offset).offset(*self.get::<i32>() as isize)
+        self.add(offset).offset(*self.cast::<i32>() as isize)
     }
 
     pub unsafe fn offset(&self, offset: isize) -> MemoryRegion {
@@ -215,7 +215,7 @@ impl MemoryRegion {
         self.base.cast()
     }
 
-    pub unsafe fn get<T>(&self) -> *const T {
+    pub unsafe fn cast<T>(&self) -> *const T {
         self.base.cast()
     }
 }

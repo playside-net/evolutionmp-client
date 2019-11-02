@@ -23,4 +23,8 @@ impl Player {
     pub fn get_name<'a>(&self) -> &'a str {
         unsafe { crate::native::player::get_name(self.handle) }
     }
+
+    pub fn disable_vehicle_rewards(&self) {
+        unsafe { crate::native::player::disable_vehicle_rewards(self.handle) }
+    }
 }

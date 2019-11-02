@@ -42,7 +42,7 @@ impl Scaleform {
         }
     }
 
-    pub fn render(&self, pos: Vector2, size: Vector2) {
+    pub fn render(&self, pos: Vector2<f32>, size: Vector2<f32>) {
         unsafe {
             crate::native::scaleform::render(self.handle, pos, size, self.color, 0)
         }
@@ -54,7 +54,7 @@ impl Scaleform {
         }
     }
 
-    pub fn render_volumetric(&self, pos: Vector3, rot: Vector3, scale: Vector3, additive: bool) {
+    pub fn render_volumetric(&self, pos: Vector3<f32>, rot: Vector3<f32>, scale: Vector3<f32>, additive: bool) {
         unsafe {
             if additive {
                 crate::native::scaleform::render_volumetric(self.handle, pos, rot, 2.0, 2.0, 1.0, scale, 2)

@@ -40,3 +40,11 @@ pub unsafe fn is_dead(player: Handle) -> bool {
 pub unsafe fn is_pressing_horn(player: Handle) -> bool {
     invoke!(bool, 0xFA1E2BF8B10598F9, player)
 }
+
+pub unsafe fn set_max_wanted_level(max_level: u32) {
+    invoke!((), 0xAA5F02DB48D704B9, max_level)
+}
+
+pub unsafe fn disable_vehicle_rewards(player: Handle) {
+    invoke!((), 0xC142BE3BB9CE125F, player)
+}

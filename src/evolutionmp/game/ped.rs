@@ -46,6 +46,14 @@ impl Ped {
             Vehicle::from_handle(handle)
         }
     }
+
+    pub fn clear_tasks_immediately(&self) {
+        unsafe { native::ped::clear_tasks_immediately(self.handle) }
+    }
+
+    pub fn put_into_vehicle(&self, vehicle: &Vehicle, seat: i32) {
+        unsafe { native::ped::put_into_vehicle(self.handle, vehicle.get_handle(), seat) }
+    }
 }
 
 impl Entity for Ped {

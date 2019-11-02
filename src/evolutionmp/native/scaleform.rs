@@ -49,7 +49,7 @@ pub unsafe fn get_method_return_value_int(handle: Handle) -> i32 {
     invoke!(i32, 0x2DE7EFA66B906036, handle)
 }
 
-pub unsafe fn render(handle: Handle, pos: Vector2, size: Vector2, color: Rgba, unk: i32) {
+pub unsafe fn render(handle: Handle, pos: Vector2<f32>, size: Vector2<f32>, color: Rgba, unk: i32) {
     invoke!((), 0x54972ADAF0294A93, handle, pos, size, color, unk)
 }
 
@@ -57,10 +57,10 @@ pub unsafe fn render_fullscreen(handle: Handle, color: Rgba, unk: i32) {
     invoke!((), 0x54972ADAF0294A93, handle, color, unk)
 }
 
-pub unsafe fn render_volumetric(handle: Handle, pos: Vector3, rot: Vector3, p4: f32, sharpness: f32, p6: f32, scale: Vector3, p8: i32) {
+pub unsafe fn render_volumetric(handle: Handle, pos: Vector3<f32>, rot: Vector3<f32>, p4: f32, sharpness: f32, p6: f32, scale: Vector3<f32>, p8: i32) {
     invoke!((), 0x87D51D72255D4E78, handle, pos, rot, p4, sharpness, p6, scale, p8)
 }
 
-pub unsafe fn render_volumetric_non_additive(handle: Handle, pos: Vector3, rot: Vector3, p4: f32, sharpness: f32, p6: f32, scale: Vector3, p8: i32) {
+pub unsafe fn render_volumetric_non_additive(handle: Handle, pos: Vector3<f32>, rot: Vector3<f32>, p4: f32, sharpness: f32, p6: f32, scale: Vector3<f32>, p8: i32) {
     invoke!((), 0x1CE592FDC749D6F5, handle, pos, rot, p4, sharpness, p6, scale, p8)
 }

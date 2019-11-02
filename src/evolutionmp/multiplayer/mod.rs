@@ -1,5 +1,197 @@
-pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
-    "replay_controller", "selector", "abigail1",
+use crate::runtime::{Script, ScriptEnv};
+use crate::pattern::MemoryRegion;
+use crate::GameState;
+use crate::{invoke, game, native};
+use crate::game::entity::Entity;
+use crate::game::stats::Stat;
+use crate::game::ped::Ped;
+use crate::game::player::Player;
+use crate::game::vehicle::Vehicle;
+use crate::game::{streaming, gameplay, dlc, script, clock};
+use crate::win::input::{KeyEvent, InputEvent};
+use crate::hash::joaat;
+use std::time::{Duration, Instant};
+use game::controls::{Control, Group as ControlGroup};
+use game::ui::{CursorSprite, LoadingPrompt};
+use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK};
+use crate::game::Vector3;
+use crate::info;
+
+pub unsafe fn init(mem: &MemoryRegion) {
+    crate::runtime::register_script(ScriptCleanWorld {
+        last_cleanup: Instant::now()
+    });
+}
+
+pub struct ScriptCleanWorld {
+    last_cleanup: Instant
+}
+
+impl Script for ScriptCleanWorld {
+    fn prepare(&mut self, mut env: ScriptEnv) {
+        let pos = Vector3::new(0.0, 0.0, 73.5);
+
+        streaming::stop_player_switch();
+        streaming::load_scene(pos);
+
+        let player = Player::local();
+        let ped = player.get_ped();
+        ped.set_position_no_offset(pos, Vector3::union(false));
+        ped.clear_tasks_immediately();
+
+        gameplay::set_freemode_map_behavior(true);
+        game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
+        dlc::load_mp_maps();
+        script::shutdown_loading_screen();
+        game::ui::hide_loading_prompt();
+
+        clock::pause(true);
+
+        self.terminate_script("selector", true);
+        self.terminate_script("replay_controller", true);
+        self.terminate_all_scripts(true);
+
+        self.cleanup();
+
+        unsafe {
+            native::audio::set_flag("LoadMPData", true);
+            native::audio::set_flag("DisableBarks", true);
+            native::audio::set_flag("DisableFlightMusic", true);
+            native::audio::set_flag("PoliceScannerDisabled", true);
+            native::audio::set_flag("OnlyAllowScriptTriggerPoliceScanner", true);
+        }
+    }
+
+    fn frame(&mut self, mut env: ScriptEnv) {
+        self.disable_controls();
+
+        let player = Player::local();
+        let ped = player.get_ped();
+
+        if Instant::now() - self.last_cleanup >= Duration::from_secs(2) {
+            self.cleanup();
+            self.last_cleanup = Instant::now();
+        }
+
+        unsafe {
+            native::ped::set_density_multiplier_this_frame(0.0);
+            native::ped::set_scenario_density_multiplier_this_frame(0.0);
+
+            native::vehicle::set_density_multiplier_this_frame(0.0);
+            native::vehicle::set_random_density_multiplier_this_frame(0.0);
+
+            native::decision_event::suppress_shocking_events_next_frame();
+            native::decision_event::suppress_agitation_events_next_frame();
+        }
+
+        if let Some(veh) = ped.get_using_vehicle() {
+            let color = veh.get_colors();
+            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Primary: {}, Secondary: {}", color.primary, color.secondary));
+        } else {
+            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Pos: {:?}", ped.get_position()));
+            //game::ui::hide_loading_prompt();
+        }
+        let player = Player::local();
+        let ped = player.get_ped();
+    }
+
+    fn input(&mut self, mut env: ScriptEnv, event: InputEvent, time_caught: Instant) {
+        match event {
+            InputEvent::Keyboard(event) => {
+                let player = Player::local();
+                let ped = player.get_ped();
+                match event.key {
+                    VK_NUMPAD0 => {
+                        if let Some(veh) = ped.get_in_vehicle(false) {
+                            veh.repair();
+                        }
+                    },
+                    VK_NUMPAD5 => {
+                        if !ped.is_in_any_vehicle(false) {
+                            let veh = Vehicle::new(&mut env, "phantom2", ped.get_position(), ped.get_heading(), false, false)
+                                .expect("Vehicle creation failed");
+                            ped.put_into_vehicle(&veh, -1);
+                        }
+                    }
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+}
+
+impl ScriptCleanWorld {
+    fn cleanup(&self) {
+        let player = Player::local();
+        unsafe {
+            player.disable_vehicle_rewards();
+            native::player::set_max_wanted_level(0);
+
+            native::vehicle::set_garbage_trucks(false);
+            native::vehicle::set_random_boats(false);
+            native::vehicle::set_random_trains(false);
+            native::vehicle::set_far_draw(false);
+            native::vehicle::set_distant_visible(false);
+            native::vehicle::delete_all_trains();
+            native::vehicle::set_parked_count(-1);
+            native::vehicle::set_low_priority_generators_active(false);
+            native::vehicle::remove_vehicles_from_generators_in_area(Vector3::union(-9999.0), Vector3::union(9999.0), false);
+
+            native::ped::set_non_scenario_cops(false);
+            native::ped::set_cops(false);
+            native::ped::set_scenario_cops(false);
+
+            native::streaming::set_vehicle_population_budget(0);
+            native::streaming::set_ped_population_budget(0);
+
+            native::vehicle::set_distant_lights_visible(false);
+            native::vehicle::set_parked_density_multiplier_this_frame(0.0);
+
+            native::ui::set_map_revealed(true);
+        }
+    }
+
+    fn disable_controls(&self) {
+        for control in CONTROLS_TO_DISABLE.iter() {
+            game::controls::disable_action(ControlGroup::Move, *control, true);
+        }
+        game::controls::disable_action(ControlGroup::Wheel, Control::CharacterWheel, true);
+    }
+
+    fn terminate_all_scripts(&self, cleanup: bool) {
+        for script in SCRIPTS_TO_TERMINATE.iter() {
+            self.terminate_script(script, cleanup);
+        }
+    }
+
+    fn terminate_script(&self, script: &str, cleanup: bool) {
+        unsafe {
+            if cleanup {
+                native::script::mark_unused(script);
+                native::script::force_cleanup(script, 8);
+            }
+            native::script::terminate_all(script);
+        }
+    }
+}
+
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 13] = [
+    Control::EnterCheatCode,
+    Control::FrontendSocialClub,
+    Control::FrontendSocialClubSecondary,
+    Control::SpecialAbilityPC,
+    Control::SpecialAbilitySecondary,
+    Control::Phone,
+    Control::Duck,
+    Control::DropWeapon,
+    Control::DropAmmo,
+    Control::SelectCharacterFranklin, Control::SelectCharacterMichael,
+    Control::SelectCharacterTrevor, Control::SelectCharacterMultiplayer
+];
+
+pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [
+    "abigail1",
     "abigail2",
     "achievement_controller",
     "act_cinema",
@@ -13,16 +205,6 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "aicover_test",
     "ainewengland_test",
     "altruist_cult",
-    "ambientblimp",
-    "ambient_diving",
-    "ambient_mrsphilips",
-    "ambient_solomon",
-    "ambient_sonar",
-    "ambient_tonya",
-    "ambient_tonyacall",
-    "ambient_tonyacall2",
-    "ambient_tonyacall5",
-    "ambient_ufos",
     "am_airstrike",
     "am_ammo_drop",
     "am_armwrestling",
@@ -34,17 +216,17 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "am_challenges",
     "am_contact_requests",
     "am_cp_collection",
+    "am_cr_securityvan",
     "am_crate_drop",
     "am_criminal_damage",
-    "am_cr_securityvan",
     "am_darts",
     "am_dead_drop",
     "am_destroy_veh",
     "am_distract_cops",
     "am_doors",
     "am_ferriswheel",
-    "am_gang_call",
     "am_ga_pickups",
+    "am_gang_call",
     "am_heist_int",
     "am_heli_taxi",
     "am_hold_up",
@@ -63,6 +245,9 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "am_mp_garage_control",
     "am_mp_property_ext",
     "am_mp_property_int",
+    "am_mp_smpl_interior_ext",
+    "am_mp_smpl_interior_int",
+    "am_mp_warehouse",
     "am_mp_yacht",
     "am_npc_invites",
     "am_pass_the_parcel",
@@ -75,6 +260,16 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "am_rontrevor_cut",
     "am_taxi",
     "am_vehicle_spawn",
+    "ambient_diving",
+    "ambient_mrsphilips",
+    "ambient_solomon",
+    "ambient_sonar",
+    "ambient_tonya",
+    "ambient_tonyacall",
+    "ambient_tonyacall2",
+    "ambient_tonyacall5",
+    "ambient_ufos",
+    "ambientblimp",
     "animal_controller",
     "appbroadcast",
     "appcamera",
@@ -91,6 +286,7 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "appmpjoblistnew",
     "apporganiser",
     "apprepeatplay",
+    "appsecuroserv",
     "appsettings",
     "appsidetask",
     "apptextmessage",
@@ -109,6 +305,9 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "atm_trigger",
     "audiotest",
     "autosave_controller",
+    "b757d.projitems",
+    "b757d.shproj",
+    "b757d.sln",
     "bailbond1",
     "bailbond2",
     "bailbond3",
@@ -125,16 +324,17 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "bj",
     "blimptest",
     "blip_controller",
-    "bootycallhandler",
     "bootycall_debug_controller",
+    "bootycallhandler",
     "buddydeathresponse",
     "bugstar_mission_export",
-    "buildingsiteambience",
     "building_controller",
+    "buildingsiteambience",
     "cablecar",
-    "camera_test",
     "cam_coord_sender",
+    "camera_test",
     "candidate_controller",
+    "car_roof_test",
     "carmod_shop",
     "carsteal1",
     "carsteal2",
@@ -142,9 +342,8 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "carsteal4",
     "carwash1",
     "carwash2",
-    "car_roof_test",
-    "celebrations",
     "celebration_editor",
+    "celebrations",
     "cellphone_controller",
     "cellphone_flashhand",
     "charactergoals",
@@ -172,13 +371,14 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "creation_startup",
     "creator",
     "custom_config",
+    "cutscene_test",
     "cutscenemetrics",
     "cutscenesamples",
-    "cutscene_test",
     "darts",
     "debug",
     "debug_app_select_screen",
     "debug_launcher",
+    "debug_ped_data",
     "density_test",
     "dialogue_handler",
     "director_mode",
@@ -188,6 +388,7 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "docks_prep1",
     "docks_prep2b",
     "docks_setup",
+    "dont_cross_the_line",
     "dreyfuss1",
     "drf1",
     "drf2",
@@ -223,9 +424,9 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "extreme4",
     "fairgroundhub",
     "fake_interiors",
+    "fame_or_shame_set",
     "fameorshame_eps",
     "fameorshame_eps_1",
-    "fame_or_shame_set",
     "family1",
     "family1taxi",
     "family2",
@@ -253,33 +454,30 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "fbi4_prep4",
     "fbi4_prep5",
     "fbi5a",
-    "filenames.txt",
-    "finalea",
-    "finaleb",
-    "finalec1",
-    "finalec2",
     "finale_choice",
     "finale_credits",
     "finale_endgame",
     "finale_heist1",
+    "finale_heist2_intro",
     "finale_heist2a",
     "finale_heist2b",
-    "finale_heist2_intro",
     "finale_heist_prepa",
     "finale_heist_prepb",
     "finale_heist_prepc",
     "finale_heist_prepd",
     "finale_heist_prepeamb",
     "finale_intro",
+    "finalea",
+    "finaleb",
+    "finalec1",
+    "finalec2",
     "floating_help_controller",
-    "flowintrotitle",
-    "flowstartaccept",
     "flow_autoplay",
     "flow_controller",
     "flow_help",
+    "flowintrotitle",
+    "flowstartaccept",
     "flyunderbridges",
-    "fmmc_launcher",
-    "fmmc_playlist_controller",
     "fm_bj_race_controler",
     "fm_capture_creator",
     "fm_deathmatch_controler",
@@ -291,13 +489,15 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "fm_intro",
     "fm_intro_cut_dev",
     "fm_lts_creator",
+    "fm_main_menu",
     "fm_maintain_cloud_header_data",
     "fm_maintain_transition_players",
-    "fm_main_menu",
     "fm_mission_controller",
     "fm_mission_creator",
     "fm_race_controler",
     "fm_race_creator",
+    "fmmc_launcher",
+    "fmmc_playlist_controller",
     "forsalesigns",
     "fps_test",
     "fps_test_mag",
@@ -312,16 +512,24 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "fullmap_test",
     "fullmap_test_flow",
     "game_server_test",
+    "gb_airfreight",
     "gb_assault",
     "gb_bellybeast",
     "gb_carjacking",
+    "gb_cashing_out",
     "gb_collect_money",
+    "gb_contraband_buy",
+    "gb_contraband_defend",
+    "gb_contraband_sell",
     "gb_deathmatch",
     "gb_finderskeepers",
     "gb_fivestar",
+    "gb_fragile_goods",
+    "gb_headhunter",
     "gb_hunt_the_boss",
     "gb_point_to_point",
     "gb_rob_shop",
+    "gb_salvage",
     "gb_sightseer",
     "gb_terminate",
     "gb_yacht_rob",
@@ -425,10 +633,10 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "luxe_veh_activity",
     "magdemo",
     "magdemo2",
-    //"main",
-    "maintransition",
+    "main",
     "main_install",
     "main_persistent",
+    "maintransition",
     "martin1",
     "maude1",
     "maude_postbailbond",
@@ -454,8 +662,6 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "mission_triggerer_b",
     "mission_triggerer_c",
     "mission_triggerer_d",
-    "mpstatsinit",
-    "mptestbed",
     "mp_awards",
     "mp_fm_registration",
     "mp_menuped",
@@ -465,6 +671,8 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "mp_save_game_global_block",
     "mp_unlocks",
     "mp_weapons",
+    "mpstatsinit",
+    "mptestbed",
     "mrsphilips1",
     "mrsphilips2",
     "murdermystery",
@@ -534,26 +742,26 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "photographywildlife",
     "physics_perf_test",
     "physics_perf_test_launcher",
+    "pi_menu",
+    "pickup_controller",
     "pickuptest",
     "pickupvehicles",
-    "pickup_controller",
     "pilot_school",
     "pilot_school_mp",
-    "pi_menu",
     "placeholdermission",
     "placementtest",
     "planewarptest",
     "player_controller",
     "player_controller_b",
-    "player_scene_ft_franklin1",
     "player_scene_f_lamgraff",
     "player_scene_f_lamtaunt",
     "player_scene_f_taxi",
-    "player_scene_mf_traffic",
+    "player_scene_ft_franklin1",
     "player_scene_m_cinema",
     "player_scene_m_fbi2",
     "player_scene_m_kids",
     "player_scene_m_shopping",
+    "player_scene_mf_traffic",
     "player_scene_t_bbfight",
     "player_scene_t_chasecar",
     "player_scene_t_insult",
@@ -584,9 +792,6 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "randomchar_controller",
     "range_modern",
     "range_modern_mp",
-    "rerecord_recording",
-    "respawn_controller",
-    "restrictedareas",
     "re_abandonedcar",
     "re_accident",
     "re_armybase",
@@ -604,8 +809,8 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "re_domestic",
     "re_drunkdriver",
     "re_duel",
-    "re_gangfight",
     "re_gang_intimidation",
+    "re_gangfight",
     "re_getaway_driver",
     "re_hitch_lift",
     "re_homeland_security",
@@ -625,51 +830,56 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "re_snatched",
     "re_stag_do",
     "re_yetarian",
+    //"replay_controller",
+    "rerecord_recording",
+    //"respawn_controller",
+    "restrictedareas",
     "rollercoaster",
     "rural_bank_heist",
     "rural_bank_prep1",
     "rural_bank_setup",
-    "savegame_bed",
     "save_anywhere",
+    "savegame_bed",
+    "sc_lb_global_block",
     "scaleformgraphictest",
     "scaleformminigametest",
     "scaleformprofiling",
     "scaleformtest",
     "scene_builder",
     "sclub_front_bouncer",
+    "script_metrics",
     "scripted_cam_editor",
     "scriptplayground",
     "scripttest1",
     "scripttest2",
     "scripttest3",
     "scripttest4",
-    "script_metrics",
     "sctv",
-    "sc_lb_global_block",
+    //"selector",
     "selector_example",
     "selling_short_1",
     "selling_short_2",
-    "shooting_camera",
-    "shoprobberies",
-    "shop_controller",
-    "shot_bikejump",
-    "shrinkletter",
     "sh_intro_f_hills",
     "sh_intro_m_home",
+    "shooting_camera",
+    "shop_controller",
+    "shoprobberies",
+    "shot_bikejump",
+    "shrinkletter",
     "smoketest",
     "social_controller",
     "solomon1",
     "solomon2",
     "solomon3",
+    "sp_dlc_registration",
+    "sp_editor_mission_instance",
+    "sp_menuped",
+    "sp_pilotschool_reg",
     "spaceshipparts",
     "spawn_activities",
     "speech_reverb_tracker",
     "spmc_instancer",
     "spmc_preloader",
-    "sp_dlc_registration",
-    "sp_editor_mission_instance",
-    "sp_menuped",
-    "sp_pilotschool_reg",
     "standard_global_init",
     "standard_global_reg",
     "startup",
@@ -687,9 +897,6 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "stunt_plane_races",
     "tasklist_1",
     "tattoo_shop",
-    "taxilauncher",
-    "taxiservice",
-    "taxitutorial",
     "taxi_clowncar",
     "taxi_cutyouin",
     "taxi_deadline",
@@ -700,6 +907,9 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "taxi_procedural",
     "taxi_takeiteasy",
     "taxi_taketobest",
+    "taxilauncher",
+    "taxiservice",
+    "taxitutorial",
     "tempalpha",
     "temptest",
     "tennis",
@@ -716,10 +926,10 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "tonya4",
     "tonya5",
     "towing",
-    "traffickingsettings",
-    "traffickingteleport",
     "traffick_air",
     "traffick_ground",
+    "traffickingsettings",
+    "traffickingteleport",
     "train_create_widget",
     "train_tester",
     "trevor1",
@@ -733,11 +943,11 @@ pub(crate) const DISABLED_SCRIPTS: [&str; 747] = [
     "ugc_global_registration",
     "underwaterpickups",
     "utvc",
+    "veh_play_widget",
     "vehicle_ai_test",
     "vehicle_force_widget",
     "vehicle_gen_controller",
     "vehicle_plate",
-    "veh_play_widget",
     "walking_ped",
     "wardrobe_mp",
     "wardrobe_sp",

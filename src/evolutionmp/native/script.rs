@@ -32,3 +32,15 @@ pub unsafe fn terminate_active_thread() {
 pub unsafe fn terminate_thread(thread: Handle) {
     invoke!((), 0xC8B189ED9138BCD4, thread)
 }
+
+pub unsafe fn shutdown_loading_screen() {
+    invoke!((), 0x078EBE9809CCD637)
+}
+
+pub unsafe fn mark_unused(script: &str) {
+    invoke!((), 0xC90D2DCACD56184C, script)
+}
+
+pub unsafe fn force_cleanup(script: &str, flags: u32) {
+    invoke!((), 0x4C68DDDDF0097317, script, flags)
+}
