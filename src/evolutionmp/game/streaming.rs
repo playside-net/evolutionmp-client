@@ -1,8 +1,8 @@
 use crate::native;
-use crate::game::Vector3;
 use crate::hash::{Hash, Hashable};
 use crate::runtime::ScriptEnv;
 use std::time::Duration;
+use cgmath::Vector3;
 
 pub fn stop_player_switch() {
     unsafe { native::streaming::stop_player_switch() }

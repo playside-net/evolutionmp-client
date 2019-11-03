@@ -8,17 +8,21 @@ use crate::game::ped::Ped;
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
 use crate::game::{streaming, gameplay, dlc, script, clock};
-use crate::win::input::{KeyEvent, InputEvent};
+use crate::win::input::{KeyboardEvent, InputEvent};
 use crate::hash::joaat;
+use crate::info;
 use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
-use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK};
-use crate::game::Vector3;
-use crate::info;
+use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
+use cgmath::Vector3;
+
+pub mod console;
 
 pub unsafe fn init(mem: &MemoryRegion) {
-    crate::runtime::register_script(ScriptCleanWorld {
+    console::init(mem);
+
+    crate::runtime::register_script("clean_world", ScriptCleanWorld {
         last_cleanup: Instant::now()
     });
 }
@@ -36,7 +40,7 @@ impl Script for ScriptCleanWorld {
 
         let player = Player::local();
         let ped = player.get_ped();
-        ped.set_position_no_offset(pos, Vector3::union(false));
+        ped.set_position_no_offset(pos, Vector3::new(false, false, false));
         ped.clear_tasks_immediately();
 
         gameplay::set_freemode_map_behavior(true);
@@ -84,23 +88,21 @@ impl Script for ScriptCleanWorld {
             native::decision_event::suppress_agitation_events_next_frame();
         }
 
-        if let Some(veh) = ped.get_using_vehicle() {
+        /*if let Some(veh) = ped.get_using_vehicle() {
             let color = veh.get_colors();
             game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Primary: {}, Secondary: {}", color.primary, color.secondary));
         } else {
             game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Pos: {:?}", ped.get_position()));
             //game::ui::hide_loading_prompt();
-        }
-        let player = Player::local();
-        let ped = player.get_ped();
+        }*/
     }
 
     fn input(&mut self, mut env: ScriptEnv, event: InputEvent, time_caught: Instant) {
         match event {
-            InputEvent::Keyboard(event) => {
+            InputEvent::Keyboard(KeyboardEvent::Key { key, .. }) => {
                 let player = Player::local();
                 let ped = player.get_ped();
-                match event.key {
+                match key {
                     VK_NUMPAD0 => {
                         if let Some(veh) = ped.get_in_vehicle(false) {
                             veh.repair();
@@ -115,7 +117,7 @@ impl Script for ScriptCleanWorld {
                     }
                     _ => {}
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -124,8 +126,9 @@ impl Script for ScriptCleanWorld {
 impl ScriptCleanWorld {
     fn cleanup(&self) {
         let player = Player::local();
+        player.disable_vehicle_rewards();
+
         unsafe {
-            player.disable_vehicle_rewards();
             native::player::set_max_wanted_level(0);
 
             native::vehicle::set_garbage_trucks(false);
@@ -136,7 +139,11 @@ impl ScriptCleanWorld {
             native::vehicle::delete_all_trains();
             native::vehicle::set_parked_count(-1);
             native::vehicle::set_low_priority_generators_active(false);
-            native::vehicle::remove_vehicles_from_generators_in_area(Vector3::union(-9999.0), Vector3::union(9999.0), false);
+            native::vehicle::remove_vehicles_from_generators_in_area(
+                Vector3::new(-9999.0, -9999.0, -9999.0),
+                Vector3::new(9999.0, 9999.0, 9999.0),
+                false
+            );
 
             native::ped::set_non_scenario_cops(false);
             native::ped::set_cops(false);

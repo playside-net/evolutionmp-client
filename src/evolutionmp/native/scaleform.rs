@@ -1,5 +1,6 @@
 use crate::invoke;
-use crate::game::{Handle, Vector2, Rgba, Vector3};
+use crate::game::{Handle, Rgba};
+use cgmath::{Vector2, Vector3};
 
 pub unsafe fn request(id: &str) -> Handle {
     invoke!(Handle, 0x11FE353CF9733E6F, id)

@@ -21,6 +21,7 @@ serde = "*"
 dirs = "*"
 libc = "*"
 field-offset = "*"
+cgmath = "*"
 
 [[bin]]
 name = "launcher"

@@ -1,4 +1,5 @@
-use crate::game::{Handle, Vector3, Vector2, Rgba};
+use crate::game::{Handle, Rgba};
+use cgmath::{Vector2, Vector3};
 
 pub struct Scaleform {
     handle: Handle,

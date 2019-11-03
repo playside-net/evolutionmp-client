@@ -1,6 +1,6 @@
 use crate::pattern::MemoryRegion;
 use crate::{info, error};
-use crate::game::{Vector3, Vector2, Rgba, Rgb};
+use crate::game::{Rgba, Rgb};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ffi::{CString, CStr};
@@ -11,6 +11,7 @@ use winapi::shared::basetsd::DWORD64;
 use winapi::ctypes::c_void;
 use std::time::Duration;
 use byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
+use cgmath::{Vector3, Vector2};
 
 pub mod ui;
 pub mod graphics;
@@ -319,11 +320,10 @@ impl NativeStackValue for Rgba {
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        let stack = stack as *mut i32;
-        stack.add(1).write((self.r * 255.0) as i32);
-        stack.add(3).write((self.g * 255.0) as i32);
-        stack.add(5).write((self.b * 255.0) as i32);
-        stack.add(7).write((self.a * 255.0) as i32);
+        (self.r as i32).write_to_stack(stack.add(0));
+        (self.g as i32).write_to_stack(stack.add(1));
+        (self.b as i32).write_to_stack(stack.add(2));
+        (self.a as i32).write_to_stack(stack.add(3));
     }
 
     fn get_stack_size(&self) -> usize {
@@ -333,18 +333,16 @@ impl NativeStackValue for Rgba {
 
 impl NativeStackValue for Rgb {
     unsafe fn read_from_stack(stack: *const u64) -> Self {
-        let stack = stack as *mut i32;
-        let r = stack.offset(1).read();
-        let g = stack.offset(3).read();
-        let b = stack.offset(5).read();
-        Rgb::new(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
+        let r = i32::read_from_stack(stack.offset(0)) as u8;
+        let g = i32::read_from_stack(stack.offset(1)) as u8;
+        let b = i32::read_from_stack(stack.offset(2)) as u8;
+        Rgb::new(r, g, b)
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        let stack = stack as *mut i32;
-        stack.add(1).write((self.r * 255.0) as i32);
-        stack.add(3).write((self.g * 255.0) as i32);
-        stack.add(5).write((self.b * 255.0) as i32);
+        (self.r as i32).write_to_stack(stack.add(0));
+        (self.g as i32).write_to_stack(stack.add(1));
+        (self.b as i32).write_to_stack(stack.add(2));
     }
 
     fn get_stack_size(&self) -> usize {

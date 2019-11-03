@@ -5,7 +5,7 @@ use crate::hash::joaat;
 use crate::game::player::Player;
 use crate::game::entity::Entity;
 use crate::game::ui::{CursorSprite, LoadingPrompt};
-use crate::win::input::{InputHook, KeyEvent};
+use crate::win::input::{InputHook, KeyboardEvent};
 use crate::game::scaleform::Scaleform;
 use crate::runtime::Script;
 use crate::game::GameState;

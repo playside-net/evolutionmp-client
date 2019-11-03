@@ -1,5 +1,5 @@
 use crate::invoke;
-use crate::game::{Handle, Vector3};
+use crate::game::Handle;
 use crate::hash::Hash;
 
 pub unsafe fn set_freemode_map_behavior(freemode_behavior: bool) {

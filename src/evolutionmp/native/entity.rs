@@ -1,6 +1,7 @@
 use crate::invoke;
-use crate::game::{Handle, Vector3};
+use crate::game::Handle;
 use crate::hash::Hash;
+use cgmath::Vector3;
 
 pub unsafe fn exists(handle: Handle) -> bool {
     invoke!(bool, 0x7239B21A38F536BA, handle)

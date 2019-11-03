@@ -1,6 +1,7 @@
 use crate::invoke;
-use crate::game::{Handle, Vector3};
+use crate::game::Handle;
 use crate::hash::Hashable;
+use cgmath::Vector3;
 
 pub unsafe fn new<H>(model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Handle where H: Hashable {
     invoke!(Handle, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check)

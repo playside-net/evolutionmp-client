@@ -1,3 +1,10 @@
+use crate::{invoke, native};
+use crate::game::Rgba;
+use cgmath::Vector2;
+
+pub const BASE_WIDTH: f32 = 1280.0;
+pub const BASE_HEIGHT: f32 = 720.0;
+
 pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {
     unsafe {
         crate::native::ui::set_loading_prompt_text_entry("STRING");
@@ -13,6 +20,51 @@ pub fn show_subtitle(text: &str, duration: i32, immediately: bool) {
         crate::native::ui::push_string(text);
         invoke!((), 0x9D77056A530643F6, duration, immediately);
     }
+}
+
+pub fn draw_rect<P, S, C>(pos: P, size: S, color: C)
+    where P: Into<Vector2<f32>>, S: Into<Vector2<f32>>, C: Into<Rgba>
+{
+    let pos = pos.into();
+    let pos = Vector2::new(pos.x / BASE_WIDTH, pos.y / BASE_HEIGHT);
+    let size = size.into();
+    let size = Vector2::new(size.x / BASE_WIDTH, size.y / BASE_HEIGHT);
+
+    unsafe { native::ui::draw_rect(pos + size * 0.5, size, color.into()) }
+}
+
+pub fn draw_text<T, P, S>(text: T, pos: P, color: Rgba, font: Font, scale: S)
+    where T: AsRef<str>, P: Into<Vector2<f32>>, S: Into<Vector2<f32>>
+{
+    let pos = pos.into();
+    let pos = Vector2::new(pos.x / BASE_WIDTH, pos.y / BASE_HEIGHT);
+    unsafe {
+        native::ui::set_text_font(font as u32);
+        native::ui::set_text_scale(scale.into());
+        native::ui::set_text_color(color);
+        native::ui::begin_text_command_draw("CELL_EMAIL_BCON");
+        native::ui::push_string(text.as_ref());
+        native::ui::end_text_command_draw(pos.into())
+    }
+}
+
+pub fn get_text_width<T>(text: T, font: Font, scale: Vector2<f32>) -> f32 where T: AsRef<str> {
+    unsafe {
+        native::ui::set_text_font(font as u32);
+        native::ui::set_text_scale(scale);
+        native::ui::begin_text_command_width("CELL_EMAIL_BCON");
+        native::ui::push_string(text.as_ref());
+        native::ui::end_text_command_width(true)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Font {
+    ChaletLondon,
+    HouseScript,
+    Monospace,
+    ChaletComprimeCologne = 4,
+    Pricedown = 7
 }
 
 pub enum LoadingPrompt {

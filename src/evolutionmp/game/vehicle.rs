@@ -1,6 +1,5 @@
 use super::Handle;
 use crate::native;
-use crate::game::Vector3;
 use crate::game::entity::Entity;
 use crate::hash::Hashable;
 use crate::game;
@@ -8,6 +7,7 @@ use crate::game::ped::Ped;
 use crate::game::streaming::Model;
 use winapi::_core::time::Duration;
 use crate::runtime::ScriptEnv;
+use cgmath::Vector3;
 
 pub struct Vehicle {
     handle: Handle

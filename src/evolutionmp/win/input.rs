@@ -1,7 +1,7 @@
-use winapi::shared::windef::HWND;
+use winapi::shared::windef::{HWND, POINT};
 use winapi::shared::basetsd::LONG_PTR;
 use winapi::shared::minwindef::{UINT, WPARAM, LPARAM, LRESULT};
-use winapi::um::winuser::{WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_MOUSEMOVE, CallWindowProcA, WNDPROC, FindWindowA, SetWindowLongPtrA, GWLP_WNDPROC, GET_WHEEL_DELTA_WPARAM};
+use winapi::um::winuser::{WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_MOUSEMOVE, CallWindowProcA, WNDPROC, FindWindowA, SetWindowLongPtrA, GWLP_WNDPROC, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, VK_SHIFT, VK_CONTROL, WM_CHAR, WM_UNICHAR, SetWindowLongPtrW, CallWindowProcW, TranslateMessage, GetMessageW, MSG};
 use winapi::um::sysinfoapi::GetTickCount;
 use std::sync::{Arc, Mutex};
 use std::cell::UnsafeCell;
@@ -27,19 +27,24 @@ impl EventPool {
 
 #[derive(Debug, Copy, Clone)]
 pub enum InputEvent {
-    Keyboard(KeyEvent),
+    Keyboard(KeyboardEvent),
     Mouse(MouseEvent)
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct KeyEvent {
-    pub key: i32,
-    pub repeats: u16,
-    pub scan_code: u8,
-    pub is_extended: bool,
-    pub alt: bool,
-    pub was_down_before: bool,
-    pub is_up: bool
+pub enum KeyboardEvent {
+    Key {
+        key: i32,
+        repeats: u16,
+        scan_code: u8,
+        is_extended: bool,
+        alt: bool,
+        shift: bool,
+        control: bool,
+        was_down_before: bool,
+        is_up: bool
+    },
+    Char(char)
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -58,12 +63,14 @@ pub enum MouseButton {
 pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_KEYDOWN | WM_KEYUP | WM_SYSKEYDOWN | WM_SYSKEYUP => {
-            let event = KeyEvent {
+            let event = KeyboardEvent::Key {
                 key: wparam as i32,
                 repeats: (lparam & 0xFFFF) as u16,
                 scan_code: ((lparam >> 16) & 0xFF) as u8,
                 is_extended: ((lparam >> 24) & 1) == 1,
                 alt: msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP,
+                shift: (GetAsyncKeyState(VK_SHIFT) as usize & 0x8000) != 0,
+                control: (GetAsyncKeyState(VK_CONTROL) as usize & 0x8000) != 0,
                 was_down_before: ((lparam >> 30) & 1) == 1,
                 is_up: msg == WM_SYSKEYUP || msg == WM_KEYUP
             };
@@ -89,14 +96,26 @@ pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lp
             let x = lparam as i16;
             let y = (lparam >> 16) as i16;
             EVENT_POOL.as_mut().unwrap().send(InputEvent::Mouse(MouseEvent::Move(x, y)))
+        },
+        WM_CHAR => {
+            let mut msg = MSG {
+                hwnd,
+                message: msg,
+                wParam: wparam,
+                lParam: lparam,
+                time: GetTickCount(),
+                pt: POINT { x: 0, y: 0 }
+            };
+            TranslateMessage(&msg as *const MSG);
+            let wparam = msg.wParam;
+            if wparam > 0 && wparam < 0x10000 {
+                let c = std::mem::transmute(wparam as u32);
+                EVENT_POOL.as_mut().unwrap().send(InputEvent::Keyboard(KeyboardEvent::Char(c)))
+            }
         }
         _ => {}
     }
-    let alt = msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP;
-    if msg == WM_KEYDOWN || msg == WM_KEYUP || alt {
-
-    }
-    CallWindowProcA(WND_PROC, hwnd, msg, wparam, lparam)
+    CallWindowProcW(WND_PROC, hwnd, msg, wparam, lparam)
 }
 
 pub struct InputHook {
@@ -113,7 +132,7 @@ impl InputHook {
             handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
             std::thread::sleep(Duration::from_millis(100));
         }
-        let proc = std::mem::transmute(SetWindowLongPtrA(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
+        let proc = std::mem::transmute(SetWindowLongPtrW(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
         WND_PROC = proc;
         if proc.is_none() {
             None
@@ -134,7 +153,7 @@ impl std::ops::Drop for InputHook {
         unsafe {
             let window = CString::new("grcWindow").unwrap();
             let handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
-            SetWindowLongPtrA(handle, GWLP_WNDPROC, std::mem::transmute(WND_PROC.unwrap()));
+            SetWindowLongPtrW(handle, GWLP_WNDPROC, std::mem::transmute(WND_PROC.unwrap()));
         }
     }
 }

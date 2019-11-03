@@ -1,4 +1,6 @@
 use crate::invoke;
+use cgmath::Vector2;
+use crate::game::Rgba;
 
 pub unsafe fn set_credits_active(active: bool) {
     invoke!((), 0xB938B7E6D3C0620C, active);
@@ -60,4 +62,36 @@ pub unsafe fn is_big_map_active() -> bool {
 
 pub unsafe fn is_big_map_full() -> bool {
     super::REVEAL_FULL_MAP.read()
+}
+
+pub unsafe fn draw_rect(pos: Vector2<f32>, size: Vector2<f32>, color: Rgba) {
+    invoke!((), 0x3A618A217E5154F0, pos, size, color)
+}
+
+pub unsafe fn set_text_font(font: u32) {
+    invoke!((), 0x66E0276CC5F6B9DA, font)
+}
+
+pub unsafe fn set_text_scale(scale: Vector2<f32>) {
+    invoke!((), 0x07C837F9A01C34C9, scale)
+}
+
+pub unsafe fn set_text_color(color: Rgba) {
+    invoke!((), 0xBE6B23FFA53FB442, color)
+}
+
+pub unsafe fn begin_text_command_draw(ty: &str) {
+    invoke!((), 0x25FBB336DF1804CB, ty)
+}
+
+pub unsafe fn end_text_command_draw(pos: Vector2<f32>) {
+    invoke!((), 0xCD015E5BB0D96A57, pos)
+}
+
+pub unsafe fn begin_text_command_width(ty: &str) {
+    invoke!((), 0x54CE8AC98E120CAB, ty)
+}
+
+pub unsafe fn end_text_command_width(unknown: bool) -> f32 {
+    invoke!(f32, 0x85F061DA64ED2F67, unknown)
 }

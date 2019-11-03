@@ -1,6 +1,7 @@
 use crate::invoke;
-use crate::game::{Handle, Vector3};
+use crate::game::Handle;
 use crate::hash::Hash;
+use cgmath::Vector3;
 
 pub unsafe fn set_vehicle_population_budget(budget: u32) {
     invoke!((), 0xCB9E1EB3BE2AF4E9, budget)

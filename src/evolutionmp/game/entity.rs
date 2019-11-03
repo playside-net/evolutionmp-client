@@ -1,7 +1,7 @@
-use crate::game::Vector3;
 use crate::hash::Hash;
 use super::Handle;
 use std::ffi::{CString, CStr};
+use cgmath::Vector3;
 
 pub trait Entity {
     fn get_handle(&self) -> Handle;
