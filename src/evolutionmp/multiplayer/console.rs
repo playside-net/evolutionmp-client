@@ -4,7 +4,7 @@ use crate::game::Rgba;
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::pattern::MemoryRegion;
 use crate::win::input::{InputEvent, KeyboardEvent};
-use std::time::Instant;
+use std::time::{Instant, UNIX_EPOCH, SystemTime};
 use std::sync::MutexGuard;
 use std::collections::VecDeque;
 use std::os::raw::c_int;
@@ -22,8 +22,8 @@ pub const INPUT_COLOR: Rgba = Rgba::WHITE;
 pub const INPUT_COLOR_BUSY: Rgba = Rgba::DARK_GRAY;
 pub const OUTPUT_COLOR: Rgba = Rgba::WHITE;
 pub const PREFIX_COLOR: Rgba = Rgba::new(52, 152, 219, 255);
-pub const BACKGROUND_COLOR: Rgba = Rgba::BLACK;
-pub const ALT_BACKGROUND_COLOR: Rgba = Rgba::new(52, 73, 94, 255);
+pub const BACKGROUND_COLOR: Rgba = Rgba::new(0, 0, 0, 127);
+pub const ALT_BACKGROUND_COLOR: Rgba = Rgba::new(52, 73, 94, 127);
 
 pub fn init(runtime: &mut Runtime) {
     runtime.register_script("console", ScriptConsole {
@@ -191,7 +191,7 @@ impl ScriptConsole {
     fn draw(&self) {
         use crate::game::ui::{draw_rect, draw_text, get_text_width};
 
-        let now = Instant::now();
+        let now = SystemTime::now();
         let scale = Vector2::new(0.35, 0.35);
         // Draw background
         draw_rect([0.0, 0.0], [CONSOLE_WIDTH, CONSOLE_HEIGHT], BACKGROUND_COLOR);
@@ -207,7 +207,7 @@ impl ScriptConsole {
         draw_text(format!("Page {}/{}", self.current_page, total_pages), [5.0, CONSOLE_HEIGHT + INPUT_HEIGHT], INPUT_COLOR, FONT, scale);
 
         // Draw blinking cursor
-        if (now.elapsed().as_millis() % 1000) < 500 {
+        if now.duration_since(UNIX_EPOCH).unwrap().subsec_millis() < 500 {
             let length = get_text_width(&self.input[0..self.cursor_pos], FONT, scale);
             draw_text("~w~~h~|~w~", [25.0 + (length * CONSOLE_WIDTH) - 4.0, CONSOLE_HEIGHT], INPUT_COLOR, FONT, scale);
         }

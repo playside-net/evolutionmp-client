@@ -19,10 +19,10 @@ pub type Handle = u32;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rgba {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8
+    pub r: u32,
+    pub g: u32,
+    pub b: u32,
+    pub a: u32
 }
 
 impl Rgba {
@@ -30,20 +30,20 @@ impl Rgba {
     pub const DARK_GRAY: Rgba = Rgba::new(81, 81, 81, 255);
     pub const BLACK: Rgba = Rgba::new(0, 0, 0, 255);
 
-    pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Rgba {
+    pub const fn new(r: u32, g: u32, b: u32, a: u32) -> Rgba {
         Rgba { r, g, b, a }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rgb {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8
+    pub r: u32,
+    pub g: u32,
+    pub b: u32
 }
 
 impl Rgb {
-    pub const fn new(r: u8, g: u8, b: u8) -> Rgb {
+    pub const fn new(r: u32, g: u32, b: u32) -> Rgb {
         Rgb { r, g, b }
     }
 }

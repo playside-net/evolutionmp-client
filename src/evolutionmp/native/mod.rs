@@ -314,7 +314,7 @@ impl<T> NativeStackValue for Vector2<T> where T: NativeStackValue + Copy + Clone
     }
 
     fn get_stack_size(&self) -> usize {
-        3
+        2
     }
 }
 
@@ -324,10 +324,10 @@ impl NativeStackValue for Rgba {
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        (self.r as i32).write_to_stack(stack.add(0));
-        (self.g as i32).write_to_stack(stack.add(1));
-        (self.b as i32).write_to_stack(stack.add(2));
-        (self.a as i32).write_to_stack(stack.add(3));
+        self.r.write_to_stack(stack.add(0));
+        self.g.write_to_stack(stack.add(1));
+        self.b.write_to_stack(stack.add(2));
+        self.a.write_to_stack(stack.add(3));
     }
 
     fn get_stack_size(&self) -> usize {
@@ -337,16 +337,16 @@ impl NativeStackValue for Rgba {
 
 impl NativeStackValue for Rgb {
     unsafe fn read_from_stack(stack: *const u64) -> Self {
-        let r = i32::read_from_stack(stack.offset(0)) as u8;
-        let g = i32::read_from_stack(stack.offset(1)) as u8;
-        let b = i32::read_from_stack(stack.offset(2)) as u8;
+        let r = u32::read_from_stack(stack.offset(0));
+        let g = u32::read_from_stack(stack.offset(1));
+        let b = u32::read_from_stack(stack.offset(2));
         Rgb::new(r, g, b)
     }
 
     unsafe fn write_to_stack(self, stack: *mut u64) {
-        (self.r as i32).write_to_stack(stack.add(0));
-        (self.g as i32).write_to_stack(stack.add(1));
-        (self.b as i32).write_to_stack(stack.add(2));
+        self.r.write_to_stack(stack.add(0));
+        self.g.write_to_stack(stack.add(1));
+        self.b.write_to_stack(stack.add(2));
     }
 
     fn get_stack_size(&self) -> usize {
@@ -354,6 +354,8 @@ impl NativeStackValue for Rgb {
     }
 }
 
+impl NativeStackValue for u8 {}
+impl NativeStackValue for &mut u8 {}
 impl NativeStackValue for i32 {}
 impl NativeStackValue for &mut i32 {}
 impl NativeStackValue for u32 {}

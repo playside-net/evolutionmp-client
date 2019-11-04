@@ -45,6 +45,7 @@ fn main() {
                             let error_code = unsafe { GetLastError() } as i32;
                             let error = std::io::Error::from_raw_os_error(error_code);
                             eprintln!("Module injection failed: {}", error);
+                            process.kill().expect("Process kill failed");
                             return;
                         }
                         module => {
