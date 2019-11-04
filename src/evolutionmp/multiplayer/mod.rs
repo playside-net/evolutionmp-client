@@ -17,6 +17,7 @@ use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
 use cgmath::Vector3;
 use std::collections::VecDeque;
+use crate::game::streaming::Model;
 
 pub mod console;
 
@@ -119,21 +120,26 @@ impl Script for ScriptCleanWorld {
                                     veh.repair();
                                 }
                             },
-                            VK_NUMPAD5 => {
-                                self.tasks.push_back(Box::new(|env| {
-                                    let player = Player::local();
-                                    let ped = player.get_ped();
-                                    if !ped.is_in_any_vehicle(false) {
-                                        let veh = Vehicle::new(env, "neon", ped.get_position(), ped.get_heading(), false, false)
-                                            .expect("Vehicle creation failed");
-                                        ped.put_into_vehicle(&veh, -1);
-                                    }
-                                }));
-                            }
                             _ => {}
                         }
                     },
                     _ => {}
+                }
+            },
+            ScriptEvent::ConsoleInput(input) => {
+                let input = input.clone();
+                let model = Model::new(&input);
+                if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
+                    self.tasks.push_back(Box::new(move |env| {
+                        let player = Player::local();
+                        let ped = player.get_ped();
+                        if !ped.is_in_any_vehicle(false) {
+                            let veh = Vehicle::new(env, model, ped.get_position(), ped.get_heading(), false, false)
+                                .expect("Vehicle creation failed");
+                            ped.put_into_vehicle(&veh, -1);
+                            env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position.", input))
+                        }
+                    }));
                 }
             }
             _ => {}

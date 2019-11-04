@@ -65,7 +65,7 @@ impl Model {
 }
 
 impl Hashable for Model {
-    fn joaat(&self) -> u32 {
+    fn joaat(&self) -> Hash {
         self.hash
     }
 }

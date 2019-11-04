@@ -35,9 +35,13 @@ static_detour! {
 
 fn get_frame_count_native(context: *mut NativeCallContext) {
     unsafe {
-        if let Some(runtime) = RUNTIME.as_mut() {
-            runtime.frame();
+        loop {
+            if let Some(runtime) = RUNTIME.as_mut() {
+                runtime.frame();
+                break;
+            }
         }
+
     }
     GetFrameCountHook.call(context)
 }
@@ -133,7 +137,7 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     RUNTIME = Some(runtime);
 
     let launcher_path = Path::new("C:/Users/Виктор/Desktop/Проекты/Rust/evolutionmp-client");
-    start_vm(launcher_path);
+    //start_vm(launcher_path);
 }
 
 pub struct ScriptContainer {
@@ -223,6 +227,10 @@ impl<'a> ScriptEnv<'a> {
     pub fn event(&mut self, event: ScriptEvent) {
         let mut event_pool = self.container.event_pool.as_mut().expect("missing env event pool");
         event_pool.push_output(event);
+    }
+
+    pub fn log<L>(&mut self, line: L) where L: Into<String> {
+        self.event(ScriptEvent::ConsoleOutput(line.into()));
     }
 }
 

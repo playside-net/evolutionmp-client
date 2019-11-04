@@ -28,7 +28,7 @@ pub const ALT_BACKGROUND_COLOR: Rgba = Rgba::new(52, 73, 94, 127);
 pub fn init(runtime: &mut Runtime) {
     runtime.register_script("console", ScriptConsole {
         cursor_pos: 0,
-        command_pos: -1,
+        command_pos: 0,
         current_page: 1,
         input: String::new(),
         line_history: Vec::new(),
@@ -39,7 +39,7 @@ pub fn init(runtime: &mut Runtime) {
 
 pub struct ScriptConsole {
     cursor_pos: usize,
-    command_pos: i32,
+    command_pos: usize,
     current_page: usize,
     input: String,
     line_history: Vec<String>,
@@ -77,28 +77,35 @@ impl Script for ScriptConsole {
 
                                 match *key {
                                     VK_BACK if open => {
-                                        if self.input.len() > 0 && self.cursor_pos > 0 {
-                                            self.input.remove(self.cursor_pos - 1);
+                                        let pos = self.cursor_pos;
+                                        if self.get_input().len() > 0 && pos > 0 {
+                                            self.get_input_mut().remove(pos - 1);
                                             self.cursor_pos -= 1;
                                         }
                                     },
                                     VK_DELETE if open => {
-                                        if self.input.len() > 0 && self.cursor_pos < self.input.len() {
-                                            self.input.remove(self.cursor_pos);
+                                        let pos = self.cursor_pos;
+                                        let len = self.get_input().len();
+                                        if len > 0 && pos < len {
+                                            self.get_input_mut().remove(pos);
                                         }
                                     },
                                     VK_LEFT if open => {
                                         if *control {
 
                                         } else {
-
+                                            if self.cursor_pos > 0 {
+                                                self.cursor_pos -= 1;
+                                            }
                                         }
                                     },
                                     VK_RIGHT if open => {
                                         if *control {
 
                                         } else {
-
+                                            if self.cursor_pos < self.get_input().len() {
+                                                self.cursor_pos -= 1;
+                                            }
                                         }
                                     },
                                     VK_HOME if open => {
@@ -108,20 +115,36 @@ impl Script for ScriptConsole {
 
                                     },
                                     VK_UP if open => {
-
+                                        if self.command_pos < self.command_history.len() {
+                                            self.command_pos += 1;
+                                            self.cursor_pos = self.get_input().len();
+                                        }
                                     },
                                     VK_DOWN if open => {
-
+                                        if self.command_pos > 0 {
+                                            self.command_pos -= 1;
+                                            self.cursor_pos = self.get_input().len();
+                                        }
                                     },
                                     VK_ESCAPE if open => {
                                         self.set_open(false);
                                     },
                                     VK_RETURN if open => {
-                                        self.set_open(false);
-                                        let mut input = String::new();
-                                        std::mem::swap(&mut self.input, &mut input);
-                                        self.cursor_pos = 0;
-                                        output.push_back(ScriptEvent::ConsoleInput(input));
+                                        if self.command_pos == 0 {
+                                            if !!self.input.is_empty() {
+                                                let mut input = String::new();
+                                                std::mem::swap(&mut self.input, &mut input);
+                                                self.cursor_pos = 0;
+                                                self.command_history.push(input.clone());
+                                                output.push_back(ScriptEvent::ConsoleInput(input));
+                                            }
+                                        } else {
+                                            let input = self.command_history[self.command_pos - 1].clone();
+                                            self.input = String::new();
+                                            self.cursor_pos = 0;
+                                            self.command_pos = 0;
+                                            output.push_back(ScriptEvent::ConsoleInput(input));
+                                        }
                                     },
                                     VK_KEY_C if open && *control => {
 
@@ -140,7 +163,7 @@ impl Script for ScriptConsole {
                             },
                             KeyboardEvent::Char(c) => {
                                 if open && !c.is_control() {
-                                    self.input.push(*c);
+                                    self.get_input_mut().push(*c);
                                     self.cursor_pos += 1;
                                 }
                             },
@@ -201,15 +224,15 @@ impl ScriptConsole {
         // Draw input prefix
         draw_text(">", [0.0, CONSOLE_HEIGHT], PREFIX_COLOR, FONT, scale);
         // Draw input text
-        draw_text(&self.input, [25.0, CONSOLE_HEIGHT], INPUT_COLOR, FONT, scale);
+        draw_text(self.get_input(), [25.0, CONSOLE_HEIGHT], INPUT_COLOR, FONT, scale);
         // Draw page information
         let total_pages = ((self.line_history.len() + (LINES_PER_PAGE - 1)) / LINES_PER_PAGE).max(1);
         draw_text(format!("Page {}/{}", self.current_page, total_pages), [5.0, CONSOLE_HEIGHT + INPUT_HEIGHT], INPUT_COLOR, FONT, scale);
 
         // Draw blinking cursor
         if now.duration_since(UNIX_EPOCH).unwrap().subsec_millis() < 500 {
-            let length = get_text_width(&self.input[0..self.cursor_pos], FONT, scale);
-            draw_text("~w~~h~|~w~", [25.0 + (length * CONSOLE_WIDTH) - 4.0, CONSOLE_HEIGHT], INPUT_COLOR, FONT, scale);
+            let width = get_text_width(&self.get_input()[0..self.cursor_pos], FONT, scale);
+            draw_text("~w~~h~|~w~", [25.0 + (width * CONSOLE_WIDTH) - 4.0, CONSOLE_HEIGHT], INPUT_COLOR, FONT, scale);
         }
 
         // Draw console history text
@@ -217,6 +240,22 @@ impl ScriptConsole {
         let history_length = (history_offset + LINES_PER_PAGE as i32) as usize;
         for i in (history_offset.max(0) as usize)..history_length {
             draw_text(&self.line_history[i], [2.0, ((i as i32 - history_offset) * 14) as f32], OUTPUT_COLOR, FONT, scale);
+        }
+    }
+
+    fn get_input(&self) -> &String {
+        if self.command_pos == 0 {
+            &self.input
+        } else {
+            &self.command_history[self.command_pos - 1]
+        }
+    }
+
+    fn get_input_mut(&mut self) -> &mut String {
+        if self.command_pos == 0 {
+            &mut self.input
+        } else {
+            &mut self.command_history[self.command_pos - 1]
         }
     }
 }

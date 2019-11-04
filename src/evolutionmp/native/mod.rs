@@ -12,6 +12,7 @@ use winapi::ctypes::c_void;
 use std::time::Duration;
 use cgmath::{Vector3, Vector2};
 use crate::game::ui::CursorSprite;
+use crate::hash::Hash;
 
 pub mod ui;
 pub mod graphics;
@@ -367,6 +368,7 @@ impl NativeStackValue for &mut bool {}
 impl NativeStackValue for u64 {}
 impl NativeStackValue for &mut u64 {}
 impl NativeStackValue for () {}
+impl NativeStackValue for Hash {}
 
 impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
 impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}

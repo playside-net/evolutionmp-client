@@ -2,7 +2,7 @@ use crate::hash::{Hashable, Hash};
 use std::marker::PhantomData;
 
 pub struct Stat<V> where V: StatValue {
-    hash: u32,
+    hash: Hash,
     _ty: PhantomData<V>
 }
 

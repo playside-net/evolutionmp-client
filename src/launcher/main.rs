@@ -2,8 +2,6 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE};
 use winapi::um::tlhelp32::TH32CS_SNAPPROCESS;
-use winapi::um::consoleapi::AllocConsole;
-use winapi::um::wincon::FreeConsole;
 use evolutionmp::registry::Registry;
 use evolutionmp::win::ps::{ProcessIterator, get_process};
 use winapi::um::errhandlingapi::GetLastError;

@@ -1,6 +1,9 @@
 use std::num::Wrapping;
+use cgmath::num_traits::{Num, Unsigned};
 
-pub type Hash = u32;
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct Hash(pub u32);
 
 pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
     let s = s.as_ref();
@@ -13,27 +16,21 @@ pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
     hash += (hash << 3);
     hash ^= (hash >> 11);
     hash += (hash << 15);
-    hash.0
+    Hash(hash.0)
 }
 
 pub trait Hashable {
-    fn joaat(&self) -> u32;
-}
-
-impl<'a> Hashable for &'a str {
-    fn joaat(&self) -> u32 {
-        crate::hash::joaat(self)
-    }
-}
-
-impl Hashable for String {
-    fn joaat(&self) -> u32 {
-        crate::hash::joaat(self)
-    }
+    fn joaat(&self) -> Hash;
 }
 
 impl Hashable for Hash {
-    fn joaat(&self) -> u32 {
+    fn joaat(&self) -> Hash {
         *self
+    }
+}
+
+impl<S> Hashable for S where S: AsRef<str> {
+    fn joaat(&self) -> Hash {
+        crate::hash::joaat(self)
     }
 }
