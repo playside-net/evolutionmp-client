@@ -128,19 +128,23 @@ impl Script for ScriptCleanWorld {
             },
             ScriptEvent::ConsoleInput(input) => {
                 let input = input.clone();
-                let model = Model::new(&input);
-                if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
-                    self.tasks.push_back(Box::new(move |env| {
-                        let player = Player::local();
-                        let ped = player.get_ped();
+                self.tasks.push_back(Box::new(move |env| {
+                    let player = Player::local();
+                    let ped = player.get_ped();
+                    let model = Model::new(&input);
+                    if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
                         if !ped.is_in_any_vehicle(false) {
                             let veh = Vehicle::new(env, model, ped.get_position(), ped.get_heading(), false, false)
                                 .expect("Vehicle creation failed");
                             ped.put_into_vehicle(&veh, -1);
-                            env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position.", input))
+                            env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position", input))
+                        } else {
+                            env.log("~r~You're already in a vehicle");
                         }
-                    }));
-                }
+                    } else {
+                        env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
+                    }
+                }));
             }
             _ => {}
         }

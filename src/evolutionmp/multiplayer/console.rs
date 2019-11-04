@@ -131,7 +131,7 @@ impl Script for ScriptConsole {
                                     },
                                     VK_RETURN if open => {
                                         if self.command_pos == 0 {
-                                            if !!self.input.is_empty() {
+                                            if !self.input.is_empty() {
                                                 let mut input = String::new();
                                                 std::mem::swap(&mut self.input, &mut input);
                                                 self.cursor_pos = 0;
