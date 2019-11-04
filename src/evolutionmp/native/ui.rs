@@ -1,6 +1,7 @@
 use crate::invoke;
 use cgmath::Vector2;
 use crate::game::Rgba;
+use crate::game::ui::CursorSprite;
 
 pub unsafe fn set_credits_active(active: bool) {
     invoke!((), 0xB938B7E6D3C0620C, active);
@@ -36,7 +37,7 @@ pub unsafe fn set_cursor_sprite(sprite: u32) {
     invoke!((), 0x8DB8CFFD58B62552, sprite)
 }
 
-pub unsafe fn get_cursor_sprite() -> u32 {
+pub unsafe fn get_cursor_sprite() -> CursorSprite {
     super::CURSOR_SPRITE.read()
 }
 

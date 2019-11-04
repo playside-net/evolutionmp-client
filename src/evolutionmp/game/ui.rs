@@ -30,7 +30,7 @@ pub fn draw_rect<P, S, C>(pos: P, size: S, color: C)
     let size = size.into();
     let size = Vector2::new(size.x / BASE_WIDTH, size.y / BASE_HEIGHT);
 
-    unsafe { native::ui::draw_rect(pos + size * 0.5, size, color.into()) }
+    unsafe { native::ui::draw_rect(pos + (size * 0.5), size, color.into()) }
 }
 
 pub fn draw_text<T, P, S>(text: T, pos: P, color: Rgba, font: Font, scale: S)
@@ -87,6 +87,7 @@ pub fn set_cursor_sprite(sprite: CursorSprite) {
     }
 }
 
+#[repr(C)]
 pub enum CursorSprite {
     None,
     Normal,

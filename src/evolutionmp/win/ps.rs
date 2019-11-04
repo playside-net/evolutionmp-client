@@ -20,10 +20,12 @@ use winapi::um::errhandlingapi::{GetLastError, SetLastError};
 use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
 use winapi::um::winuser::{MessageBeep, MB_ICONEXCLAMATION, MB_ICONSTOP, MessageBoxW, MB_ICONHAND, MB_OKCANCEL, GetParent};
 use winapi::shared::ntdef::{HANDLE, NULL};
-use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, LPCVOID, __some_function, FARPROC, HINSTANCE};
+use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, LPCVOID, __some_function, FARPROC, HINSTANCE, LPDWORD};
 use winapi::shared::basetsd::SIZE_T;
 use winapi::ctypes::c_void;
 use widestring::{WideCStr, WideCString};
+use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
+use std::mem::size_of;
 
 pub fn get_current_process() -> ProcessHandle {
     ProcessHandle::from(unsafe { GetCurrentProcess() })
@@ -125,69 +127,17 @@ impl std::ops::Deref for ModuleHandle {
 }
 
 pub struct ModuleEntry {
-    inner: MODULEENTRY32W
-}
-
-impl From<MODULEENTRY32W> for ModuleEntry {
-    fn from(inner: MODULEENTRY32W) -> Self {
-        Self { inner }
-    }
+    instance: HINSTANCE,
+    name: String
 }
 
 impl ModuleEntry {
-    pub fn get_name(&self) -> WideCString {
-        WideCString::from_vec_with_nul(self.inner.szModule.iter().cloned().collect::<Vec<_>>()).unwrap()
+    pub fn get_instance(&self) -> HINSTANCE {
+        self.instance
     }
 
-    pub fn get_base_address(&self) -> *mut u8 {
-        self.inner.modBaseAddr
-    }
-
-    pub fn get_base_size(&self) -> usize {
-        self.inner.modBaseSize as usize
-    }
-}
-
-pub struct ModuleIterator {
-    processes_snapshot: HANDLE,
-    first: bool,
-    entry: MODULEENTRY32W
-}
-
-impl ModuleIterator {
-    pub fn new(flags: DWORD) -> Option<ModuleIterator> {
-        let processes_snapshot = unsafe { CreateToolhelp32Snapshot(flags, 0) };
-        unsafe { SetLastError(0) };
-        if processes_snapshot != INVALID_HANDLE_VALUE {
-            Some(ModuleIterator {
-                processes_snapshot,
-                first: true,
-                entry: MODULEENTRY32W {
-                    dwSize: std::mem::size_of::<MODULEENTRY32W>() as u32,
-                    .. Default::default()
-                }
-            })
-        } else {
-            None
-        }
-    }
-}
-
-impl Iterator for ModuleIterator {
-    type Item = ModuleEntry;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.first {
-            self.first = false;
-            if unsafe { Module32FirstW(self.processes_snapshot, &mut self.entry) } == TRUE {
-                return Some(ModuleEntry::from(self.entry.clone()))
-            }
-        } else {
-            while unsafe { Module32NextW(self.processes_snapshot, &mut self.entry) } == TRUE {
-                return Some(ModuleEntry::from(self.entry.clone()))
-            }
-        }
-        None
+    pub fn get_name(&self) -> &String {
+        &self.name
     }
 }
 
@@ -202,13 +152,27 @@ impl ProcessHandle {
         unsafe { GetProcessId(self.inner) }
     }
 
-    pub fn find_module<S>(&self, file_name: S, flags: DWORD) -> Option<ModuleEntry> where S: AsRef<str> {
-        for m in ModuleIterator::new(flags)? {
-            if &m.get_name().to_string_lossy() == file_name.as_ref() {
-                return Some(m);
+    pub fn get_modules(&self, flags: DWORD) -> Vec<ModuleEntry> {
+        let mut result = Vec::new();
+        let mut modules = vec![std::ptr::null_mut(); 1024];
+        let mut count: DWORD = 0;
+        unsafe {
+            let cb = (1024 * size_of::<HMODULE>()) as DWORD;
+            if EnumProcessModulesEx(self.inner, modules.as_mut_ptr(), cb, &mut count, flags) == TRUE {
+                let mut mod_name = vec![0; MAX_PATH];
+                for i in 0..(count as usize / size_of::<HMODULE>()) {
+                    let module = modules[i];
+                    if GetModuleFileNameExW(self.inner, module, mod_name.as_mut_ptr(), MAX_PATH as DWORD) != 0 {
+                        let name = WideCStr::from_ptr_str(mod_name.as_mut_ptr()).to_string_lossy();
+                        result.push(ModuleEntry {
+                            instance: module,
+                            name
+                        });
+                    }
+                }
             }
         }
-        None
+        result
     }
 
     pub fn inject_library(&self, dll_path: &Path) -> Result<u32, InjectionError> {
@@ -217,7 +181,7 @@ impl ProcessHandle {
         }
 
         let load_library_address = get_procedure_address("Kernel32.dll", "LoadLibraryW")?;
-        let dll_path = WideCString::from_str(dll_path).unwrap();
+        let dll_path = WideCString::from_str(dll_path.to_string_lossy()).unwrap();
         let alloc = self.virtual_alloc(&dll_path, null_mut(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE).unwrap();
 
         match self.create_thread(load_library_address, &alloc) {
@@ -259,6 +223,10 @@ impl ProcessHandle {
         } else {
             Ok(ThreadHandle::from(inner))
         }
+    }
+
+    pub fn inner(&self) -> HANDLE {
+        self.inner
     }
 }
 

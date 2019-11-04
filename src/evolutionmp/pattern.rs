@@ -138,17 +138,17 @@ impl MemoryRegion {
         }
     }
 
-    pub fn find_all<P>(&self, pattern: P) -> RegionIterator where P: Into<Pattern> {
+    pub fn find<P>(&self, pattern: P) -> RegionIterator where P: Into<Pattern> {
         RegionIterator::new(pattern, &self)
     }
 
-    pub fn find_first_await<P>(&self, pattern: P, sleep_ms: u64, timeout_ms: u64) -> Option<MemoryRegion> where P: Into<Pattern> + Copy {
+    pub fn find_await<P>(&self, pattern: P, sleep_ms: u64, timeout_ms: u64) -> Option<MemoryRegion> where P: Into<Pattern> + Copy {
         let start = Instant::now();
         loop {
             if (Instant::now() - start) >= Duration::from_millis(timeout_ms) {
                 break None;
             }
-            if let Some(region) = self.find_all(pattern).next() {
+            if let Some(region) = self.find(pattern).next() {
                 break Some(region);
             }
             std::thread::sleep(Duration::from_millis(sleep_ms));
@@ -167,7 +167,7 @@ impl MemoryRegion {
     }
 
     pub unsafe fn read_ptr(&self, offset: usize) -> MemoryRegion {
-        self.add(offset).offset(*self.cast::<i32>() as isize)
+        self.add(offset).offset(*self.get::<i32>() as isize)
     }
 
     pub unsafe fn offset(&self, offset: isize) -> MemoryRegion {
@@ -215,7 +215,7 @@ impl MemoryRegion {
         self.base.cast()
     }
 
-    pub unsafe fn cast<T>(&self) -> *const T {
+    pub unsafe fn get<T>(&self) -> *const T {
         self.base.cast()
     }
 }

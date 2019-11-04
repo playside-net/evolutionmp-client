@@ -6,6 +6,8 @@ use winapi::um::consoleapi::AllocConsole;
 use winapi::um::wincon::FreeConsole;
 use evolutionmp::registry::Registry;
 use evolutionmp::win::ps::{ProcessIterator, get_process};
+use winapi::um::errhandlingapi::GetLastError;
+use winapi::um::psapi::LIST_MODULES_ALL;
 
 fn main() {
     let gta_exe = "GTA5.exe";
@@ -34,29 +36,36 @@ fn main() {
         let access = PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE;
         let proc = get_process(gta_exe, access)
             .expect(&format!("{} not found", gta_exe));
-        println!("Found GTA5.exe process with pid: {}", proc.get_pid());
+        println!("Found GTA5.exe process with pid: {} ({:p})", proc.get_pid(), proc.inner());
         loop {
             match proc.inject_library(&client_dll) {
                 Ok(exit_code) => {
                     match exit_code {
-                        0 => {}
-                        1 => {
-                            eprintln!("Module injection failed");
+                        0 | 1 => {
+                            let error_code = unsafe { GetLastError() } as i32;
+                            let error = std::io::Error::from_raw_os_error(error_code);
+                            eprintln!("Module injection failed: {}", error);
                             return;
                         }
-                        other => {
-                            println!("Injected module at 0x{:X}", other);
+                        module => {
+                            for m in proc.get_modules(LIST_MODULES_ALL) {
+                                if m.get_instance() as u64 & 0xFFFFFFFF == module as u64 {
+                                    println!("Injection successful at: {:p} ({})", m.get_instance(), m.get_name());
+                                    break;
+                                }
+                            }
                             break;
                         }
                     }
                 },
                 Err(err) => {
                     eprintln!("Injection error: {:?}", err);
+                    return;
                 }
             }
         };
 
-        println!("Launcher process exited with code: {}", process.wait().unwrap());
+        println!("Launcher process exited with code: {}", process.wait().unwrap().code().unwrap());
     } else if registry.is_steam_key() {
         println!("Found steam version of GTA5");
     }

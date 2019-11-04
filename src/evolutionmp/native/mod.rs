@@ -1,6 +1,6 @@
 use crate::pattern::MemoryRegion;
 use crate::{info, error};
-use crate::game::{Rgba, Rgb};
+use crate::game::{Rgba, Rgb, Handle};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ffi::{CString, CStr};
@@ -10,8 +10,8 @@ use winapi::shared::minwindef::DWORD;
 use winapi::shared::basetsd::DWORD64;
 use winapi::ctypes::c_void;
 use std::time::Duration;
-use byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
 use cgmath::{Vector3, Vector2};
+use crate::game::ui::CursorSprite;
 
 pub mod ui;
 pub mod graphics;
@@ -32,20 +32,24 @@ pub mod gameplay;
 pub mod dlc;
 pub mod clock;
 pub mod decision_event;
+pub mod pool;
 
 pub static mut NATIVES: Option<Natives> = None;
 pub static mut EXPANDED_RADAR: *const bool = std::ptr::null();
 pub static mut REVEAL_FULL_MAP: *const bool = std::ptr::null();
-pub static mut CURSOR_SPRITE: *const u32 = std::ptr::null();
+pub static mut CURSOR_SPRITE: *const CursorSprite = std::ptr::null();
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     NATIVES = Some(Natives::new(mem));
-    let big_map = mem.find_first_await("33 C0 0F 57 C0 ? 0D", 50, 1000)
-        .expect("big map").add(7);
+    let big_map = mem.find("33 C0 0F 57 C0 ? 0D")
+        .next().expect("big map")
+        .add(7);
     EXPANDED_RADAR = big_map.as_ptr().cast();
     REVEAL_FULL_MAP = big_map.add(30).as_ptr().cast();
-    let cursor_sprite = mem.find_first_await("74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 50, 1000)
-        .expect("cursor sprite");
+    CURSOR_SPRITE = mem.find("74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0")
+        .next().expect("cursor sprite")
+        .get();
+    pool::init(mem);
 }
 
 pub static mut ARG: UnsafeCell<NativeArgStack> = UnsafeCell::new(NativeArgStack {
@@ -81,7 +85,7 @@ struct NativeRegistrationTable {
     initialized: bool
 }
 
-pub type SetVectorResults = unsafe extern "stdcall" fn(*mut NativeCallContext);
+pub type SetVectorResults = unsafe extern "C" fn(*mut NativeCallContext);
 
 impl NativeRegistration {
     pub unsafe fn get_next_registration(&self) -> *mut NativeRegistration {
@@ -186,10 +190,10 @@ unsafe impl Sync for Natives {}
 
 impl Natives {
     pub unsafe fn new(global_region: &MemoryRegion) -> Natives {
-        let table = global_region.find_first_await("76 32 48 8B 53 40", 50, 1000)
+        let table = global_region.find_await("76 32 48 8B 53 40", 50, 1000)
             .expect("native table").add(9).read_ptr(4).get_mut::<NativeRegistrationTable>();
         let vector_fixer: SetVectorResults = std::mem::transmute(
-            global_region.find_first_await("83 79 18 ? 48 8B D1 74 4A FF 4A 18", 50, 1000)
+            global_region.find_await("83 79 18 ? 48 8B D1 74 4A FF 4A 18", 50, 1000)
                 .expect("vector fixer").as_mut_ptr()
         );
 

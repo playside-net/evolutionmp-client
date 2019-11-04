@@ -1,3 +1,4 @@
+#![feature(const_transmute)]
 use crate::win::ps::get_current_process;
 use crate::pattern::{MemoryRegion, RegionIterator};
 use crate::game::vehicle::Vehicle;
@@ -18,7 +19,7 @@ use std::env::current_dir;
 use std::collections::HashMap;
 use std::time::Instant;
 use winapi::shared::minwindef::{HINSTANCE, DWORD, LPVOID, BOOL, TRUE, HMODULE};
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibraryAndExitThread};
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleW};
 use winapi::ctypes::c_void;
 use winapi::um::winuser::{VK_BACK, VK_NUMPAD5};
 use std::panic::PanicInfo;
@@ -46,10 +47,10 @@ fn attach(instance: HMODULE) {
         let mem = MemoryRegion::image();
 
         //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-        mem.find_first_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
+        mem.find_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
             .expect("movie").nop(13); //Disable movie
 
-        let game_state = mem.find_first_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
+        let game_state = mem.find_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
             .expect("game state")
             .add(2)
             .read_ptr(5);
@@ -57,27 +58,18 @@ fn attach(instance: HMODULE) {
         std::thread::spawn(move || {
             let mut input = win::input::InputHook::new().expect("Input hooking failed");
 
-            while !(*game_state.cast::<GameState>()).is_loaded() {
+            while !(*game_state.get::<GameState>()).is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
             native::init(&mem);
 
-            while *game_state.cast::<GameState>() != GameState::Playing {
+            while *game_state.get::<GameState>() != GameState::Playing {
                 game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            runtime::init(&mem);
-            multiplayer::init(&mem);
-
-            loop {
-                while let Some(event) = input.next_event() {
-                    for s in &mut runtime::SCRIPTS {
-                        s.input(event);
-                    }
-                }
-            }
+            runtime::start(&mem, input);
         });
     }
 }

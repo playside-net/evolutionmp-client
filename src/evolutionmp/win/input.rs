@@ -5,7 +5,7 @@ use winapi::um::winuser::{WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_L
 use winapi::um::sysinfoapi::GetTickCount;
 use std::sync::{Arc, Mutex};
 use std::cell::UnsafeCell;
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Sender, Receiver, RecvError, TryRecvError};
 use std::ffi::CString;
 use winapi::shared::ntdef::NULL;
 use std::time::Duration;
@@ -143,8 +143,8 @@ impl InputHook {
         }
     }
 
-    pub fn next_event(&mut self) -> Option<InputEvent> {
-        self.receiver.try_recv().ok()
+    pub fn next_event(&mut self) -> Result<InputEvent, TryRecvError> {
+        self.receiver.try_recv()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::runtime::{Script, ScriptEnv};
+use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, ScriptEvent};
 use crate::pattern::MemoryRegion;
 use crate::GameState;
 use crate::{invoke, game, native};
@@ -16,18 +16,21 @@ use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
 use cgmath::Vector3;
+use std::collections::VecDeque;
 
 pub mod console;
 
-pub unsafe fn init(mem: &MemoryRegion) {
-    console::init(mem);
+pub fn init(runtime: &mut Runtime) {
+    console::init(runtime);
 
-    crate::runtime::register_script("clean_world", ScriptCleanWorld {
+    runtime.register_script("clean_world", ScriptCleanWorld {
+        tasks: VecDeque::new(),
         last_cleanup: Instant::now()
     });
 }
 
 pub struct ScriptCleanWorld {
+    tasks: VecDeque<Box<dyn FnMut(&mut ScriptEnv)>>,
     last_cleanup: Instant
 }
 
@@ -67,6 +70,10 @@ impl Script for ScriptCleanWorld {
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
+        while let Some(mut task) = self.tasks.pop_front() {
+            task(&mut env);
+        }
+
         self.disable_controls();
 
         let player = Player::local();
@@ -88,38 +95,50 @@ impl Script for ScriptCleanWorld {
             native::decision_event::suppress_agitation_events_next_frame();
         }
 
-        /*if let Some(veh) = ped.get_using_vehicle() {
+        if let Some(veh) = ped.get_using_vehicle() {
             let color = veh.get_colors();
-            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Primary: {}, Secondary: {}", color.primary, color.secondary));
-        } else {
+            let count = unsafe { native::pool::VEHICLE_POOL.read().get_count() };
+            let size = unsafe { native::pool::VEHICLE_POOL.read().get_size() };
+            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Vehicles: {}/{}", count, size));
+        }/* else {
             game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Pos: {:?}", ped.get_position()));
             //game::ui::hide_loading_prompt();
         }*/
     }
 
-    fn input(&mut self, mut env: ScriptEnv, event: InputEvent, time_caught: Instant) {
+    fn event(&mut self, event: &mut ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
         match event {
-            InputEvent::Keyboard(KeyboardEvent::Key { key, .. }) => {
-                let player = Player::local();
-                let ped = player.get_ped();
-                match key {
-                    VK_NUMPAD0 => {
-                        if let Some(veh) = ped.get_in_vehicle(false) {
-                            veh.repair();
+            ScriptEvent::UserInput(event) => {
+                match event {
+                    InputEvent::Keyboard(KeyboardEvent::Key { key, .. }) => {
+                        match *key {
+                            VK_NUMPAD0 => {
+                                let player = Player::local();
+                                let ped = player.get_ped();
+                                if let Some(veh) = ped.get_in_vehicle(false) {
+                                    veh.repair();
+                                }
+                            },
+                            VK_NUMPAD5 => {
+                                self.tasks.push_back(Box::new(|env| {
+                                    let player = Player::local();
+                                    let ped = player.get_ped();
+                                    if !ped.is_in_any_vehicle(false) {
+                                        let veh = Vehicle::new(env, "neon", ped.get_position(), ped.get_heading(), false, false)
+                                            .expect("Vehicle creation failed");
+                                        ped.put_into_vehicle(&veh, -1);
+                                    }
+                                }));
+                            }
+                            _ => {}
                         }
                     },
-                    VK_NUMPAD5 => {
-                        if !ped.is_in_any_vehicle(false) {
-                            let veh = Vehicle::new(&mut env, "phantom2", ped.get_position(), ped.get_heading(), false, false)
-                                .expect("Vehicle creation failed");
-                            ped.put_into_vehicle(&veh, -1);
-                        }
-                    }
                     _ => {}
                 }
             }
             _ => {}
         }
+        false
     }
 }
 
