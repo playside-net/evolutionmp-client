@@ -10,6 +10,10 @@ pub trait Entity {
         unsafe { crate::native::entity::exists(self.get_handle()) }
     }
 
+    fn get_address(&self) -> *mut u8 {
+        unsafe { (crate::native::pool::ENTITY_ADDRESS.unwrap())(self.get_handle()) }
+    }
+
     fn is_dead(&self) -> bool {
         unsafe { crate::native::entity::is_dead(self.get_handle()) }
     }

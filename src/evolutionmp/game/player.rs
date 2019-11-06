@@ -16,6 +16,10 @@ impl Player {
         self.handle
     }
 
+    pub fn get_address(&self) -> *mut u8 {
+        unsafe { (crate::native::pool::PLAYER_ADDRESS.unwrap())(self.get_handle()) }
+    }
+
     pub fn get_ped(&self) -> Ped {
         Ped::from_player(self)
     }

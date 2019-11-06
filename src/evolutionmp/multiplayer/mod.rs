@@ -79,10 +79,7 @@ impl Script for ScriptCleanWorld {
         let player = Player::local();
         let ped = player.get_ped();
 
-        if Instant::now() - self.last_cleanup >= Duration::from_secs(2) {
-            self.cleanup();
-            self.last_cleanup = Instant::now();
-        }
+        self.cleanup();
 
         unsafe {
             native::ped::set_density_multiplier_this_frame(0.0);

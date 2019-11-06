@@ -233,10 +233,8 @@ macro_rules! invoke {
         let hash: u64 = $hash;
         let natives = $crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
         let handler = natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash));
-        crate::info!("Preparing invocation of 0x{:016X}", hash);
         natives.context.reset();
         handler(&mut natives.context);
-        crate::info!("Invocation successful. Getting result of type {} ...", std::any::type_name::<$ret>());
         natives.context.get::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
@@ -244,15 +242,9 @@ macro_rules! invoke {
         let hash: u64 = $hash;
         let natives = $crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
         let handler = natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash));
-        crate::info!("Preparing invocation of 0x{:016X}", hash);
         natives.context.reset();
-        $(
-            let arg = $arg;
-            crate::info!("Pushing argument: {:?}", arg);
-            natives.context.push(arg);
-        )*
+        $(natives.context.push($arg);)*
         handler(&mut natives.context);
-        crate::info!("Invocation successful. Getting result of type {} ...", std::any::type_name::<$ret>());
         natives.context.get::<$ret>()
     }};
 }
