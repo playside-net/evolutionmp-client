@@ -1,6 +1,5 @@
 use crate::win::ps::{ModuleHandle, ModuleEntry};
 use crate::win::user::{message_box, MessageBoxButtons, MessageBoxIcon};
-use crate::info;
 use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, LONG};
 use winapi::um::memoryapi::VirtualProtect;
 use winapi::um::tlhelp32::TH32CS_SNAPMODULE;

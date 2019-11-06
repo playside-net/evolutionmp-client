@@ -241,14 +241,14 @@ pub enum ScriptEvent {
 }
 
 extern "C" fn invoke(itf: *mut *const JNINativeInterface_, hash: jlong, args: jobjectArray) -> jlong {
-    crate::info!("Info", "Hello from java!");
+    crate::info_message!("Info", "Hello from java!");
     0
 }
 
 unsafe fn start_vm(launcher_path: &Path) {
     let java_exe = launcher_path.join("java").join("bin").join("server").join("jvm.dll");
     let jar_path = launcher_path.join("client-rt.jar");
-    crate::info!("Info", "Jar path is {:?}", jar_path);
+    crate::info_message!("Info", "Jar path is {:?}", jar_path);
     let mut java_args = InitArgsBuilder::new()
         .version(JNIVersion::V8)
         .option(&format!("-Djava.class.path={}", jar_path.to_str().unwrap()));

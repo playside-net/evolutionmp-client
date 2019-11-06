@@ -6,11 +6,12 @@ use evolutionmp::registry::Registry;
 use evolutionmp::win::ps::{ProcessIterator, get_process};
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::psapi::LIST_MODULES_ALL;
+use evolutionmp::launcher_dir;
 
 fn main() {
     let gta_exe = "GTA5.exe";
     let gta_launcher_exe = "GTAVLauncher.exe";
-    let client_dll = std::env::current_dir().unwrap().join("target\\debug\\evolutionmp.dll");
+    let client_dll = launcher_dir().join("evolutionmp.dll");
     let registry = Registry::read().expect("Unable to find GTA5 registry entry!");
     let install_dir = registry.get_install_path();
 

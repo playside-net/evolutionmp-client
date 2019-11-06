@@ -10,7 +10,6 @@ use crate::game::vehicle::Vehicle;
 use crate::game::{streaming, gameplay, dlc, script, clock};
 use crate::win::input::{KeyboardEvent, InputEvent};
 use crate::hash::joaat;
-use crate::info;
 use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};

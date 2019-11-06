@@ -1,5 +1,4 @@
 use std::num::Wrapping;
-use cgmath::num_traits::{Num, Unsigned};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -10,12 +9,12 @@ pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
     let mut hash = Wrapping(0u32);
     for c in s.chars() {
         hash += Wrapping(c.to_lowercase().next().unwrap() as u32);
-        hash += (hash << 10);
-        hash ^= (hash >> 6);
+        hash += hash << 10;
+        hash ^= hash >> 6;
     }
-    hash += (hash << 3);
-    hash ^= (hash >> 11);
-    hash += (hash << 15);
+    hash += hash << 3;
+    hash ^= hash >> 11;
+    hash += hash << 15;
     Hash(hash.0)
 }
 

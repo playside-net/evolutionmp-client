@@ -24,7 +24,8 @@ pub unsafe fn is_dead(handle: Handle) -> bool {
 }
 
 pub unsafe fn get_position(handle: Handle) -> Vector3<f32> {
-    invoke!(Vector3<f32>, 0x3FEF770D40960D5A, handle, !is_dead(handle))
+    let alive = !is_dead(handle);
+    invoke!(Vector3<f32>, 0x3FEF770D40960D5A, handle, alive)
 }
 
 pub unsafe fn set_position_no_offset(handle: Handle, pos: Vector3<f32>, axis: Vector3<bool>) {

@@ -11,18 +11,31 @@ detour = { version = "*", features = ["nightly"] }
 winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi", "fibersapi", "winerror", "consoleapi"] }
 ntapi = { version = "*", features = ["nightly"] }
 winreg = "*"
+tokio = "*"
 bincode = "*"
 serde = "*"
+serde_derive = "*"
+serde_json = "*"
+futures = "*"
+byteorder = "*"
 dirs = "*"
-libc = "*"
 field-offset = "*"
 cgmath = "*"
 widestring = "*"
 jni-dynamic = { git = "https://github.com/Radviger/jni-dynamic-rs", features = ["invocation"] }
+chrono = "*"
+log = "*"
+colored = "*"
+fern = { version = "*", features = ["colored"] }
+backtrace = "*"
+ansi_term = "*"
 
 [[bin]]
 name = "launcher"
 path = "src/launcher/main.rs"
+[[bin]]
+name = "server"
+path = "src/server/main.rs"
 
 [lib]
 name = "evolutionmp"
