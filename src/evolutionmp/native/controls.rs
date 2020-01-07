@@ -16,3 +16,7 @@ pub unsafe fn disable_all_actions(group: u32) {
 pub unsafe fn enable_all_actions(group: u32) {
     invoke!((), 0xA5FFE9B05F199DE7, group)
 }
+
+pub unsafe fn is_pressed(group: u32, control: u32) -> bool {
+    invoke!(bool, 0xF3A21BCD95725A4A, group, control)
+}

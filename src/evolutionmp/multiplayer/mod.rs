@@ -9,23 +9,34 @@ use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
 use crate::game::{streaming, gameplay, dlc, script, clock};
 use crate::win::input::{KeyboardEvent, InputEvent};
-use crate::hash::joaat;
+use crate::info;
 use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
-use cgmath::Vector3;
+use cgmath::{Vector3, Vector2};
 use std::collections::VecDeque;
-use crate::game::streaming::Model;
+use crate::game::streaming::{Model, AnimDict};
+use winapi::um::errhandlingapi::SetUnhandledExceptionFilter;
+use crate::game::camera::Camera;
+use crate::native::pool::Pool;
 
 pub mod console;
+//pub mod network;
 
 pub fn init(runtime: &mut Runtime) {
+    info!("Initializing console");
     console::init(runtime);
+    info!("Registering scripts");
+    //network::init(runtime);
 
     runtime.register_script("clean_world", ScriptCleanWorld {
         tasks: VecDeque::new(),
         last_cleanup: Instant::now()
+    });
+    runtime.register_script("finger_pointing", ScriptFingerPointing {
+        active: false,
+        camera: None
     });
 }
 
@@ -91,16 +102,17 @@ impl Script for ScriptCleanWorld {
             native::decision_event::suppress_shocking_events_next_frame();
             native::decision_event::suppress_agitation_events_next_frame();
         }
-
+        if let Some(vehicles) = native::pool::get_vehicles() {
+            let len = vehicles.len();
+            let capacity = vehicles.capacity();
+            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Vehicles: {}/{}", len, capacity));
+        }
         if let Some(veh) = ped.get_using_vehicle() {
             let color = veh.get_colors();
-            let count = unsafe { native::pool::VEHICLE_POOL.read().get_count() };
-            let size = unsafe { native::pool::VEHICLE_POOL.read().get_size() };
-            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Vehicles: {}/{}", count, size));
-        }/* else {
-            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Pos: {:?}", ped.get_position()));
+
+        } else {
             //game::ui::hide_loading_prompt();
-        }*/
+        }
     }
 
     fn event(&mut self, event: &mut ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
@@ -110,11 +122,21 @@ impl Script for ScriptCleanWorld {
                     InputEvent::Keyboard(KeyboardEvent::Key { key, .. }) => {
                         match *key {
                             VK_NUMPAD0 => {
-                                let player = Player::local();
-                                let ped = player.get_ped();
-                                if let Some(veh) = ped.get_in_vehicle(false) {
-                                    veh.repair();
-                                }
+                                /*if let Some(vehicles) = native::pool::get_vehicles() {
+                                    for (i, mut v) in vehicles.iter().enumerate() {
+                                        crate::info!("deleting vehicle: {} ({})", v.get_handle(), i);
+                                        v.delete();
+                                    }
+                                }*/
+                                self.tasks.push_back(Box::new(move |env| {
+                                    let player = Player::local();
+                                    let ped = player.get_ped();
+                                    if let Some(veh) = ped.get_in_vehicle(false) {
+                                        veh.start_horn(5000, "NORMAL", true);
+                                    } else {
+                                        player.set_model(env, "FreeModeMale01");
+                                    }
+                                }));
                             },
                             _ => {}
                         }
@@ -174,6 +196,8 @@ impl ScriptCleanWorld {
             native::ped::set_cops(false);
             native::ped::set_scenario_cops(false);
 
+            gameplay::set_time_scale(1.0);
+
             native::streaming::set_vehicle_population_budget(0);
             native::streaming::set_ped_population_budget(0);
 
@@ -205,6 +229,59 @@ impl ScriptCleanWorld {
             }
             native::script::terminate_all(script);
         }
+    }
+}
+
+pub struct ScriptFingerPointing {
+    active: bool,
+    camera: Option<Camera>
+}
+
+impl Script for ScriptFingerPointing {
+    fn prepare(&mut self, mut env: ScriptEnv) {
+        self.camera = Some(Camera::new("gameplay", false).expect("Camera creation failed"));
+    }
+
+    fn frame(&mut self, mut env: ScriptEnv) {
+        let player = Player::local().get_ped();
+        let tasks = player.get_tasks();
+
+        tasks.is_network_move_active();
+
+        let pitch = (self.get_relative_pitch().max(42.0).max(-70.0) + 70.0) / 112.0;
+        let heading = (game::camera::get_gameplay_relative_heading().min(180.0).max(-180.0)) / 360.0;
+
+        tasks.set_network_move_signal("Pitch", pitch);
+        tasks.set_network_move_signal("Heading", heading * -1.0 + 1.0);
+        tasks.set_network_move_signal("isBlocked", false);
+        let first_person = false;
+        tasks.set_network_move_signal("isFirstPerson", first_person);
+
+        if game::controls::is_pressed(ControlGroup::Move, Control::SpecialAbilitySecondary) {
+            if !self.active {
+                self.active = true;
+                let dict = AnimDict::new("anim@mp_point");
+                dict.request();
+                while !dict.is_loaded() {
+                    env.wait(Duration::from_millis(0));
+                }
+                player.set_config_flag(36, true);
+                player.get_tasks().network_move("task_mp_pointing", 0.5, false, dict.get_name(), 24);
+                dict.mark_unused();
+            }
+        } else if self.active {
+            let tasks = player.get_tasks();
+            tasks.request_network_move_state_transition("Stop");
+            tasks.clear_secondary();
+            self.active = false;
+        }
+    }
+}
+
+impl ScriptFingerPointing {
+    fn get_relative_pitch(&self) -> f32 {
+        let camera_rotation = self.camera.as_ref().expect("missing gameplay camera").get_rotation(2);
+        camera_rotation.x - Player::local().get_ped().get_pitch()
     }
 }
 

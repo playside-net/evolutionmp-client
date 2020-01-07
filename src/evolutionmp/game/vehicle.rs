@@ -8,20 +8,14 @@ use crate::game::streaming::Model;
 use winapi::_core::time::Duration;
 use crate::runtime::ScriptEnv;
 use cgmath::Vector3;
+use crate::native::vehicle::GEARS_OFFSET;
+use crate::native::pool::FromHandle;
 
 pub struct Vehicle {
     handle: Handle
 }
 
 impl Vehicle {
-    pub unsafe fn from_handle(handle: Handle) -> Option<Vehicle> {
-        if handle == 0 {
-            None
-        } else {
-            Some(Vehicle { handle })
-        }
-    }
-
     pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: Hashable {
         let model = Model::new(model);
         if model.is_in_cd_image() && model.is_valid() && model.is_vehicle() {
@@ -48,6 +42,12 @@ impl Vehicle {
         unsafe { native::vehicle::set_colors(self.handle, primary, secondary) }
     }
 
+    pub fn get_gears_offset(&self) -> i32 {
+        unsafe {
+            *self.get_address().offset(GEARS_OFFSET as isize).cast::<i32>()
+        }
+    }
+
     pub fn repair(&self) {
         unsafe { native::vehicle::repair(self.handle) }
     }
@@ -59,6 +59,10 @@ impl Vehicle {
     pub fn place_on_ground(&self) {
         unsafe { native::vehicle::place_on_ground(self.handle) }
     }
+
+    pub fn start_horn<H>(&self, duration: u32, hash: H, forever: bool) where H: Hashable {
+        unsafe { native::vehicle::start_horn(self.handle, duration, hash, forever) }
+    }
 }
 
 pub struct VehicleColors {
@@ -69,5 +73,20 @@ pub struct VehicleColors {
 impl Entity for Vehicle {
     fn get_handle(&self) -> Handle {
         self.handle
+    }
+
+    fn delete(&mut self) {
+        self.set_persistent(false);
+        unsafe { native::entity::delete(&mut self.handle) }
+    }
+}
+
+impl FromHandle for Vehicle {
+    unsafe fn from_handle(handle: Handle) -> Option<Self> {
+        if handle == 0 {
+            None
+        } else {
+            Some(Self { handle })
+        }
     }
 }

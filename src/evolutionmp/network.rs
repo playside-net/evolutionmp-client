@@ -8,20 +8,17 @@ use tokio::net::{UdpSocket, UdpFramed, TcpStream};
 use tokio::codec::{Encoder, Decoder};
 use tokio::prelude::*;
 
-use futures::{Stream, Future};
-use futures::sync::mpsc::{Sender, Receiver};
-use futures::AsyncSink;
-use futures::try_ready;
-
 use serde_derive::{Serialize, Deserialize};
 use log::{debug, error};
 use colored::Colorize;
 use bincode::{self, Error as BinError};
 use std::sync::{Arc, Mutex};
 use byteorder::{ReadBytesExt, WriteBytesExt, BE};
+use tokio::sync::mpsc::Receiver;
+use std::future::Future;
 
-pub const IP: IpAddr = IpAddr::V4(Ipv4Addr::new(149, 202, 193, 229));
-pub const PORT: u16 = 1735;
+pub const IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+pub const PORT: u16 = 2809;
 pub const MAX_MTU: usize = 1400;
 pub const MAX_PACKET_SIZE: usize = 512 * 1024;
 
@@ -43,16 +40,11 @@ impl MessageSender {
             total_bytes: 0
         }
     }
-}
 
-impl Future for MessageSender {
-    type Item = ();
-    type Error = ();
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    pub async fn run(&mut self) {
         loop {
             if self.total_bytes == 0 {
-                let message: Option<Message> = try_ready!(self.input.poll());
+                let message: Option<Message> = self.input.poll().await?;
                 if let Some(message) = message {
                     let data = bincode::serialize(&message)
                         .expect("Serialization failed");
@@ -72,14 +64,14 @@ impl Future for MessageSender {
             if self.current_bytes == 0 {
                 let mut tmp: [u8; 4] = [0; 4];
                 (&mut tmp[..]).write_u32::<BE>(self.total_bytes as u32).unwrap();
-                try_ready!(stream.poll_write(&tmp).map_err(|e| {
+                stream.poll_write(&tmp).map_err(|e| {
                     error!("Message header writing failed: {:?}", e);
-                }));
+                }).await?;
             }
             while self.current_bytes < self.total_bytes {
-                let a = try_ready!(stream.poll_write(&self.data).map_err(|e| {
+                let a = stream.poll_write(&self.data).map_err(|e| {
                     error!("Message chunk writing failed: {:?}", e);
-                }));
+                }).await?;
                 self.current_bytes += a;
                 debug!("Written {} bytes ({}/{})", a, self.current_bytes, self.total_bytes);
             }
@@ -101,26 +93,21 @@ impl<F> MessageReceiver<F> where F: FnMut(Message) {
     pub fn new(stream: Arc<Mutex<TcpStream>>, output: F) -> MessageReceiver<F> {
         MessageReceiver { stream, output, total_bytes: 0, data: Vec::new() }
     }
-}
 
-impl<F> Future for MessageReceiver<F> where F: FnMut(Message) {
-    type Item = ();
-    type Error = ();
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    pub async fn run(&mut self) {
         loop {
             let a: Option<String> = Some(String::from("b"));
             let mut stream = self.stream.lock().unwrap();
             if self.total_bytes == 0 {
                 let mut a: [u8; 4] = [0; 4];
-                try_ready!(match stream.poll_read(&mut a) {
+                match stream.poll_read(&mut a) {
                     Err(e) => {
                         error!("Error reading packet header: {:?}", e);
                         (self.output)(Message::Disconnect);
                         return Ok(Async::Ready(()));
                     },
                     o => o
-                }.map_err(|_|()));
+                }.map_err(|_|()).await?;
                 self.total_bytes = (&a[..]).read_u32::<BE>().unwrap() as usize;
             }
 
@@ -132,7 +119,7 @@ impl<F> Future for MessageReceiver<F> where F: FnMut(Message) {
                 while self.data.len() < self.total_bytes {
                     let rem = self.total_bytes - self.data.len();
                     let to = rem.min(MAX_MTU);
-                    let a = try_ready!(stream.poll_read(&mut tmp[0..to]).map_err(|e|error!("Error reading packet chunk: {:?}", e)));
+                    let a = stream.poll_read(&mut tmp[0..to]).map_err(|e|error!("Error reading packet chunk: {:?}", e)).await?;
                     if a > 0 {
                         self.data.extend_from_slice(&tmp[0..a]);
                         debug!("Read {} bytes ({}/{})", a, self.data.len(), self.total_bytes);
@@ -158,5 +145,8 @@ impl<F> Future for MessageReceiver<F> where F: FnMut(Message) {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Disconnect,
-    Connect
+    Connect {
+        socialclub: String,
+        pid: u32
+    }
 }

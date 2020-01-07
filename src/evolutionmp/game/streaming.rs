@@ -69,3 +69,37 @@ impl Hashable for Model {
         self.hash
     }
 }
+
+pub struct AnimDict {
+    name: String
+}
+
+impl AnimDict {
+    pub fn new<N>(name: N) -> AnimDict where N: Into<String> {
+        AnimDict {
+            name: name.into()
+        }
+    }
+}
+
+impl AnimDict {
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_valid(&self) -> bool {
+        unsafe { native::streaming::is_anim_dict_valid(&self.name) }
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        unsafe { native::streaming::is_anim_dict_loaded(&self.name) }
+    }
+
+    pub fn request(&self) {
+        unsafe { native::streaming::request_anim_dict(&self.name) }
+    }
+
+    pub fn mark_unused(&self) {
+        unsafe { native::streaming::mark_anim_dict_unused(&self.name) }
+    }
+}

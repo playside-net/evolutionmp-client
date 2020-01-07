@@ -44,3 +44,40 @@ pub unsafe fn set_scenario_cops(enabled: bool) {
 pub unsafe fn set_cops(enabled: bool) {
     invoke!((), 0x102E68B2024D536D, enabled)
 }
+
+pub unsafe fn set_current_weapon_visible(handle: Handle, visible: bool, deselect: bool, p3: bool, p4: bool) {
+    invoke!((), 0x0725A4CCFDED9A70, handle, visible, deselect, p3, p4)
+}
+
+pub unsafe fn set_config_flag(handle: Handle, flag: u32, value: bool) {
+    invoke!((), 0x1913FE4CBF41C463, handle, flag, value)
+}
+
+pub mod task {
+    use crate::invoke;
+    use crate::game::Handle;
+
+    pub unsafe fn clear_secondary(handle: Handle) {
+        invoke!((), 0x176CECF6F920D707, handle)
+    }
+
+    pub unsafe fn network_move(handle: Handle, name: &str, multiplier: f32, p3: bool, dict: &str, flags: u32) {
+        invoke!((), 0x2D537BA194896636, name, multiplier, p3, dict, flags)
+    }
+
+    pub unsafe fn is_network_move_active(handle: Handle) -> bool {
+        invoke!(bool, 0x921CE12C489C4C41, handle)
+    }
+
+    pub unsafe fn set_network_move_signal_float(handle: Handle, name: &str, value: f32) {
+        invoke!((), 0xD5BB4025AE449A4E, handle, name, value)
+    }
+
+    pub unsafe fn set_network_move_signal_bool(handle: Handle, name: &str, value: bool) {
+        invoke!((), 0xB0A6CFD2C69C1088, handle, name, value)
+    }
+
+    pub unsafe fn request_network_move_state_transition(handle: Handle, name: &str) -> bool {
+        invoke!(bool, 0xD01015C7316AE176, handle, name)
+    }
+}

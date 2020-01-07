@@ -50,7 +50,7 @@ pub mod registry;
 #[cfg(target_os = "windows")]
 pub mod multiplayer;
 
-pub mod network;
+//pub mod network;
 pub mod hash;
 
 const DLL_PROCESS_ATTACH: u32 = 1;
@@ -96,11 +96,10 @@ fn attach(instance: HMODULE) {
             info!("Natives initialized. Waiting for game being started...");
 
             while get_game_state() != GameState::Playing {
-                game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            info!("Game started. Starting runtime...");
+            info!("Game loaded. Starting runtime...");
 
             runtime::start(&mem, input);
         });
@@ -228,7 +227,7 @@ pub fn setup_logger(prefix: &str, debug: bool) {
             }
         })
         .level(if debug { log::LevelFilter::Debug } else { log::LevelFilter::Info })
-        .chain(fern::log_file(launcher_dir().join("latest.log")).unwrap())
+        .chain(fern::log_file(launcher_dir().join(&format!("{}.log", prefix))).unwrap())
         .chain(stdout())
         .apply().expect("Logger setup failed");
 

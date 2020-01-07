@@ -2,6 +2,47 @@ use crate::invoke;
 use crate::game::Handle;
 use crate::hash::Hashable;
 use cgmath::Vector3;
+use crate::pattern::MemoryRegion;
+
+pub(crate) static mut GEARS_OFFSET: i32 = 0;
+pub(crate) static mut HIGH_GEAR_OFFSET: i32 = 0;
+pub(crate) static mut FUEL_LEVEL_OFFSET: i32 = 0;
+pub(crate) static mut WHEEL_SPEED_OFFSET: i32 = 0;
+pub(crate) static mut CURRENT_RPM_OFFSET: i32 = 0;
+pub(crate) static mut ACCELERATION_OFFSET: i32 = 0;
+pub(crate) static mut STEERING_SCALE_OFFSET: i32 = 0;
+pub(crate) static mut STEERING_ANGLE_OFFSET: i32 = 0;
+
+pub unsafe fn init(mem: &MemoryRegion) {
+    let address = mem.find("48 8D 8F ? ? ? ? 4C 8B C3 F3 0F 11 7C 24")
+        .next().expect("gear offset")
+        .add(3);
+    GEARS_OFFSET = *address.get::<i32>() + 2;
+    HIGH_GEAR_OFFSET = *address.get::<i32>() + 6;
+
+    let address = mem.find("74 ? 0F 57 C9 0F 2F 8B ? ? ? ? 73 ? F3 0F 10 83 ? ? ? ?")
+        .next().expect("fuel level offset")
+        .add(8);
+    FUEL_LEVEL_OFFSET = *address.get::<i32>();
+
+    let address = mem.find("F3 0F 10 8F ? ? ? ? F3 0F 59 05 ? ? ? ?")
+        .next().expect("wheel speed offset")
+        .add(4);
+
+    WHEEL_SPEED_OFFSET = *address.get::<i32>();
+
+    let address = mem.find("76 03 0F 28 F0 F3 44 0F 10 93")
+        .next().expect("rpm offset")
+        .add(10);
+    CURRENT_RPM_OFFSET = *address.get::<i32>();
+    ACCELERATION_OFFSET = *address.get::<i32>() + 16;
+
+    let address = mem.find("74 0A F3 0F 11 B3 ? ? ? ? EB 25")
+        .next().expect("steering offset")
+        .add(6);
+    STEERING_SCALE_OFFSET = *address.get::<i32>();
+    STEERING_ANGLE_OFFSET = *address.get::<i32>() + 8;
+}
 
 pub unsafe fn new<H>(model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Handle where H: Hashable {
     invoke!(Handle, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check)
@@ -81,4 +122,12 @@ pub unsafe fn set_low_priority_generators_active(active: bool) {
 
 pub unsafe fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3<f32>, unknown: bool) {
     invoke!((), 0x46A1E1A299EC4BBA, start, end, unknown)
+}
+
+pub unsafe fn delete(handle: &mut Handle) {
+    invoke!((), 0xEA386986E786A54F, handle)
+}
+
+pub unsafe fn start_horn<H>(handle: Handle, duration: u32, mode: H, forever: bool) where H: Hashable {
+    invoke!((), 0x9C8C6504B5B63D2C, handle, duration, mode.joaat(), forever)
 }

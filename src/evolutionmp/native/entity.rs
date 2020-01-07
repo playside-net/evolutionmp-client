@@ -94,3 +94,15 @@ pub unsafe fn set_position_freezed(handle: Handle, freezed: bool) {
 pub unsafe fn set_collision(handle: Handle, collision: bool, physics: bool) {
     invoke!((), 0x1A9205C1B9EE827F, handle, collision, physics)
 }
+
+pub unsafe fn get_position_by_offset(handle: Handle, offset: Vector3<f32>) -> Vector3<f32> {
+    invoke!(Vector3<f32>, 0x1899F328B0E12848, handle, offset)
+}
+
+pub unsafe fn delete(handle: &mut Handle) {
+    invoke!((), 0xAE3CBE5BF394C9C9, handle)
+}
+
+pub unsafe fn set_as_mission(handle: Handle, p1: bool, p2: bool) {
+    invoke!((), 0xAD738C3085FE7E11, handle, p1, p2)
+}

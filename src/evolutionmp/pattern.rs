@@ -1,12 +1,7 @@
-use crate::win::ps::{ModuleHandle, ModuleEntry};
-use crate::win::user::{message_box, MessageBoxButtons, MessageBoxIcon};
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, LONG};
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE};
 use winapi::um::memoryapi::VirtualProtect;
-use winapi::um::tlhelp32::TH32CS_SNAPMODULE;
 use winapi::um::libloaderapi::GetModuleHandleA;
 use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
-use winapi::shared::basetsd::SIZE_T;
-use winapi::ctypes::c_void;
 use std::any::Any;
 use std::ptr::null_mut;
 use std::time::{Duration, Instant};
@@ -212,6 +207,10 @@ impl MemoryRegion {
 
     pub unsafe fn get_mut<T>(&self) -> *mut T {
         self.base.cast()
+    }
+
+    pub unsafe fn get_box<T>(&self) -> Box<T> {
+        Box::from_raw(self.base.cast())
     }
 
     pub unsafe fn get<T>(&self) -> *const T {

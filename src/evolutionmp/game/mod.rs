@@ -14,6 +14,11 @@ pub mod streaming;
 pub mod gameplay;
 pub mod script;
 pub mod clock;
+pub mod camera;
+pub mod worldprobe;
+pub mod checkpoint;
+pub mod object;
+pub mod pickup;
 
 pub type Handle = u32;
 

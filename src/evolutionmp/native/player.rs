@@ -1,5 +1,6 @@
 use crate::invoke;
 use crate::game::Handle;
+use crate::hash::Hashable;
 
 pub unsafe fn get_name<'a>(player: Handle) -> &'a str {
     invoke!(&str, 0x6D0DE6A7B5DA71F8, player)
@@ -47,4 +48,8 @@ pub unsafe fn set_max_wanted_level(max_level: u32) {
 
 pub unsafe fn disable_vehicle_rewards(player: Handle) {
     invoke!((), 0xC142BE3BB9CE125F, player)
+}
+
+pub unsafe fn set_model<H>(player: Handle, model: H) where H: Hashable {
+    invoke!((), 0x00A1CADD00108836, player, model.joaat())
 }

@@ -13,7 +13,11 @@
       <w>leaderboard</w>
       <w>longjmp</w>
       <w>multiplayer</w>
+      <w>outro</w>
+      <w>peds</w>
       <w>pricedown</w>
+      <w>ragdoll</w>
+      <w>raytrace</w>
       <w>reticle</w>
       <w>rockstar</w>
       <w>scaleform</w>
@@ -22,6 +26,9 @@
       <w>snapmatic</w>
       <w>socialclub</w>
       <w>teleported</w>
+      <w>unalerted</w>
+      <w>waypoint</w>
+      <w>worldprobe</w>
     </words>
   </dictionary>
 </component>

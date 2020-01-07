@@ -1,4 +1,3 @@
-use crate::invoke;
 use crate::native;
 
 pub fn set_time(hour: u32, minute: u32, second: u32) {

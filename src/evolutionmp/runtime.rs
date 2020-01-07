@@ -6,6 +6,7 @@ use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, Inpu
 use crate::native::{NativeCallContext, NativeStackValue};
 use crate::hash::joaat;
 use crate::win::thread::Fiber;
+use crate::{info, error};
 use std::os::raw::c_char;
 use std::ffi::CString;
 use std::time::{Instant, Duration};
@@ -22,6 +23,7 @@ use winapi::_core::panic::PanicInfo;
 use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM, NativeMethod};
 use jni_dynamic::objects::{JValue, JObject};
 use jni_dynamic::sys::{jlong, jobject, jobjectArray, JNINativeInterface_};
+use winapi::ctypes::c_void;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
@@ -31,6 +33,7 @@ pub(crate) static mut CONSOLE_VISIBLE: bool = false;
 
 static_detour! {
     static GetFrameCountHook: extern "C" fn(*mut NativeCallContext);
+    static ReturnTrueFromScriptHook: extern "C" fn(*mut c_void, *mut c_void) -> bool;
 }
 
 fn get_frame_count_native(context: *mut NativeCallContext) {
@@ -44,6 +47,10 @@ fn get_frame_count_native(context: *mut NativeCallContext) {
 
     }
     GetFrameCountHook.call(context)
+}
+
+fn return_true_from_script(arg1: *mut c_void, arg2: *mut c_void) -> bool {
+    true
 }
 
 pub struct EventPool {
@@ -126,13 +133,24 @@ impl Runtime {
 
 pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     let natives = crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
+    let mut dump = Vec::new();
+    unsafe { natives.dump(&mut dump) };
+    info!("Dumping natives: {:#?}", dump);
+
     let get_frame_count = natives.get_handler(0xFC8202EFC642E6F2)
         .expect("Unable to get native handler for GET_FRAME_COUNT");
+    let return_true = mem.find("74 3C 48 8B 01 FF 50 10 84 C0")
+        .next()
+        .expect("Unable to find return_true_from_script").get::<u8>();
     GetFrameCountHook
         .initialize(get_frame_count, get_frame_count_native).expect("GET_FRAME_COUNT hook initialization failed")
         .enable().expect("GET_FRAME_COUNT hook enabling failed");
+    ReturnTrueFromScriptHook
+        .initialize(std::mem::transmute(return_true), return_true_from_script).expect("return_true_from_script hook initialization failed")
+        .enable().expect("return_true_from_script hook enabling failed");
 
     let mut runtime = Runtime::new(input);
+    info!("Initializing multiplayer");
     crate::multiplayer::init(&mut runtime);
     RUNTIME = Some(runtime);
 
@@ -140,6 +158,7 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     //start_vm(launcher_path);
 }
 
+#[repr(C)]
 pub struct ScriptContainer {
     name: String,
     fiber: Option<Fiber>,
@@ -191,9 +210,7 @@ impl ScriptContainer {
 
     pub fn wait(&mut self, duration: Duration) {
         self.wake_at = Instant::now() + duration;
-        unsafe {
-            self.main_fiber.as_mut().expect("missing main fiber").make_current();
-        }
+        self.main_fiber.as_mut().expect("missing main fiber").make_current();
     }
 }
 

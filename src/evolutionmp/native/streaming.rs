@@ -62,3 +62,19 @@ pub unsafe fn request_model_collision(model: Hash) {
 pub unsafe fn is_model_collision_loaded(model: Hash) -> bool {
     invoke!(bool, 0x22CCA434E368F03A, model)
 }
+
+pub unsafe fn is_anim_dict_valid(dict: &str) -> bool {
+    invoke!(bool, 0x2DA49C3B79856961, dict)
+}
+
+pub unsafe fn is_anim_dict_loaded(dict: &str) -> bool {
+    invoke!(bool, 0xD031A9162D01088C, dict)
+}
+
+pub unsafe fn request_anim_dict(dict: &str) {
+    invoke!((), 0xD3BD40951412FEF6, dict)
+}
+
+pub unsafe fn mark_anim_dict_unused(dict: &str) {
+    invoke!((), 0xF66A602F829E2A06, dict)
+}

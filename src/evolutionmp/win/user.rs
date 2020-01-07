@@ -8,10 +8,10 @@ use std::ffi::{OsStr, OsString};
 use widestring::{WideCString};
 
 pub unsafe fn message_box<T, C>(window: Option<HWND>, text: T, caption: C, buttons: MessageBoxButtons, icon: Option<MessageBoxIcon>) -> Option<MessageBoxResult>
-    where T: Into<String>, C: Into<String> {
+    where T: AsRef<str>, C: AsRef<str> {
 
-    let text = WideCString::from_str(text.into()).unwrap();
-    let caption = WideCString::from_str(caption.into()).unwrap();
+    let text = WideCString::from_str(text.as_ref()).unwrap();
+    let caption = WideCString::from_str(caption.as_ref()).unwrap();
     let result = MessageBoxW(window.unwrap_or(null_mut()), text.as_ptr(), caption.as_ptr(), buttons.code() + icon.map_or(0, |i|i.code()));
     MessageBoxResult::from_code(result)
 }

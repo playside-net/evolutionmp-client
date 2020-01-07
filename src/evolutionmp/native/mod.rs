@@ -12,6 +12,7 @@ use std::time::Duration;
 use cgmath::{Vector3, Vector2};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
+use byteorder::ReadBytesExt;
 
 pub mod ui;
 pub mod graphics;
@@ -33,6 +34,8 @@ pub mod dlc;
 pub mod clock;
 pub mod decision_event;
 pub mod pool;
+pub mod camera;
+pub mod worldprobe;
 
 pub static mut NATIVES: Option<Natives> = None;
 pub static mut SET_VECTOR_RESULTS: Option<SetVectorResults> = None;
@@ -55,44 +58,53 @@ pub(crate) unsafe fn init(mem: &MemoryRegion) {
         .next().expect("cursor sprite")
         .get();
     pool::init(mem);
+    vehicle::init(mem);
+}
+
+#[repr(C)]
+struct PtrMagic {
+    prev: u64,
+    next: u64
+}
+
+impl PtrMagic {
+    unsafe fn get(&self) -> u64 {
+        let addr = self as *const Self as *const u32;
+        let mask = (addr as u64 as u32 ^ *addr.wrapping_add(2)) as u64;
+        ((mask << 32) | mask) ^ self.prev
+    }
 }
 
 #[repr(C)]
 struct NativeGroup {
-    next_group_1: u64,
-    next_group_2: u64,
+    next_group: PtrMagic,
     handlers: [NativeHandler; 7],
-    num_entries_1: u32,
-    num_entries_2: u32,
-    hashes: u64
+    len_1: u32,
+    len_2: u32,
+    pad: u32,
+    hashes: [PtrMagic; 7]
 }
 
 #[repr(C)]
 struct NativeTable {
-    groups: [*mut NativeGroup; 0xFF],
+    groups: [Box<NativeGroup>; 0xFF],
     _unknown: u32,
     initialized: bool
 }
 
 impl NativeTable {
     pub fn find(&self, hash: u64) -> Option<NativeHandler> {
-        let mut table = self.groups[(hash & 0xFF) as usize];
+        let mut group = &self.groups[(hash & 0xFF) as usize];
+        unsafe {
+            group.find(hash)
+        }
+    }
 
-        loop {
-            unsafe {
-                let e = (*table).get_num_entries();
-
-                for i in 0..e {
-                    let h = (*table).get_hash(i);
-                    if hash == h {
-                        let handler = (*table).handlers[i as usize];
-                        return Some(handler);
-                    }
-                }
-                table = (*table).get_next_registration();
-                if table.is_null() {
-                    return None;
-                }
+    pub unsafe fn dump(&self, target: &mut Vec<u64>) {
+        for g in self.groups.iter() {
+            let l = g.len();
+            for i in 0..l {
+                target.push(g.get_hash(i));
             }
         }
     }
@@ -101,22 +113,38 @@ impl NativeTable {
 pub type SetVectorResults = unsafe extern "C" fn(*mut NativeCallContext);
 
 impl NativeGroup {
-    pub unsafe fn get_next_registration(&self) -> *mut NativeGroup {
-        let addr: *mut u32 = std::mem::transmute(&self.next_group_1);
-        let mask = (addr as u64 as u32 ^ *addr.offset(2)) as u64;
-        std::mem::transmute((mask << 32 | mask) ^ *(addr as *mut u64))
+    pub unsafe fn find(&self, hash: u64) -> Option<NativeHandler> {
+        let e = self.len();
+
+        for i in 0..e {
+            let h = self.get_hash(i);
+            if hash == h {
+                let handler = self.handlers[i];
+                return Some(handler);
+            }
+        }
+        let next = self.get_next_group();
+        if next.is_null() {
+            None
+        }  else {
+            (*next).find(hash)
+        }
     }
 
-    pub unsafe fn get_num_entries(&self) -> usize {
-        let addr: *mut u32 = std::mem::transmute(&self.num_entries_1);
-        (addr as u64 as u32 ^ self.num_entries_1 ^ self.num_entries_2) as usize
+    pub unsafe fn get_next_group(&self) -> *mut NativeGroup {
+        self.next_group.get() as *mut u64 as *mut _
+    }
+
+    pub fn len(&self) -> usize {
+        let addr: *const u32 = &self.len_1 as *const _;
+        (addr as u64 as u32 ^ self.len_1 ^ self.len_2) as usize
     }
 
     pub unsafe fn get_hash(&self, index: usize) -> u64 {
-        let addr: *mut u32 = std::mem::transmute(&self.next_group_1);
-        let addr = addr.add(4 * index + 21);
-        let mask = (addr as u64 as u32 ^ *addr.offset(2)) as u64;
-        (mask << 32 | mask) ^ *(addr as *mut u64)
+        let addr = (&self.pad as *const u32).wrapping_add(1 + 4 * index);
+        let mask = (addr as u64 as u32 ^ *addr.wrapping_add(2)) as u64;
+        let result = ((mask << 32) | mask) ^ *(addr as *const u64);
+        std::mem::transmute(result)
     }
 }
 
@@ -184,7 +212,7 @@ type NativeHandler = extern "C" fn(*mut NativeCallContext);
 
 pub struct Natives {
     mappings: HashMap<u64, u64>,
-    table: *mut NativeTable,
+    table: Box<NativeTable>,
     cache: HashMap<u64, NativeHandler>,
     pub context: NativeCallContext
 }
@@ -194,10 +222,11 @@ unsafe impl Sync for Natives {}
 impl Natives {
     pub unsafe fn new(global_region: &MemoryRegion) -> Natives {
         let table = global_region.find_await("76 32 48 8B 53 40", 50, 1000)
-            .expect("native table").add(9).read_ptr(4).get_mut::<NativeTable>();
+            .expect("native table").add(9).read_ptr(4).get_box::<NativeTable>();
         let mappings = crate::mappings::MAPPINGS.iter().map(|a| (a[0], a[1])).collect::<HashMap<_, _>>();
 
-        Natives { mappings, table,
+        Natives {
+            mappings, table,
             cache: HashMap::new(),
             context: NativeCallContext {
                 returns: Box::new([0; 3]),
@@ -209,6 +238,10 @@ impl Natives {
         }
     }
 
+    pub unsafe fn dump(&self, target: &mut Vec<u64>) {
+        self.table.dump(target);
+    }
+
     pub unsafe fn get_handler(&mut self, native: u64) -> Option<NativeHandler> {
         if let Some(handler) = self.cache.get(&native) {
             Some(*handler)
@@ -216,7 +249,7 @@ impl Natives {
             let mapped_native = *self.mappings.get(&native)
                 .expect(&format!("Missing mapping for native 0x{:016X}", native));
 
-            if let Some(handler) = (*self.table).find(mapped_native) {
+            if let Some(handler) = self.table.find(mapped_native) {
                 self.cache.insert(native, handler);
                 Some(handler)
             } else {
@@ -229,7 +262,6 @@ impl Natives {
 #[macro_export]
 macro_rules! invoke {
     ($ret: ty, $hash:literal) => {{
-        use $crate::native::NativeStackValue;
         let hash: u64 = $hash;
         let natives = $crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
         let handler = natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash));
@@ -238,7 +270,6 @@ macro_rules! invoke {
         natives.context.get::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
-        use $crate::native::NativeStackValue;
         let hash: u64 = $hash;
         let natives = $crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
         let handler = natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash));
