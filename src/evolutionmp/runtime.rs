@@ -133,9 +133,10 @@ impl Runtime {
 
 pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     let natives = crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
-    let mut dump = Vec::new();
+
+    /*let mut dump = Vec::new();
     unsafe { natives.dump(&mut dump) };
-    info!("Dumping natives: {:#?}", dump);
+    info!("Dumping natives: {:#?}", dump);*/
 
     let get_frame_count = natives.get_handler(0xFC8202EFC642E6F2)
         .expect("Unable to get native handler for GET_FRAME_COUNT");
