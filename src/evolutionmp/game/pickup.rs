@@ -6,7 +6,7 @@ pub struct Pickup {
 }
 
 impl FromHandle for Pickup {
-    unsafe fn from_handle(handle: Handle) -> Option<Self> {
+    fn from_handle(handle: Handle) -> Option<Self> {
         if handle == 0 {
             None
         } else {

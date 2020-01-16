@@ -12,7 +12,7 @@ pub struct Probe {
 impl Probe {
     pub fn new_ray(start: Vector3<f32>, end: Vector3<f32>, flags: u32, entity: &dyn Entity, p8: u32) -> Probe {
         Probe {
-            handle: unsafe { native::worldprobe::new_ray(start, end, flags, entity.get_handle(), p8) }
+            handle: native::worldprobe::new_ray(start, end, flags, entity.get_handle(), p8)
         }
     }
 
@@ -21,9 +21,7 @@ impl Probe {
         let mut end = Vector3::new(0.0, 0.0, 0.0);
         let mut surface_normal = Vector3::new(0.0, 0.0, 0.0);
         let mut entity = 0 as Handle;
-        let code = unsafe {
-            native::worldprobe::get_result(self.handle, &mut hit, &mut end, &mut surface_normal, &mut entity)
-        };
+        let code = native::worldprobe::get_result(self.handle, &mut hit, &mut end, &mut surface_normal, &mut entity);
         ProbeResult {
             hit,
             end,
@@ -53,6 +51,6 @@ impl Entity for ProbeEntity {
 
     fn delete(&mut self) {
         self.set_persistent(false);
-        unsafe { native::entity::delete(&mut self.handle) }
+        native::entity::delete(&mut self.handle)
     }
 }

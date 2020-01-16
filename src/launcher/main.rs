@@ -7,7 +7,7 @@ use evolutionmp::win::ps::{ProcessIterator, get_process};
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::psapi::LIST_MODULES_ALL;
 use evolutionmp::launcher_dir;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn main() {
     let gta_exe = "GTA5.exe";
@@ -66,6 +66,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
                         for m in proc.get_modules(LIST_MODULES_ALL) {
                             if m.get_instance() as u64 & 0xFFFFFFFF == module as u64 {
                                 println!("Injection successful at: {:p} ({})", m.get_instance(), m.get_name());
+                                m.get_procedure_address("set_io");
                                 break;
                             }
                         }

@@ -1,4 +1,4 @@
-use crate::win::ps::get_current_process;
+#![feature(asm, set_stdio)]
 use crate::pattern::{MemoryRegion, RegionIterator};
 use crate::game::vehicle::Vehicle;
 use crate::hash::joaat;
@@ -30,6 +30,7 @@ use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
 use log::{info, debug, error};
 use serde_derive::{Serialize, Deserialize};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -53,35 +54,39 @@ pub mod multiplayer;
 //pub mod network;
 pub mod hash;
 
-const DLL_PROCESS_ATTACH: u32 = 1;
-const DLL_THREAD_ATTACH: u32 = 2;
-const DLL_THREAD_DETACH: u32 = 3;
-const DLL_PROCESS_DETACH: u32 = 0;
+#[repr(C)]
+pub enum DllCallReason {
+    ProcessDetach, ProcessAttach, ThreadAttach, ThreadDetach
+}
 
 pub const LOG_ROOT: &'static str = "root";
 pub const LOG_PANIC: &'static str = "panic";
 
+static GAME_STATE: AtomicPtr<GameState> = AtomicPtr::new(null_mut());
+
+fn get_game_state() -> GameState {
+    unsafe { GAME_STATE.load(Ordering::SeqCst).read() }
+}
+
 #[cfg(target_os = "windows")]
-fn attach(instance: HMODULE) {
+fn attach(instance: HINSTANCE) {
     unsafe {
-        info!("Injection successful");
-
-        let mem = MemoryRegion::image();
-
-        //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-        mem.find_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
-            .expect("movie").nop(13); //Disable movie
-
-        let game_state = mem.find_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
-            .expect("game state")
-            .add(2)
-            .read_ptr(5);
-
-        let get_game_state = move || {
-            *game_state.get::<GameState>()
-        };
-
         std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+
+            info!("Injection successful");
+
+            let mem = MemoryRegion::image();
+
+            //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
+            mem.find_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
+                .expect("movie").nop(13); //Disable movie
+
+            GAME_STATE.store(mem.find_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
+                .expect("game state")
+                .add(2)
+                .read_ptr(5).get_mut(), Ordering::SeqCst);
+
             let mut input = win::input::InputHook::new().expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");
 
@@ -129,17 +134,23 @@ macro_rules! info_message {
     };
 }
 
+pub extern "rust" fn set_io(print: Option<Box<dyn Write + Send>>, panic: Option<Box<dyn Write + Send>>) {
+    std::io::set_print(print);
+    std::io::set_panic(panic);
+}
+
 #[cfg(target_os = "windows")]
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DWORD, reserved: LPVOID) -> BOOL {
+pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, reserved: LPVOID) -> BOOL {
+    std::io::stdout();
     match reason {
-        DLL_PROCESS_ATTACH => {
+        DllCallReason::ProcessAttach => {
             unsafe { DisableThreadLibraryCalls(instance) };
             setup_logger("client", true);
             attach(instance)
         }
-        DLL_PROCESS_DETACH => {
+        DllCallReason::ProcessDetach => {
             detach();
         }
         _ => {},

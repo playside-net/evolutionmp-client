@@ -9,8 +9,8 @@ use tokio::prelude::Async;
 use futures::Future;
 use futures::sync::mpsc::{channel, Receiver, Sender};
 use log::{info, error, warn};
-use winapi::_core::task::{Context, Poll};
-use winapi::_core::pin::Pin;
+use std::task::{Context, Poll};
+use std::pin::Pin;
 use tokio::prelude::future::FutureResult;
 use tokio::sync::mpsc::{Receiver, Sender};
 

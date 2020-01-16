@@ -5,12 +5,11 @@ use crate::game::controls::{Group as ControlGroup, Control};
 use crate::pattern::MemoryRegion;
 use crate::win::input::{InputEvent, KeyboardEvent};
 use std::time::{Instant, UNIX_EPOCH, SystemTime};
-use std::sync::MutexGuard;
 use std::collections::VecDeque;
 use std::os::raw::c_int;
 use winapi::um::winuser::{VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_ESCAPE, VK_RETURN};
 use cgmath::Vector2;
-use winapi::_core::time::Duration;
+use std::time::Duration;
 
 pub const FONT: Font = Font::ChaletLondon;
 pub const CONSOLE_WIDTH: f32 = BASE_WIDTH;
@@ -61,7 +60,7 @@ impl Script for ScriptConsole {
         }
     }
 
-    fn event(&mut self, event: &mut ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
         match event {
             ScriptEvent::UserInput(event) => {
                 match event {
@@ -185,11 +184,13 @@ impl Script for ScriptConsole {
 
 impl ScriptConsole {
     fn is_open(&self) -> bool {
-        unsafe { crate::runtime::CONSOLE_VISIBLE }
+        use std::sync::atomic::Ordering;
+        crate::runtime::CONSOLE_VISIBLE.load(Ordering::SeqCst)
     }
 
     fn set_open(&mut self, open: bool) {
-        unsafe { crate::runtime::CONSOLE_VISIBLE = open };
+        use std::sync::atomic::Ordering;
+        crate::runtime::CONSOLE_VISIBLE.store(open, Ordering::SeqCst);
         if !open {
             self.last_closed = Instant::now() + Duration::from_millis(200);
             self.lock_controls();

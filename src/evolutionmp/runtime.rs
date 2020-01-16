@@ -3,7 +3,7 @@ use crate::pattern::MemoryRegion;
 use crate::native::collection::PtrCollection;
 use crate::GameState;
 use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
-use crate::native::{NativeCallContext, NativeStackValue};
+use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe};
 use crate::hash::joaat;
 use crate::win::thread::Fiber;
 use crate::{info, error};
@@ -19,34 +19,23 @@ use detour::static_detour;
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::shared::minwindef::{LPVOID, DWORD, TRUE};
 use winapi::um::winuser::VK_RETURN;
-use winapi::_core::panic::PanicInfo;
+use std::panic::PanicInfo;
 use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM, NativeMethod};
 use jni_dynamic::objects::{JValue, JObject};
 use jni_dynamic::sys::{jlong, jobject, jobjectArray, JNINativeInterface_};
 use winapi::ctypes::c_void;
+use std::cell::{Cell, RefCell};
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicBool, AtomicPtr};
+use crate::game::streaming::Resource;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
-pub(crate) static mut RUNTIME: Option<Runtime> = None;
-pub(crate) static mut VM: Option<Arc<JavaVM>> = None;
-pub(crate) static mut CONSOLE_VISIBLE: bool = false;
+pub(crate) static CONSOLE_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 static_detour! {
     static GetFrameCountHook: extern "C" fn(*mut NativeCallContext);
     static ReturnTrueFromScriptHook: extern "C" fn(*mut c_void, *mut c_void) -> bool;
-}
-
-fn get_frame_count_native(context: *mut NativeCallContext) {
-    unsafe {
-        loop {
-            if let Some(runtime) = RUNTIME.as_mut() {
-                runtime.frame();
-                break;
-            }
-        }
-
-    }
-    GetFrameCountHook.call(context)
 }
 
 fn return_true_from_script(arg1: *mut c_void, arg2: *mut c_void) -> bool {
@@ -81,12 +70,8 @@ impl EventPool {
         }
     }
 
-    pub fn iterate<F>(&mut self, mut handler: F) where F: FnMut(&mut ScriptEvent) -> bool {
-        for i in 0..self.input.len() {
-            if handler(&mut self.input[i]) {
-                self.input.remove(i);
-            }
-        }
+    pub fn iterate<F>(&mut self, mut handler: F) where F: FnMut(&ScriptEvent) -> bool {
+        self.input.retain(|i| !handler(i));
     }
 }
 
@@ -132,32 +117,43 @@ impl Runtime {
 }
 
 pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
-    let natives = crate::native::NATIVES.as_mut().expect("Natives aren't initialized yet");
+    let natives = crate::native::NATIVES.borrow();
+    let natives = natives.as_ref().expect("Natives aren't initialized yet");
 
     /*let mut dump = Vec::new();
     unsafe { natives.dump(&mut dump) };
     info!("Dumping natives: {:#?}", dump);*/
 
-    let get_frame_count = natives.get_handler(0xFC8202EFC642E6F2)
-        .expect("Unable to get native handler for GET_FRAME_COUNT");
-    let return_true = mem.find("74 3C 48 8B 01 FF 50 10 84 C0")
-        .next()
-        .expect("Unable to find return_true_from_script").get::<u8>();
-    GetFrameCountHook
-        .initialize(get_frame_count, get_frame_count_native).expect("GET_FRAME_COUNT hook initialization failed")
-        .enable().expect("GET_FRAME_COUNT hook enabling failed");
-    ReturnTrueFromScriptHook
-        .initialize(std::mem::transmute(return_true), return_true_from_script).expect("return_true_from_script hook initialization failed")
-        .enable().expect("return_true_from_script hook enabling failed");
-
     let mut runtime = Runtime::new(input);
     info!("Initializing multiplayer");
     crate::multiplayer::init(&mut runtime);
-    RUNTIME = Some(runtime);
+
+    static RUNTIME: ThreadSafe<RefCell<Option<Runtime>>> = ThreadSafe::new(RefCell::new(None));
+    RUNTIME.replace(Some(runtime));
+
+    let get_frame_count = natives.get_handler(0xFC8202EFC642E6F2)
+        .expect("Unable to get native handler for GET_FRAME_COUNT");
+    GetFrameCountHook
+        .initialize(get_frame_count, |context| {
+            let mut runtime = RUNTIME.try_borrow_mut().expect("cannot call GET_FRAME_COUNT from script");
+            let mut runtime = runtime.as_mut().unwrap();
+            runtime.frame();
+            GetFrameCountHook.call(context)
+        }).expect("GET_FRAME_COUNT hook initialization failed")
+        .enable().expect("GET_FRAME_COUNT hook enabling failed");
+
+    /*let return_true = mem.find("74 3C 48 8B 01 FF 50 10 84 C0")
+        .next()
+        .expect("Unable to find return_true_from_script").get::<u8>();*/
+    /*ReturnTrueFromScriptHook
+        .initialize(std::mem::transmute(return_true), return_true_from_script).expect("return_true_from_script hook initialization failed")
+        .enable().expect("return_true_from_script hook enabling failed");*/
 
     let launcher_path = Path::new("C:/Users/Виктор/Desktop/Проекты/Rust/evolutionmp-client");
     //start_vm(launcher_path);
 }
+
+unsafe impl std::marker::Send for ScriptContainer {}
 
 #[repr(C)]
 pub struct ScriptContainer {
@@ -226,7 +222,7 @@ impl std::ops::Drop for ScriptContainer {
 pub trait Script {
     fn prepare(&mut self, mut env: ScriptEnv) {}
     fn frame(&mut self, mut env: ScriptEnv) {}
-    fn event(&mut self, event: &mut ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool { false }
+    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool { false }
 }
 
 pub struct ScriptEnv<'a> {
@@ -249,6 +245,13 @@ impl<'a> ScriptEnv<'a> {
 
     pub fn log<L>(&mut self, line: L) where L: Into<String> {
         self.event(ScriptEvent::ConsoleOutput(line.into()));
+    }
+
+    pub fn wait_for_resource(&mut self, resource: &dyn Resource) {
+        resource.request();
+        while !resource.is_loaded() {
+            self.wait(Duration::from_millis(0));
+        }
     }
 }
 
@@ -276,8 +279,6 @@ unsafe fn start_vm(launcher_path: &Path) {
     let vm = Arc::new(
         JavaVM::new(java_exe, java_args).expect("Error creating JVM")
     );
-
-    VM = Some(vm.clone());
 
     std::thread::Builder::new().name(String::from("vm")).spawn(move || {
         let env = vm.attach_current_thread().expect("Thread attach failed");

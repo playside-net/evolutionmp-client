@@ -31,7 +31,7 @@ pub trait StatValue {
 impl StatValue for i32 {
     fn read(hash: Hash, default: i32) -> Option<Self> {
         let mut result = &mut 0;
-        if unsafe { crate::native::stats::get_int(hash, result, -1) } {
+        if crate::native::stats::get_int(hash, result, -1) {
             Some(*result)
         } else {
             None
@@ -39,6 +39,6 @@ impl StatValue for i32 {
     }
 
     fn write(&self, hash: Hash, save: bool) -> bool {
-        unsafe { crate::native::stats::set_int(hash, *self, save) }
+        crate::native::stats::set_int(hash, *self, save)
     }
 }

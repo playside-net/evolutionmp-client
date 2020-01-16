@@ -3,13 +3,13 @@ use crate::hash::{Hash, Hashable};
 use crate::runtime::ScriptEnv;
 use std::time::Duration;
 use cgmath::Vector3;
+pub use native::streaming::{
+    stop_player_switch, load_scene
+};
 
-pub fn stop_player_switch() {
-    unsafe { native::streaming::stop_player_switch() }
-}
-
-pub fn load_scene(pos: Vector3<f32>) {
-    unsafe { native::streaming::load_scene(pos) }
+pub trait Resource {
+    fn is_loaded(&self) -> bool;
+    fn request(&self);
 }
 
 #[derive(Copy, Clone)]
@@ -24,43 +24,38 @@ impl Model {
         }
     }
 
-    pub fn is_loaded(&self) -> bool {
-        unsafe { native::streaming::is_model_loaded(self.hash) }
-    }
-
     pub fn is_collision_loaded(&self) -> bool {
-        unsafe { native::streaming::is_model_collision_loaded(self.hash) }
+        native::streaming::is_model_collision_loaded(self.hash)
     }
 
     pub fn is_valid(&self) -> bool {
-        unsafe { native::streaming::is_model_valid(self.hash) }
+        native::streaming::is_model_valid(self.hash)
     }
 
     pub fn is_in_cd_image(&self) -> bool {
-        unsafe { native::streaming::is_model_in_cd_image(self.hash) }
+        native::streaming::is_model_in_cd_image(self.hash)
     }
 
     pub fn is_vehicle(&self) -> bool {
-        unsafe { native::streaming::is_model_a_vehicle(self.hash) }
-    }
-
-    pub fn request(&self) {
-        unsafe { native::streaming::request_model(self.hash) }
-    }
-
-    pub fn request_and_wait(&self, env: &mut ScriptEnv) {
-        self.request();
-        while !self.is_loaded() {
-            env.wait(Duration::from_millis(0));
-        }
+        native::streaming::is_model_a_vehicle(self.hash)
     }
 
     pub fn request_collision(&self) {
-        unsafe { native::streaming::request_model_collision(self.hash) }
+        native::streaming::request_model_collision(self.hash)
     }
 
     pub fn mark_unused(&self) {
-        unsafe { native::streaming::mark_model_unused(self.hash) }
+        native::streaming::mark_model_unused(self.hash)
+    }
+}
+
+impl Resource for Model {
+    fn is_loaded(&self) -> bool {
+        native::streaming::is_model_loaded(self.hash)
+    }
+
+    fn request(&self) {
+        native::streaming::request_model(self.hash)
     }
 }
 
@@ -88,18 +83,20 @@ impl AnimDict {
     }
 
     pub fn is_valid(&self) -> bool {
-        unsafe { native::streaming::is_anim_dict_valid(&self.name) }
-    }
-
-    pub fn is_loaded(&self) -> bool {
-        unsafe { native::streaming::is_anim_dict_loaded(&self.name) }
-    }
-
-    pub fn request(&self) {
-        unsafe { native::streaming::request_anim_dict(&self.name) }
+        native::streaming::is_anim_dict_valid(&self.name)
     }
 
     pub fn mark_unused(&self) {
-        unsafe { native::streaming::mark_anim_dict_unused(&self.name) }
+        native::streaming::mark_anim_dict_unused(&self.name)
+    }
+}
+
+impl Resource for AnimDict {
+    fn is_loaded(&self) -> bool {
+        native::streaming::is_anim_dict_loaded(&self.name)
+    }
+
+    fn request(&self) {
+        native::streaming::request_anim_dict(&self.name)
     }
 }

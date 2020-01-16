@@ -164,6 +164,20 @@ pub struct Fiber {
     handle: HANDLE
 }
 
+unsafe impl std::marker::Send for Fiber {}
+
+#[inline]
+pub unsafe fn __readgsqword(offset: DWORD) -> u64 {
+    let out: u64;
+    asm!("mov $0, gs:[$1]"
+    : "=r"(out)
+    : "ri"(offset)
+    :
+    : "intel"
+    );
+    out
+}
+
 impl Fiber {
     pub fn new<T>(stack_size: SIZE_T, param: &mut T, initializer: FiberInitializer<&mut T>) -> Fiber where T: Sized {
         Fiber {
@@ -181,7 +195,7 @@ impl Fiber {
 
     pub fn current() -> Option<Fiber> {
         let offset = offset_of!(NT_TIB => u);
-        let handle = unsafe { ntapi::winapi_local::um::winnt::__readgsqword(offset.get_byte_offset() as u32) } as HANDLE;
+        let handle = unsafe { __readgsqword(offset.get_byte_offset() as u32) } as HANDLE;
         if !handle.is_null() {
             Some(Fiber { handle })
         } else {

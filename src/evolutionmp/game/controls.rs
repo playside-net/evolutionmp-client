@@ -389,21 +389,21 @@ pub enum Control {
 }
 
 pub fn disable_action(group: Group, control: Control, disable: bool) {
-    unsafe { crate::native::controls::disable_action(group as u32, control as u32, disable) }
+    crate::native::controls::disable_action(group as u32, control as u32, disable)
 }
 
 pub fn enable_action(group: Group, control: Control, enable: bool) {
-    unsafe { crate::native::controls::enable_action(group as u32, control as u32, enable) }
+    crate::native::controls::enable_action(group as u32, control as u32, enable)
 }
 
 pub fn disable_all_actions(group: Group) {
-    unsafe { crate::native::controls::disable_all_actions(group as u32) }
+    crate::native::controls::disable_all_actions(group as u32)
 }
 
 pub fn enable_all_actions(group: Group) {
-    unsafe { crate::native::controls::enable_all_actions(group as u32) }
+    crate::native::controls::enable_all_actions(group as u32)
 }
 
 pub fn is_pressed(group: Group, control: Control) -> bool {
-    unsafe { crate::native::controls::is_pressed(group as u32, control as u32) }
+    crate::native::controls::is_pressed(group as u32, control as u32)
 }

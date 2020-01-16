@@ -6,7 +6,7 @@ pub struct Checkpoint {
 }
 
 impl FromHandle for Checkpoint {
-    unsafe fn from_handle(handle: Handle) -> Option<Self> {
+    fn from_handle(handle: Handle) -> Option<Self> {
         if handle == 0 {
             None
         } else {

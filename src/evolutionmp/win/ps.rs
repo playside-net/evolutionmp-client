@@ -139,6 +139,18 @@ impl ModuleEntry {
     pub fn get_name(&self) -> &String {
         &self.name
     }
+
+    pub fn get_procedure_address(&self, procedure: &str) -> Option<FARPROC> {
+        let procedure_str = CString::new(procedure).unwrap();
+        let procedure = unsafe {
+            GetProcAddress(self.instance, procedure_str.as_ptr() as _)
+        };
+        if procedure.is_null() {
+            None
+        } else {
+            Ok(procedure)
+        }
+    }
 }
 
 type TY = unsafe extern "system" fn(LPVOID) -> DWORD;

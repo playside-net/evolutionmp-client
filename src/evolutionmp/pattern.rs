@@ -5,6 +5,7 @@ use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
 use std::any::Any;
 use std::ptr::null_mut;
 use std::time::{Duration, Instant};
+use std::mem::ManuallyDrop;
 
 #[derive(Debug, Clone)]
 pub struct Pattern {
@@ -209,8 +210,8 @@ impl MemoryRegion {
         self.base.cast()
     }
 
-    pub unsafe fn get_box<T>(&self) -> Box<T> {
-        Box::from_raw(self.base.cast())
+    pub unsafe fn get_box<T>(&self) -> ManuallyDrop<Box<T>> {
+        ManuallyDrop::new(Box::from_raw(self.base.cast()))
     }
 
     pub unsafe fn get<T>(&self) -> *const T {

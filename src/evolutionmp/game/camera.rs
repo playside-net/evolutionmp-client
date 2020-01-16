@@ -9,7 +9,7 @@ pub struct Camera {
 
 impl Camera {
     pub fn new<H>(name: H, unknown: bool) -> Option<Camera> where H: Hashable {
-        let handle = unsafe { native::camera::new(name, unknown) };
+        let handle = native::camera::new(name, unknown);
         if handle == 0  {
             None
         } else {
@@ -18,26 +18,26 @@ impl Camera {
     }
 
     pub fn exists(&self) -> bool {
-        unsafe { native::camera::exists(self.handle) }
+        native::camera::exists(self.handle)
     }
 
     pub fn destroy(&self, check_this_script: bool) {
-        unsafe { native::camera::destroy(self.handle, check_this_script) }
+        native::camera::destroy(self.handle, check_this_script)
     }
 
     pub fn get_position(&self) -> Vector3<f32> {
-        unsafe { native::camera::get_position(self.handle) }
+        native::camera::get_position(self.handle)
     }
 
     pub fn get_rotation(&self, order: u32) -> Vector3<f32> {
-        unsafe { native::camera::get_rotation(self.handle, order) }
+        native::camera::get_rotation(self.handle, order)
     }
 
     pub fn get_fov(&self) -> f32 {
-        unsafe { native::camera::get_fov(self.handle) }
+        native::camera::get_fov(self.handle)
     }
 }
 
 pub fn get_gameplay_relative_heading() -> f32 {
-    unsafe { native::camera::get_gameplay_relative_heading() }
+    native::camera::get_gameplay_relative_heading()
 }

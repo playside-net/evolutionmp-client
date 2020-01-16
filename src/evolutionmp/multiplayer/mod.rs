@@ -45,6 +45,8 @@ pub struct ScriptCleanWorld {
     last_cleanup: Instant
 }
 
+static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
+
 impl Script for ScriptCleanWorld {
     fn prepare(&mut self, mut env: ScriptEnv) {
         let pos = Vector3::new(0.0, 0.0, 73.5);
@@ -58,7 +60,7 @@ impl Script for ScriptCleanWorld {
         ped.clear_tasks_immediately();
 
         gameplay::set_freemode_map_behavior(true);
-        game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
+        //game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
         dlc::load_mp_maps();
         script::shutdown_loading_screen();
         game::ui::hide_loading_prompt();
@@ -71,12 +73,8 @@ impl Script for ScriptCleanWorld {
 
         self.cleanup();
 
-        unsafe {
-            native::audio::set_flag("LoadMPData", true);
-            native::audio::set_flag("DisableBarks", true);
-            native::audio::set_flag("DisableFlightMusic", true);
-            native::audio::set_flag("PoliceScannerDisabled", true);
-            native::audio::set_flag("OnlyAllowScriptTriggerPoliceScanner", true);
+        for flag in AUDIO_FLAGS.iter() {
+            native::audio::set_flag(flag, true);
         }
     }
 
@@ -92,17 +90,17 @@ impl Script for ScriptCleanWorld {
 
         self.cleanup();
 
-        unsafe {
-            native::ped::set_density_multiplier_this_frame(0.0);
-            native::ped::set_scenario_density_multiplier_this_frame(0.0);
+        native::ped::set_density_multiplier_this_frame(0.0);
+        native::ped::set_scenario_density_multiplier_this_frame(0.0);
 
-            native::vehicle::set_density_multiplier_this_frame(0.0);
-            native::vehicle::set_random_density_multiplier_this_frame(0.0);
+        native::vehicle::set_density_multiplier_this_frame(0.0);
+        native::vehicle::set_random_density_multiplier_this_frame(0.0);
 
-            native::decision_event::suppress_shocking_events_next_frame();
-            native::decision_event::suppress_agitation_events_next_frame();
-        }
-        if let Some(vehicles) = native::pool::get_vehicles() {
+        native::decision_event::suppress_shocking_events_next_frame();
+        native::decision_event::suppress_agitation_events_next_frame();
+
+
+        /*if let Some(vehicles) = native::pool::get_vehicles() {
             let len = vehicles.len();
             let capacity = vehicles.capacity();
             game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Vehicles: {}/{}", len, capacity));
@@ -112,10 +110,10 @@ impl Script for ScriptCleanWorld {
 
         } else {
             //game::ui::hide_loading_prompt();
-        }
+        }*/
     }
 
-    fn event(&mut self, event: &mut ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
         match event {
             ScriptEvent::UserInput(event) => {
                 match event {
@@ -132,7 +130,7 @@ impl Script for ScriptCleanWorld {
                                     let player = Player::local();
                                     let ped = player.get_ped();
                                     if let Some(veh) = ped.get_in_vehicle(false) {
-                                        veh.start_horn(5000, "NORMAL", true);
+                                        veh.repair();
                                     } else {
                                         player.set_model(env, "FreeModeMale01");
                                     }
@@ -175,37 +173,35 @@ impl ScriptCleanWorld {
         let player = Player::local();
         player.disable_vehicle_rewards();
 
-        unsafe {
-            native::player::set_max_wanted_level(0);
+        native::player::set_max_wanted_level(0);
 
-            native::vehicle::set_garbage_trucks(false);
-            native::vehicle::set_random_boats(false);
-            native::vehicle::set_random_trains(false);
-            native::vehicle::set_far_draw(false);
-            native::vehicle::set_distant_visible(false);
-            native::vehicle::delete_all_trains();
-            native::vehicle::set_parked_count(-1);
-            native::vehicle::set_low_priority_generators_active(false);
-            native::vehicle::remove_vehicles_from_generators_in_area(
-                Vector3::new(-9999.0, -9999.0, -9999.0),
-                Vector3::new(9999.0, 9999.0, 9999.0),
-                false
-            );
+        native::vehicle::set_garbage_trucks(false);
+        native::vehicle::set_random_boats(false);
+        native::vehicle::set_random_trains(false);
+        native::vehicle::set_far_draw(false);
+        native::vehicle::set_distant_visible(false);
+        native::vehicle::delete_all_trains();
+        native::vehicle::set_parked_count(-1);
+        native::vehicle::set_low_priority_generators_active(false);
+        native::vehicle::remove_vehicles_from_generators_in_area(
+            Vector3::new(-9999.0, -9999.0, -9999.0),
+            Vector3::new(9999.0, 9999.0, 9999.0),
+            false
+        );
 
-            native::ped::set_non_scenario_cops(false);
-            native::ped::set_cops(false);
-            native::ped::set_scenario_cops(false);
+        native::ped::set_non_scenario_cops(false);
+        native::ped::set_cops(false);
+        native::ped::set_scenario_cops(false);
 
-            gameplay::set_time_scale(1.0);
+        gameplay::set_time_scale(1.0);
 
-            native::streaming::set_vehicle_population_budget(0);
-            native::streaming::set_ped_population_budget(0);
+        native::streaming::set_vehicle_population_budget(0);
+        native::streaming::set_ped_population_budget(0);
 
-            native::vehicle::set_distant_lights_visible(false);
-            native::vehicle::set_parked_density_multiplier_this_frame(0.0);
+        native::vehicle::set_distant_lights_visible(false);
+        native::vehicle::set_parked_density_multiplier_this_frame(0.0);
 
-            native::ui::set_map_revealed(true);
-        }
+        native::ui::set_map_revealed(true);
     }
 
     fn disable_controls(&self) {
@@ -222,13 +218,11 @@ impl ScriptCleanWorld {
     }
 
     fn terminate_script(&self, script: &str, cleanup: bool) {
-        unsafe {
-            if cleanup {
-                native::script::mark_unused(script);
-                native::script::force_cleanup(script, 8);
-            }
-            native::script::terminate_all(script);
+        if cleanup {
+            native::script::mark_unused(script);
+            native::script::force_cleanup(script, 8);
         }
+        native::script::terminate_all(script);
     }
 }
 
@@ -261,10 +255,7 @@ impl Script for ScriptFingerPointing {
             if !self.active {
                 self.active = true;
                 let dict = AnimDict::new("anim@mp_point");
-                dict.request();
-                while !dict.is_loaded() {
-                    env.wait(Duration::from_millis(0));
-                }
+                env.wait_for_resource(&dict);
                 player.set_config_flag(36, true);
                 player.get_tasks().network_move("task_mp_pointing", 0.5, false, dict.get_name(), 24);
                 dict.mark_unused();
