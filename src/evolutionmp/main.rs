@@ -134,7 +134,8 @@ macro_rules! info_message {
     };
 }
 
-pub extern "rust" fn set_io(print: Option<Box<dyn Write + Send>>, panic: Option<Box<dyn Write + Send>>) {
+#[no_mangle]
+pub extern fn set_io(print: Option<Box<dyn Write + Send>>, panic: Option<Box<dyn Write + Send>>) {
     std::io::set_print(print);
     std::io::set_panic(panic);
 }

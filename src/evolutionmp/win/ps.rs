@@ -64,7 +64,7 @@ unsafe fn set_privilege(privilege: &str, value: bool) -> bool {
     false
 }
 
-fn get_procedure_address(module: &str, procedure: &str) -> Result<FARPROC, InjectionError> {
+pub fn get_procedure_address(module: &str, procedure: &str) -> Result<FARPROC, InjectionError> {
     let module_str = WideCString::from_str(module).unwrap();
     let procedure_str = CString::new(procedure).unwrap();
     let module: HMODULE = unsafe {
@@ -127,12 +127,12 @@ impl std::ops::Deref for ModuleHandle {
 }
 
 pub struct ModuleEntry {
-    instance: HINSTANCE,
+    instance: HMODULE,
     name: String
 }
 
 impl ModuleEntry {
-    pub fn get_instance(&self) -> HINSTANCE {
+    pub fn get_instance(&self) -> HMODULE {
         self.instance
     }
 
@@ -148,7 +148,7 @@ impl ModuleEntry {
         if procedure.is_null() {
             None
         } else {
-            Ok(procedure)
+            Some(procedure)
         }
     }
 }

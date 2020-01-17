@@ -41,6 +41,8 @@ impl Player {
         if model.is_in_cd_image() && model.is_valid() {
             env.wait_for_resource(&model);
             native::player::set_model(self.handle, model);
+            let ped = self.get_ped();
+            ped.set_default_component_variation();
             model.mark_unused();
             true
         } else {

@@ -1,13 +1,15 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE};
+use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE};
 use winapi::um::tlhelp32::TH32CS_SNAPPROCESS;
 use evolutionmp::registry::Registry;
-use evolutionmp::win::ps::{ProcessIterator, get_process};
+use evolutionmp::win::ps::{ProcessIterator, get_process, ModuleEntry, ProcessHandle, get_procedure_address};
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::psapi::LIST_MODULES_ALL;
 use evolutionmp::launcher_dir;
 use std::path::Path;
+use winapi::um::winbase::INFINITE;
+use winapi::_core::ptr::null_mut;
 
 fn main() {
     let gta_exe = "GTA5.exe";
@@ -65,8 +67,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
                     module => {
                         for m in proc.get_modules(LIST_MODULES_ALL) {
                             if m.get_instance() as u64 & 0xFFFFFFFF == module as u64 {
-                                println!("Injection successful at: {:p} ({})", m.get_instance(), m.get_name());
-                                m.get_procedure_address("set_io");
+                                initialize(proc, m, &client_dll);
                                 break;
                             }
                         }
@@ -86,6 +87,25 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
 
 fn is_process_alive<S>(file_name: S) -> bool where S: AsRef<str> {
     ProcessIterator::new(TH32CS_SNAPPROCESS).unwrap().any(move |p|&p.get_name().to_string_lossy() == file_name.as_ref())
+}
+
+fn initialize(proc: ProcessHandle, m: ModuleEntry, client_dll: &Path) {
+    /*//println!("Looking for set_io in: {:p} ({})", m.get_instance(), m.get_name());
+    let p = get_procedure_address(&client_dll.to_string_lossy(), "set_io").expect("no set_io");
+    //let p = m.get_procedure_address("set_io").expect("missing set_io procedure in target module");
+    //println!("Found set_io procedure: {:?}", p);
+
+    let alloc = proc.virtual_alloc(&0u32, null_mut(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE).unwrap();
+
+    match proc.create_thread(p, &alloc) {
+        Ok(thread) => {
+            thread.wait_for_single_object(INFINITE);
+            println!("set_io result: {}", thread.get_exit_code());
+        },
+        Err(err) => {
+            println!("set_io failed: {:?}", err);
+        }
+    }*/
 }
 
 

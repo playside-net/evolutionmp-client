@@ -17,6 +17,8 @@ use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ops::Deref;
 use std::ptr::{null_mut, null};
+use crate::native::pool::FromHandle;
+use crate::game::entity::Entity;
 
 pub mod ui;
 pub mod graphics;
@@ -239,8 +241,10 @@ impl<'a> NativeStackWriter<'a> {
         self.pos += 1;
     }
 
-    pub fn write<T>(&mut self, value: T) where T: NativeStackValue {
-        value.write_to_stack(self)
+    pub fn write<T>(&mut self, value: T) -> usize where T: NativeStackValue {
+        let len = value.get_stack_size();
+        value.write_to_stack(self);
+        len
     }
 
     pub fn as_ptr(&mut self) -> *mut u64 {
@@ -306,16 +310,31 @@ impl NativeCallContext {
         }
     }
 
-    pub fn push<A>(&mut self, arg: A) where A: NativeStackValue {
+    pub fn push_arg<A>(&mut self, arg: A) -> usize where A: NativeStackValue {
         let i = self.arg_count as usize;
-        let size = arg.get_stack_size() as u32;
-        arg.write_to_stack(&mut NativeStackWriter::new(&mut self.args[i..]));
-        self.arg_count += size;
+        let mut writer = NativeStackWriter::new(&mut self.args[i..]);
+        let len = writer.write(arg);
+        self.arg_count += len as u32;
+        len
     }
 
-    pub fn get<R>(&mut self) -> R where R: NativeStackValue {
+    pub fn pop_arg<A>(&mut self) -> A where A: NativeStackValue {
+        let i = self.arg_count as usize;
+        let mut reader = NativeStackReader::new(&self.args[(i - 1)..]);
+        let arg = reader.read();
+        self.arg_count -= A::get_stack_size(&arg) as u32;
+        arg
+    }
+
+    pub fn get_result<R>(&mut self) -> R where R: NativeStackValue {
         (SET_VECTOR_RESULTS.get().unwrap())(self);
-        R::read_from_stack(&mut NativeStackReader::new(&*self.returns))
+        let mut reader = NativeStackReader::new(&*self.returns);
+        reader.read()
+    }
+
+    pub fn set_result<R>(&mut self, result: R) -> usize where R: NativeStackValue {
+        let mut writer = NativeStackWriter::new(&mut *self.returns);
+        writer.write(result)
     }
 }
 
@@ -354,15 +373,15 @@ macro_rules! invoke {
         let handler = $crate::native::get_handler(hash);
         let mut context = $crate::native::NativeCallContext::new();
         handler(&mut context);
-        context.get::<$ret>()
+        context.get_result::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
         let hash: u64 = $hash;
         let handler = $crate::native::get_handler(hash);
         let mut context = $crate::native::NativeCallContext::new();
-        $(context.push($arg);)*
+        $(context.push_arg($arg);)*
         handler(&mut context);
-        context.get::<$ret>()
+        context.get_result::<$ret>()
     }};
 }
 
@@ -470,3 +489,13 @@ impl NativeStackValue for Hash {}
 
 impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
 impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}
+
+impl<E> NativeStackValue for E where E: Entity + FromHandle {
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        E::from_handle(stack.read::<Handle>()).unwrap()
+    }
+
+    fn write_to_stack(self, stack: &mut NativeStackWriter) {
+        stack.write(self.get_handle());
+    }
+}

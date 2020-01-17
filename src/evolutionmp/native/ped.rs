@@ -53,6 +53,10 @@ pub fn set_config_flag(handle: Handle, flag: u32, value: bool) {
     invoke!((), 0x1913FE4CBF41C463, handle, flag, value)
 }
 
+pub fn set_default_component_variation(handle: Handle) {
+    invoke!((), 0x45EEE61580806D63, handle)
+}
+
 pub mod task {
     use crate::invoke;
     use crate::game::Handle;

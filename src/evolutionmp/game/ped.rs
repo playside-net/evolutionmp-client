@@ -58,6 +58,10 @@ impl Ped {
         native::ped::set_config_flag(self.handle, flag, value)
     }
 
+    pub fn set_default_component_variation(&self) {
+        native::ped::set_default_component_variation(self.handle)
+    }
+
     pub fn get_tasks(&self) -> PedTasks {
         PedTasks {
             ped: self

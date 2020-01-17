@@ -28,12 +28,14 @@ use std::cell::{Cell, RefCell};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicPtr};
 use crate::game::streaming::Resource;
+use crate::game::player::Player;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
 pub(crate) static CONSOLE_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 static_detour! {
+    static SetPlayerModel: extern "C" fn(*mut NativeCallContext);
     static GetFrameCountHook: extern "C" fn(*mut NativeCallContext);
     static ReturnTrueFromScriptHook: extern "C" fn(*mut c_void, *mut c_void) -> bool;
 }
@@ -141,6 +143,17 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
             GetFrameCountHook.call(context)
         }).expect("GET_FRAME_COUNT hook initialization failed")
         .enable().expect("GET_FRAME_COUNT hook enabling failed");
+
+    /*let set_player_model = natives.get_handler(0x00A1CADD00108836)
+        .expect("Unable to get native handler for SET_PLAYER_MODEL");
+    SetPlayerModel
+        .initialize(set_player_model, |context| {
+            let mut context: &mut NativeCallContext = unsafe { std::mem::transmute(context) };
+            let model: Hash = context.pop_arg();
+            //let player: Player = context.pop_arg();
+            crate::info!("Tried to set player model to 0x{:016X}", model.0);
+        }).expect("SET_PLAYER_MODEL hook initialization failed")
+        .enable().expect("SET_PLAYER_MODEL hook enabling failed");*/
 
     /*let return_true = mem.find("74 3C 48 8B 01 FF 50 10 84 C0")
         .next()

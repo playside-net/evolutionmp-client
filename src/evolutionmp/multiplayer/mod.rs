@@ -55,6 +55,7 @@ impl Script for ScriptCleanWorld {
         streaming::load_scene(pos);
 
         let player = Player::local();
+        player.set_model(&mut env, "mp_m_freemode_01");
         let ped = player.get_ped();
         ped.set_position_no_offset(pos, Vector3::new(false, false, false));
         ped.clear_tasks_immediately();
@@ -131,8 +132,6 @@ impl Script for ScriptCleanWorld {
                                     let ped = player.get_ped();
                                     if let Some(veh) = ped.get_in_vehicle(false) {
                                         veh.repair();
-                                    } else {
-                                        player.set_model(env, "FreeModeMale01");
                                     }
                                 }));
                             },
