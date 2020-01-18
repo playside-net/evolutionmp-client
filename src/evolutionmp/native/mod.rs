@@ -200,19 +200,19 @@ impl<'a> NativeStackReader<'a> {
     }
 
     pub fn read_u64(&mut self) -> u64 {
-        let current_pos = self.pos;
+        let pos = self.pos;
         self.pos += 1;
-        self.stack[current_pos]
+        self.stack[pos]
+    }
+
+    pub fn read_ptr<T>(&mut self) -> *const T where T: NativeStackValue {
+        let pos = self.pos;
+        self.pos += 1;
+        self.stack[pos..].as_ptr().cast::<T>()
     }
 
     pub fn read<T>(&mut self) -> T where T: NativeStackValue {
         T::read_from_stack(self)
-    }
-
-    pub fn as_ptr(&mut self) -> *const u64 {
-        let old_pos = self.pos;
-        self.pos += 1;
-        self.stack[old_pos..].as_ptr()
     }
 }
 
@@ -241,16 +241,16 @@ impl<'a> NativeStackWriter<'a> {
         self.pos += 1;
     }
 
+    pub fn write_ptr<T>(&mut self) -> *mut T where T: NativeStackValue {
+        let pos = self.pos;
+        self.pos += 1;
+        self.stack[pos..].as_mut_ptr().cast()
+    }
+
     pub fn write<T>(&mut self, value: T) -> usize where T: NativeStackValue {
         let len = value.get_stack_size();
         value.write_to_stack(self);
         len
-    }
-
-    pub fn as_ptr(&mut self) -> *mut u64 {
-        let old_pos = self.pos;
-        self.pos += 1;
-        self.stack[old_pos..].as_mut_ptr()
     }
 }
 
@@ -259,7 +259,7 @@ pub trait NativeStackValue {
         let size = std::mem::size_of::<Self>();
         if size <= 8 {
             unsafe {
-                stack.as_ptr().cast::<Self>().read()
+                stack.read_ptr::<Self>().read()
             }
         } else {
             panic!(
@@ -274,7 +274,7 @@ pub trait NativeStackValue {
         let size = std::mem::size_of::<Self>();
         if size <= 8 {
             unsafe {
-                stack.as_ptr().cast::<Self>().write(self);
+                stack.write_ptr::<Self>().write(self);
             }
         } else {
             panic!(
@@ -291,6 +291,7 @@ pub trait NativeStackValue {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct NativeCallContext {
     returns: Box<[u64; 3]>,
     arg_count: u32,
@@ -310,20 +311,16 @@ impl NativeCallContext {
         }
     }
 
+    pub fn get_args(&self) -> NativeStackReader {
+        NativeStackReader::new(&*self.args)
+    }
+
     pub fn push_arg<A>(&mut self, arg: A) -> usize where A: NativeStackValue {
         let i = self.arg_count as usize;
         let mut writer = NativeStackWriter::new(&mut self.args[i..]);
         let len = writer.write(arg);
         self.arg_count += len as u32;
         len
-    }
-
-    pub fn pop_arg<A>(&mut self) -> A where A: NativeStackValue {
-        let i = self.arg_count as usize;
-        let mut reader = NativeStackReader::new(&self.args[(i - 1)..]);
-        let arg = reader.read();
-        self.arg_count -= A::get_stack_size(&arg) as u32;
-        arg
     }
 
     pub fn get_result<R>(&mut self) -> R where R: NativeStackValue {
@@ -387,7 +384,8 @@ macro_rules! invoke {
 
 impl NativeStackValue for &str {
     fn read_from_stack(stack: &mut NativeStackReader) -> Self {
-        unsafe { CStr::from_ptr(stack.as_ptr() as *const _ as *mut _) }.to_str()
+        let ptr = stack.read_ptr::<u8>();
+        unsafe { CStr::from_ptr(ptr as *mut _) }.to_str()
             .expect("Failed to read C string")
     }
 

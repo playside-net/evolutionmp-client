@@ -1,8 +1,7 @@
 use crate::runtime::{Script, ScriptEnv, Runtime, ScriptEvent};
-use crate::game::ui::{BASE_WIDTH, BASE_HEIGHT, Font, LoadingPrompt};
+use crate::game::ui::{BASE_WIDTH, BASE_HEIGHT, Font};
 use crate::game::Rgba;
 use crate::game::controls::{Group as ControlGroup, Control};
-use crate::pattern::MemoryRegion;
 use crate::win::input::{InputEvent, KeyboardEvent};
 use std::time::{Instant, UNIX_EPOCH, SystemTime};
 use std::collections::VecDeque;
@@ -10,6 +9,8 @@ use std::os::raw::c_int;
 use winapi::um::winuser::{VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_ESCAPE, VK_RETURN};
 use cgmath::Vector2;
 use std::time::Duration;
+use std::ffi::CString;
+use widestring::WideCStr;
 
 pub const FONT: Font = Font::ChaletLondon;
 pub const CONSOLE_WIDTH: f32 = BASE_WIDTH;
@@ -77,8 +78,15 @@ impl Script for ScriptConsole {
                                 match *key {
                                     VK_BACK if open => {
                                         let pos = self.cursor_pos;
-                                        if self.get_input().len() > 0 && pos > 0 {
-                                            self.get_input_mut().remove(pos - 1);
+                                        let len = self.get_input().len();
+                                        if len > 0 && pos > 0 {
+                                            let mut input = String::with_capacity(len - 1);
+                                            for (i, c) in self.get_input().chars().enumerate() {
+                                                if i != pos - 1 {
+                                                    input.push(c);
+                                                }
+                                            }
+                                            std::mem::replace(self.get_input_mut(), input);
                                             self.cursor_pos -= 1;
                                         }
                                     },
@@ -86,7 +94,13 @@ impl Script for ScriptConsole {
                                         let pos = self.cursor_pos;
                                         let len = self.get_input().len();
                                         if len > 0 && pos < len {
-                                            self.get_input_mut().remove(pos);
+                                            let mut input = String::with_capacity(len - 1);
+                                            for (i, c) in self.get_input().chars().enumerate() {
+                                                if i != pos {
+                                                    input.push(c);
+                                                }
+                                            }
+                                            std::mem::replace(self.get_input_mut(), input);
                                         }
                                     },
                                     VK_LEFT if open => {
@@ -172,6 +186,10 @@ impl Script for ScriptConsole {
                     _ => {}
                 }
             },
+            ScriptEvent::NativeEvent(event) => {
+                self.line_history.push(format!("Native event received: {:?}", event));
+                return true;
+            },
             ScriptEvent::ConsoleOutput(line) => {
                 self.line_history.push(line.clone());
                 return true;
@@ -232,7 +250,8 @@ impl ScriptConsole {
 
         // Draw blinking cursor
         if now.duration_since(UNIX_EPOCH).unwrap().subsec_millis() < 500 {
-            let width = get_text_width(&self.get_input()[0..self.cursor_pos], FONT, scale);
+            let prefix = self.get_input().chars().take(self.cursor_pos).collect::<String>();
+            let width = get_text_width(prefix, FONT, scale);
             draw_text("~w~~h~|~w~", [25.0 + (width * CONSOLE_WIDTH) - 4.0, CONSOLE_HEIGHT], INPUT_COLOR, FONT, scale);
         }
 

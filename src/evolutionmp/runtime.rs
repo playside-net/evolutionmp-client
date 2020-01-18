@@ -3,7 +3,7 @@ use crate::pattern::MemoryRegion;
 use crate::native::collection::PtrCollection;
 use crate::GameState;
 use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
-use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe};
+use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe, NativeFunction};
 use crate::hash::joaat;
 use crate::win::thread::Fiber;
 use crate::{info, error};
@@ -11,38 +11,28 @@ use std::os::raw::c_char;
 use std::ffi::CString;
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
 use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 use std::path::Path;
-use detour::static_detour;
+use detour::{static_detour, GenericDetour, RawDetour};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::shared::minwindef::{LPVOID, DWORD, TRUE};
 use winapi::um::winuser::VK_RETURN;
 use std::panic::PanicInfo;
-use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM, NativeMethod};
-use jni_dynamic::objects::{JValue, JObject};
-use jni_dynamic::sys::{jlong, jobject, jobjectArray, JNINativeInterface_};
 use winapi::ctypes::c_void;
 use std::cell::{Cell, RefCell};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicPtr};
 use crate::game::streaming::Resource;
 use crate::game::player::Player;
+use cgmath::Vector3;
+use crate::game::ped::Ped;
+use crate::game::vehicle::Vehicle;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
 pub(crate) static CONSOLE_VISIBLE: AtomicBool = AtomicBool::new(false);
-
-static_detour! {
-    static SetPlayerModel: extern "C" fn(*mut NativeCallContext);
-    static GetFrameCountHook: extern "C" fn(*mut NativeCallContext);
-    static ReturnTrueFromScriptHook: extern "C" fn(*mut c_void, *mut c_void) -> bool;
-}
-
-fn return_true_from_script(arg1: *mut c_void, arg2: *mut c_void) -> bool {
-    true
-}
 
 pub struct EventPool {
     input: Vec<ScriptEvent>,
@@ -102,6 +92,14 @@ impl Runtime {
             let mut event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
             event_pool.push_input(ScriptEvent::UserInput(event));
         }
+        if let Ok(mut native_events) = EVENTS.try_borrow_mut() {
+            if let Some(native_events) = native_events.as_mut() {
+                let mut event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
+                while let Some(event) = native_events.pop_front() {
+                    event_pool.push_input(ScriptEvent::NativeEvent(event));
+                }
+            }
+        }
         for s in &mut self.scripts {
             s.main_fiber = self.main_fiber.take();
             s.event_pool = self.event_pool.take();
@@ -118,55 +116,141 @@ impl Runtime {
     }
 }
 
+static EVENTS: ThreadSafe<RefCell<Option<VecDeque<NativeEvent>>>> = ThreadSafe::new(RefCell::new(None));
+static RUNTIME: ThreadSafe<RefCell<Option<Runtime>>> = ThreadSafe::new(RefCell::new(None));
+static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
+
+#[derive(Debug)]
+pub enum NativeEvent {
+    NewVehicle {
+        model: Hash,
+        pos: Vector3<f32>,
+        heading: f32,
+        is_network: bool,
+        this_script_check: bool
+    },
+    TaskEnterVehicle {
+        ped: Ped,
+        vehicle: Vehicle,
+        timeout: u32,
+        seat: i32,
+        speed: f32,
+        flag: i32,
+        unknown: u32
+    }
+}
+
+impl NativeEvent {
+    pub fn vehicle(context: &mut NativeCallContext) -> NativeEvent {
+        let mut args = context.get_args();
+        NativeEvent::NewVehicle {
+            model: args.read(),
+            pos: args.read(),
+            heading: args.read(),
+            is_network: args.read(),
+            this_script_check: args.read(),
+        }
+    }
+
+    pub fn task_enter_vehicle(context: &mut NativeCallContext) -> NativeEvent {
+        let mut args = context.get_args();
+        NativeEvent::TaskEnterVehicle {
+            ped: args.read(),
+            vehicle: args.read(),
+            timeout: args.read(),
+            seat: args.read(),
+            speed: args.read(),
+            flag: args.read(),
+            unknown: args.read()
+        }
+    }
+}
+
+macro_rules! native_event {
+    ($hash:literal, $constructor:ident) => {
+        hook_native($hash, |context| {
+            push_native_event(NativeEvent::$constructor(context));
+            call_native_trampoline($hash, context);
+        });
+    };
+}
+
 pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
-    let natives = crate::native::NATIVES.borrow();
-    let natives = natives.as_ref().expect("Natives aren't initialized yet");
-
-    /*let mut dump = Vec::new();
-    unsafe { natives.dump(&mut dump) };
-    info!("Dumping natives: {:#?}", dump);*/
-
     let mut runtime = Runtime::new(input);
     info!("Initializing multiplayer");
     crate::multiplayer::init(&mut runtime);
 
-    static RUNTIME: ThreadSafe<RefCell<Option<Runtime>>> = ThreadSafe::new(RefCell::new(None));
+    EVENTS.replace(Some(VecDeque::new()));
     RUNTIME.replace(Some(runtime));
+    HOOKS.replace(Some(HashMap::new()));
 
-    let get_frame_count = natives.get_handler(0xFC8202EFC642E6F2)
-        .expect("Unable to get native handler for GET_FRAME_COUNT");
-    GetFrameCountHook
-        .initialize(get_frame_count, |context| {
-            let mut runtime = RUNTIME.try_borrow_mut().expect("cannot call GET_FRAME_COUNT from script");
-            let mut runtime = runtime.as_mut().unwrap();
-            runtime.frame();
-            GetFrameCountHook.call(context)
-        }).expect("GET_FRAME_COUNT hook initialization failed")
-        .enable().expect("GET_FRAME_COUNT hook enabling failed");
+    info!("Hooking natives");
 
-    /*let set_player_model = natives.get_handler(0x00A1CADD00108836)
-        .expect("Unable to get native handler for SET_PLAYER_MODEL");
-    SetPlayerModel
-        .initialize(set_player_model, |context| {
-            let mut context: &mut NativeCallContext = unsafe { std::mem::transmute(context) };
-            let model: Hash = context.pop_arg();
-            //let player: Player = context.pop_arg();
-            crate::info!("Tried to set player model to 0x{:016X}", model.0);
-        }).expect("SET_PLAYER_MODEL hook initialization failed")
-        .enable().expect("SET_PLAYER_MODEL hook enabling failed");*/
+    hook_native(0xFC8202EFC642E6F2, |context| {
+        if let Ok(mut runtime) = RUNTIME.try_borrow_mut() {
+            if let Some(mut runtime) = runtime.as_mut() {
+                runtime.frame();
+            }
+        }
+        call_native_trampoline(0xFC8202EFC642E6F2, context)
+    });
+    native_event!(0xAF35D0D2583051B0, vehicle);
+    native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
+}
 
-    /*let return_true = mem.find("74 3C 48 8B 01 FF 50 10 84 C0")
-        .next()
-        .expect("Unable to find return_true_from_script").get::<u8>();*/
-    /*ReturnTrueFromScriptHook
-        .initialize(std::mem::transmute(return_true), return_true_from_script).expect("return_true_from_script hook initialization failed")
-        .enable().expect("return_true_from_script hook enabling failed");*/
+fn push_native_event(event: NativeEvent) {
+    if let Ok(mut events) = EVENTS.try_borrow_mut() {
+        if let Some(mut events) = events.as_mut() {
+            events.push_back(event);
+        }
+    }
+}
 
-    let launcher_path = Path::new("C:/Users/Виктор/Desktop/Проекты/Rust/evolutionmp-client");
-    //start_vm(launcher_path);
+fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
+    let hooks = HOOKS.try_borrow().expect("unable to borrow hook map");
+    let hooks = hooks.as_ref().expect("hook map is not initialized");
+    let detour = hooks.get(&hash).expect(&format!("missing native trampoline for 0x{:016X}", hash));
+    unsafe {
+        let trampoline: NativeFunction = std::mem::transmute(detour.trampoline());
+        trampoline(context);
+    }
+}
+
+fn hook_native(hash: u64, hook: fn(&mut NativeCallContext)) {
+    let original = crate::native::get_handler(hash);
+    unsafe {
+        let detour = GenericDetour::new(original, std::mem::transmute(hook))
+            .expect(&format!("native hook creation failed for 0x{:016X}", hash));
+        detour.enable().expect(&format!("native hook enabling failed for 0x{:016X}", hash));
+        let mut hooks = HOOKS.try_borrow_mut().expect("unable to mutably borrow hook map");
+        let detour = std::mem::transmute::<GenericDetour<_>, RawDetour>(detour);
+        hooks.as_mut().expect("hook map is not initialized").insert(hash, detour);
+    }
 }
 
 unsafe impl std::marker::Send for ScriptContainer {}
+
+pub struct TaskQueue {
+    tasks: VecDeque<Box<dyn FnMut(&mut ScriptEnv)>>
+}
+
+impl TaskQueue {
+    pub fn new() -> TaskQueue {
+        TaskQueue {
+            tasks: VecDeque::new()
+        }
+    }
+
+    pub fn push<F>(&mut self, task: F) where F: FnMut(&mut ScriptEnv) + 'static {
+        self.tasks.push_back(Box::new(task))
+    }
+
+    pub fn process(&mut self, env: &mut ScriptEnv) {
+        while let Some(mut task) = self.tasks.pop_front() {
+            task(env);
+        }
+    }
+}
 
 #[repr(C)]
 pub struct ScriptContainer {
@@ -271,61 +355,6 @@ impl<'a> ScriptEnv<'a> {
 pub enum ScriptEvent {
     ConsoleInput(String),
     ConsoleOutput(String),
+    NativeEvent(NativeEvent),
     UserInput(InputEvent)
-}
-
-extern "C" fn invoke(itf: *mut *const JNINativeInterface_, hash: jlong, args: jobjectArray) -> jlong {
-    crate::info_message!("Info", "Hello from java!");
-    0
-}
-
-unsafe fn start_vm(launcher_path: &Path) {
-    let java_exe = launcher_path.join("java").join("bin").join("server").join("jvm.dll");
-    let jar_path = launcher_path.join("client-rt.jar");
-    crate::info_message!("Info", "Jar path is {:?}", jar_path);
-    let mut java_args = InitArgsBuilder::new()
-        .version(JNIVersion::V8)
-        .option(&format!("-Djava.class.path={}", jar_path.to_str().unwrap()));
-
-    let java_args = java_args.build().expect("Error building JVM args");
-
-    let vm = Arc::new(
-        JavaVM::new(java_exe, java_args).expect("Error creating JVM")
-    );
-
-    std::thread::Builder::new().name(String::from("vm")).spawn(move || {
-        let env = vm.attach_current_thread().expect("Thread attach failed");
-
-        let string_class = env.find_class("java/lang/String").unwrap();
-        let thread_class = env.find_class("java/lang/Thread").unwrap();
-        let file_class = env.find_class("java/io/File").unwrap();
-
-        let current_thread = env.call_static_method(thread_class, "currentThread", "()Ljava/lang/Thread;", &[]).unwrap();
-
-        let thread_name = env.new_string("vm").unwrap();
-
-        /*{
-            let s = env.new_string(".").unwrap();
-            let file = env.new_object(file_class, "(Ljava/lang/String;)V", &[JValue::Object(s.into())]).unwrap();
-            let dir = env.call_method(file, "getAbsolutePath", "()Ljava/lang/String;", &[]).unwrap();
-            let dir = env.get_string(JString::from(dir.l().unwrap())).unwrap();
-            info!("JVM working dir is: {}", dir.to_str().unwrap());
-        }*/
-
-        env.call_method(current_thread.l().unwrap(), "setName", "(Ljava/lang/String;)V", &[JValue::Object(thread_name.into())])
-            .expect("Unable to set main jvm thread name");
-
-        let script_class = env.find_class("mp/evolution/script/Script")
-            .expect("Unable to find script class");
-
-        env.register_natives(script_class, vec![
-            NativeMethod::new("invoke", "(JLjava/lang/Object;)J", invoke as *mut ())
-        ]).unwrap();
-
-        let arr = env.new_object_array(0, string_class, JObject::null()).unwrap();
-        let main_class = env.find_class("mp/evolution/Main")
-            .expect("Unable to find main class");
-        env.call_static_method(main_class, "main", "([Ljava/lang/String;)V", &[JValue::Object(arr.into())])
-            .expect("Error invoking main function");
-    }).unwrap();
 }

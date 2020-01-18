@@ -1,5 +1,11 @@
 use crate::invoke;
 use crate::game::Handle;
+use crate::hash::Hashable;
+use cgmath::Vector3;
+
+pub fn new<H>(ty: u32, model: H, pos: Vector3<f32>, heading: f32, network: bool, this_script_check: bool) -> Handle where H: Hashable {
+    invoke!(Handle, 0xD49F9B0955C367DE, ty, model.joaat(), pos, heading, network, this_script_check)
+}
 
 pub fn set_density_multiplier_this_frame(multiplier: f32) {
     invoke!((), 0x95E3D6257B166CF2, multiplier)
@@ -23,10 +29,6 @@ pub fn get_using_vehicle(ped: Handle) -> Handle {
 
 pub fn get_entering_vehicle(ped: Handle) -> Handle {
     invoke!(Handle, 0xF92691AED837A5FC, ped)
-}
-
-pub fn clear_tasks_immediately(handle: Handle) {
-    invoke!((), 0xAAA34F8A7CB32098)
 }
 
 pub fn put_into_vehicle(handle: Handle, vehicle: Handle, seat: i32) {
@@ -61,8 +63,16 @@ pub mod task {
     use crate::invoke;
     use crate::game::Handle;
 
+    pub fn clear_immediately(handle: Handle) {
+        invoke!((), 0xAAA34F8A7CB32098)
+    }
+
     pub fn clear_secondary(handle: Handle) {
         invoke!((), 0x176CECF6F920D707, handle)
+    }
+
+    pub fn enter_vehicle(handle: Handle, vehicle: Handle, timeout: u32, seat: i32, speed: f32, flag: i32) {
+        invoke!((), 0xC20E50AA46D09CA8, handle, vehicle, timeout, seat, speed, flag, 0u32)
     }
 
     pub fn network_move(handle: Handle, name: &str, multiplier: f32, p3: bool, dict: &str, flags: u32) {

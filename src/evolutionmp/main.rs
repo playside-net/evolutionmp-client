@@ -1,4 +1,4 @@
-#![feature(asm, set_stdio)]
+#![feature(asm, set_stdio, fn_traits)]
 use crate::pattern::{MemoryRegion, RegionIterator};
 use crate::game::vehicle::Vehicle;
 use crate::hash::joaat;
@@ -87,7 +87,7 @@ fn attach(instance: HINSTANCE) {
                 .add(2)
                 .read_ptr(5).get_mut(), Ordering::SeqCst);
 
-            let mut input = win::input::InputHook::new().expect("Input hooking failed");
+            let mut input = InputHook::new(&mem).expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");
 
             while !get_game_state().is_loaded() {

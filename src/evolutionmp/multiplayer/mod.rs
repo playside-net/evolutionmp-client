@@ -1,4 +1,4 @@
-use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, ScriptEvent};
+use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, ScriptEvent, TaskQueue};
 use crate::pattern::MemoryRegion;
 use crate::GameState;
 use crate::{invoke, game, native};
@@ -14,10 +14,9 @@ use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
-use cgmath::{Vector3, Vector2};
+use cgmath::Vector3;
 use std::collections::VecDeque;
 use crate::game::streaming::{Model, AnimDict};
-use winapi::um::errhandlingapi::SetUnhandledExceptionFilter;
 use crate::game::camera::Camera;
 use crate::native::pool::Pool;
 
@@ -31,7 +30,7 @@ pub fn init(runtime: &mut Runtime) {
     //network::init(runtime);
 
     runtime.register_script("clean_world", ScriptCleanWorld {
-        tasks: VecDeque::new(),
+        tasks: TaskQueue::new(),
         last_cleanup: Instant::now()
     });
     runtime.register_script("finger_pointing", ScriptFingerPointing {
@@ -41,7 +40,7 @@ pub fn init(runtime: &mut Runtime) {
 }
 
 pub struct ScriptCleanWorld {
-    tasks: VecDeque<Box<dyn FnMut(&mut ScriptEnv)>>,
+    tasks: TaskQueue,
     last_cleanup: Instant
 }
 
@@ -58,7 +57,7 @@ impl Script for ScriptCleanWorld {
         player.set_model(&mut env, "mp_m_freemode_01");
         let ped = player.get_ped();
         ped.set_position_no_offset(pos, Vector3::new(false, false, false));
-        ped.clear_tasks_immediately();
+        ped.get_tasks().clear_immediately();
 
         gameplay::set_freemode_map_behavior(true);
         //game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
@@ -80,9 +79,7 @@ impl Script for ScriptCleanWorld {
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
-        while let Some(mut task) = self.tasks.pop_front() {
-            task(&mut env);
-        }
+        self.tasks.process(&mut env);
 
         self.disable_controls();
 
@@ -127,13 +124,13 @@ impl Script for ScriptCleanWorld {
                                         v.delete();
                                     }
                                 }*/
-                                self.tasks.push_back(Box::new(move |env| {
+                                self.tasks.push(move |env| {
                                     let player = Player::local();
                                     let ped = player.get_ped();
                                     if let Some(veh) = ped.get_in_vehicle(false) {
                                         veh.repair();
                                     }
-                                }));
+                                });
                             },
                             _ => {}
                         }
@@ -143,7 +140,7 @@ impl Script for ScriptCleanWorld {
             },
             ScriptEvent::ConsoleInput(input) => {
                 let input = input.clone();
-                self.tasks.push_back(Box::new(move |env| {
+                self.tasks.push(move |env| {
                     let player = Player::local();
                     let ped = player.get_ped();
                     let model = Model::new(&input);
@@ -159,7 +156,7 @@ impl Script for ScriptCleanWorld {
                     } else {
                         env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
                     }
-                }));
+                });
             }
             _ => {}
         }
@@ -237,18 +234,18 @@ impl Script for ScriptFingerPointing {
 
     fn frame(&mut self, mut env: ScriptEnv) {
         let player = Player::local().get_ped();
-        let tasks = player.get_tasks();
+        let tasks = player.get_tasks().get_network();
 
-        tasks.is_network_move_active();
+        tasks.is_move_active();
 
         let pitch = (self.get_relative_pitch().max(42.0).max(-70.0) + 70.0) / 112.0;
         let heading = (game::camera::get_gameplay_relative_heading().min(180.0).max(-180.0)) / 360.0;
 
-        tasks.set_network_move_signal("Pitch", pitch);
-        tasks.set_network_move_signal("Heading", heading * -1.0 + 1.0);
-        tasks.set_network_move_signal("isBlocked", false);
+        tasks.set_move_signal("Pitch", pitch);
+        tasks.set_move_signal("Heading", heading * -1.0 + 1.0);
+        tasks.set_move_signal("isBlocked", false);
         let first_person = false;
-        tasks.set_network_move_signal("isFirstPerson", first_person);
+        tasks.set_move_signal("isFirstPerson", first_person);
 
         if game::controls::is_pressed(ControlGroup::Move, Control::SpecialAbilitySecondary) {
             if !self.active {
@@ -256,13 +253,12 @@ impl Script for ScriptFingerPointing {
                 let dict = AnimDict::new("anim@mp_point");
                 env.wait_for_resource(&dict);
                 player.set_config_flag(36, true);
-                player.get_tasks().network_move("task_mp_pointing", 0.5, false, dict.get_name(), 24);
+                tasks.do_move("task_mp_pointing", 0.5, false, dict.get_name(), 24);
                 dict.mark_unused();
             }
         } else if self.active {
-            let tasks = player.get_tasks();
-            tasks.request_network_move_state_transition("Stop");
-            tasks.clear_secondary();
+            player.get_tasks().get_network().request_move_state_transition("Stop");
+            player.get_tasks().clear_secondary();
             self.active = false;
         }
     }

@@ -12,6 +12,7 @@ use std::time::Duration;
 use std::sync::atomic::Ordering;
 use cgmath::Vector3;
 
+#[derive(Debug)]
 pub struct Vehicle {
     handle: Handle
 }
