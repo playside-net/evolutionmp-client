@@ -18,7 +18,6 @@ use cgmath::Vector3;
 use std::collections::VecDeque;
 use crate::game::streaming::{Model, AnimDict};
 use crate::game::camera::Camera;
-use crate::native::pool::Pool;
 use winapi::_core::sync::atomic::Ordering;
 
 pub mod console;
@@ -52,6 +51,7 @@ impl Script for ScriptCleanWorld {
         let pos = Vector3::new(0.0, 0.0, 73.5);
 
         streaming::load_scene(pos);
+        game::misc::set_stunt_jumps_can_trigger(false);
 
         let player = Player::local();
         player.set_model(&mut env, "mp_m_freemode_01");

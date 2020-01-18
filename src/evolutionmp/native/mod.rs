@@ -108,7 +108,7 @@ struct NativeTable {
 
 impl NativeTable {
     pub fn find(&self, hash: u64) -> Option<NativeFunction> {
-        let mut group = &self.groups[(hash & 0xFF) as usize];
+        let group = &self.groups[(hash & 0xFF) as usize];
         unsafe {
             group.find(hash)
         }
@@ -371,9 +371,7 @@ impl NativeStackValue for &str {
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         let native = CString::new(self).expect("Failed to write C string");
-        unsafe {
-            stack.write_u64(native.as_ptr() as u64);
-        }
+        stack.write_u64(native.as_ptr() as u64);
         std::mem::forget(native);
     }
 }

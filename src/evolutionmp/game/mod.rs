@@ -22,6 +22,7 @@ pub mod object;
 pub mod pickup;
 pub mod decision_event;
 pub mod system;
+pub mod misc;
 
 pub type Handle = u32;
 

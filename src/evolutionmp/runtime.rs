@@ -93,7 +93,7 @@ impl Runtime {
         }
         if let Ok(mut native_events) = EVENTS.try_borrow_mut() {
             if let Some(native_events) = native_events.as_mut() {
-                let mut event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
+                let event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
                 while let Some(event) = native_events.pop_front() {
                     event_pool.push_input(ScriptEvent::NativeEvent(event));
                 }
@@ -106,7 +106,7 @@ impl Runtime {
             self.main_fiber = s.main_fiber.take();
             self.event_pool = s.event_pool.take();
         }
-        let mut event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
+        let event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
         event_pool.swap();
     }
 
@@ -219,7 +219,7 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
 
     hook_native(0xFC8202EFC642E6F2, |context| {
         if let Ok(mut runtime) = RUNTIME.try_borrow_mut() {
-            if let Some(mut runtime) = runtime.as_mut() {
+            if let Some(runtime) = runtime.as_mut() {
                 runtime.frame();
             }
         }
@@ -233,7 +233,7 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
 
 fn push_native_event(event: NativeEvent) {
     if let Ok(mut events) = EVENTS.try_borrow_mut() {
-        if let Some(mut events) = events.as_mut() {
+        if let Some(events) = events.as_mut() {
             events.push_back(event);
         }
     }
@@ -319,7 +319,7 @@ impl ScriptContainer {
     }
 
     fn process_input(&mut self, script: &mut Box<dyn Script>) {
-        let mut event_pool = self.event_pool.as_mut().expect("missing script event pool");
+        let event_pool = self.event_pool.as_mut().expect("missing script event pool");
         let mut output = VecDeque::new();
         event_pool.iterate(|e| script.event(e, &mut output));
         event_pool.output.extend(output.into_iter());
@@ -350,8 +350,8 @@ impl std::ops::Drop for ScriptContainer {
 }
 
 pub trait Script {
-    fn prepare(&mut self, mut env: ScriptEnv) {}
-    fn frame(&mut self, mut env: ScriptEnv) {}
+    fn prepare(&mut self, env: ScriptEnv) {}
+    fn frame(&mut self, env: ScriptEnv) {}
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool { false }
 }
 

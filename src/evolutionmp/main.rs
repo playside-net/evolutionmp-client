@@ -73,7 +73,7 @@ fn attach(instance: HINSTANCE) {
                 .add(2)
                 .read_ptr(5).get_mut(), Ordering::SeqCst);
 
-            let mut input = InputHook::new(&mem).expect("Input hooking failed");
+            let input = InputHook::new(&mem).expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");
 
             while !get_game_state().is_loaded() {
