@@ -20,20 +20,8 @@ use std::ptr::{null_mut, null};
 use crate::native::pool::Handleable;
 use crate::game::entity::Entity;
 
-pub mod ui;
-pub mod graphics;
-pub mod scaleform;
-pub mod system;
-pub mod entity;
 pub mod vehicle;
-pub mod socialclub;
-pub mod collection;
-pub mod script;
-pub mod controls;
-pub mod gameplay;
-pub mod decision_event;
 pub mod pool;
-pub mod worldprobe;
 
 pub struct ThreadSafe<T> {
     t: T
@@ -500,13 +488,3 @@ impl NativeStackValue for Hash {}
 
 impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
 impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}
-
-impl<E> NativeStackValue for E where E: Entity + Handleable {
-    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
-        E::from_handle(stack.read::<Handle>()).unwrap()
-    }
-
-    fn write_to_stack(self, stack: &mut NativeStackWriter) {
-        stack.write(self.get_handle());
-    }
-}

@@ -1,4 +1,5 @@
 use crate::invoke;
+use cgmath::Vector3;
 
 pub fn get_timer_a() -> u32 {
     invoke!(u32, 0x83666F9FB8FEBD4B)
@@ -36,20 +37,20 @@ pub fn pow(base: f32, exponent: f32) -> f32 {
     invoke!(f32, 0xE3621CC40F31FE2E, base, exponent)
 }
 
-pub fn vector_magnitude(x: f32, y: f32, z: f32) -> f32 {
-    invoke!(f32, 0x652D2EEEF1D3E62C, x, y, z)
+pub fn vector_magnitude(v: Vector3<f32>) -> f32 {
+    invoke!(f32, 0x652D2EEEF1D3E62C, v)
 }
 
-pub fn vector_magnitude2(x: f32, y: f32, z: f32) -> f32 {
-    invoke!(f32, 0xA8CEACB4F35AE058, x, y, z)
+pub fn vector_magnitude2(v: Vector3<f32>) -> f32 {
+    invoke!(f32, 0xA8CEACB4F35AE058, v)
 }
 
-pub fn vector_distance(x1: f32, y1: f32, z1: f32, x2: f32, y2: f32, z2: f32) -> f32 {
-    invoke!(f32, 0x2A488C176D52CCA5, x1, y1, z1, x2, y2, z2)
+pub fn vector_distance(start: Vector3<f32>, end: Vector3<f32>) -> f32 {
+    invoke!(f32, 0x2A488C176D52CCA5, start, end)
 }
 
-pub fn vector_distance2(x1: f32, y1: f32, z1: f32, x2: f32, y2: f32, z2: f32) -> f32 {
-    invoke!(f32, 0xB7A628320EFF8E47, x1, y1, z1, x2, y2, z2)
+pub fn vector_distance2(start: Vector3<f32>, end: Vector3<f32>) -> f32 {
+    invoke!(f32, 0xB7A628320EFF8E47, start, end)
 }
 
 pub fn shift_left(value: u32, bits: u32) -> u32 {

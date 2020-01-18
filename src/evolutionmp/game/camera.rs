@@ -14,8 +14,7 @@ pub fn get_gameplay_relative_heading() -> f32 {
 
 impl Camera {
     pub fn new<H>(name: H, unknown: bool) -> Option<Camera> where H: Hashable {
-        let handle = invoke!(Handle, 0x5E3CF89C6BCCA67D, name.joaat(), unknown);
-        Self::from_handle(handle)
+        invoke!(Option<Camera>, 0x5E3CF89C6BCCA67D, name.joaat(), unknown)
     }
 
     pub fn exists(&self) -> bool {

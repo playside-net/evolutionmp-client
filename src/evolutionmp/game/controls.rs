@@ -389,29 +389,53 @@ pub enum Control {
 }
 
 pub fn disable_action(group: Group, control: Control, disable: bool) {
-    crate::native::controls::disable_action(group as u32, control as u32, disable)
+    invoke!((), 0xFE99B66D079CF6BC, group as u32, control as u32, disable)
 }
 
 pub fn enable_action(group: Group, control: Control, enable: bool) {
-    crate::native::controls::enable_action(group as u32, control as u32, enable)
+    invoke!((), 0x351220255D64C155, group as u32, control as u32, enable)
 }
 
 pub fn disable_all_actions(group: Group) {
-    crate::native::controls::disable_all_actions(group as u32)
+    invoke!((), 0x5F4B6931816E599B, group as u32)
 }
 
 pub fn enable_all_actions(group: Group) {
-    crate::native::controls::enable_all_actions(group as u32)
+    invoke!((), 0xA5FFE9B05F199DE7, group as u32)
+}
+
+pub fn is_enabled(group: Group, control: Control) -> bool {
+    invoke!(bool, 0x1CEA6BFDF248E5D9, group as u32, control as u32)
+}
+
+pub fn is_released(group: Group, control: Control) -> bool {
+    invoke!(bool, 0x648EE3E7F38877DD, group as u32, control as u32)
 }
 
 pub fn is_pressed(group: Group, control: Control) -> bool {
-    crate::native::controls::is_pressed(group as u32, control as u32)
+    invoke!(bool, 0xF3A21BCD95725A4A, group as u32, control as u32)
 }
 
-pub fn is_disabled_just_pressed(group: Group, control: Control) -> bool {
-    crate::native::controls::is_disabled_just_pressed(group as u32, control as u32)
+pub fn is_just_pressed(group: Group, control: Control) -> bool {
+    invoke!(bool, 0x580417101DDB492F, group as u32, control as u32)
+}
+
+pub fn is_just_released(group: Group, control: Control) -> bool {
+    invoke!(bool, 0x50F940259D3841E6, group as u32, control as u32)
 }
 
 pub fn is_disabled_pressed(group: Group, control: Control) -> bool {
-    crate::native::controls::is_disabled_pressed(group as u32, control as u32)
+    invoke!(bool, 0xE2587F8CBBD87B1D, group as u32, control as u32)
+}
+
+pub fn is_disabled_released(group: Group, control: Control) -> bool {
+    invoke!(bool, 0xFB6C4072E9A32E92, group as u32, control as u32)
+}
+
+pub fn is_disabled_just_pressed(group: Group, control: Control) -> bool {
+    invoke!(bool, 0x91AEF906BCA88877, group as u32, control as u32)
+}
+
+pub fn is_disabled_just_released(group: Group, control: Control) -> bool {
+    invoke!(bool, 0x305C8DCD79DA8B0F, group as u32, control as u32)
 }

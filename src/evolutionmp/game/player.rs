@@ -11,6 +11,10 @@ pub struct Player {
     handle: Handle
 }
 
+pub fn get_social_club<'a>() -> &'a str {
+    invoke!(&str, 0x198D161F458ECC7F)
+}
+
 pub fn is_online() -> bool {
     invoke!(bool, 0xF25D331DC2627BBC)
 }

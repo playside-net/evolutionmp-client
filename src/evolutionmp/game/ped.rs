@@ -6,8 +6,8 @@ use crate::game::vehicle::Vehicle;
 use crate::invoke;
 use crate::native::pool::{Handleable, Pool};
 use crate::hash::Hashable;
-use cgmath::{Vector3, MetricSpace};
 use crate::game::streaming::AnimDict;
+use cgmath::{Vector3, MetricSpace};
 
 #[derive(Debug)]
 pub struct Ped {
@@ -106,13 +106,9 @@ impl Ped {
 }
 
 impl Entity for Ped {
-    fn get_handle(&self) -> Handle {
-        self.handle
-    }
-
     fn delete(&mut self) {
         self.set_persistent(false);
-        native::entity::delete(&mut self.handle)
+        invoke!((), 0x9614299DCB53E54B, &mut self.handle)
     }
 }
 

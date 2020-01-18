@@ -51,7 +51,6 @@ impl Script for ScriptCleanWorld {
     fn prepare(&mut self, mut env: ScriptEnv) {
         let pos = Vector3::new(0.0, 0.0, 73.5);
 
-        streaming::stop_player_switch();
         streaming::load_scene(pos);
 
         let player = Player::local();
@@ -83,6 +82,7 @@ impl Script for ScriptCleanWorld {
         self.tasks.process(&mut env);
 
         self.disable_controls();
+        streaming::stop_player_switch();
 
         let player = Player::local();
         let ped = player.get_ped();
@@ -92,11 +92,11 @@ impl Script for ScriptCleanWorld {
         game::ped::set_density_multiplier_this_frame(0.0);
         game::ped::set_scenario_density_multiplier_this_frame(0.0);
 
-        native::vehicle::set_density_multiplier_this_frame(0.0);
-        native::vehicle::set_random_density_multiplier_this_frame(0.0);
+        game::vehicle::set_density_multiplier_this_frame(0.0);
+        game::vehicle::set_random_density_multiplier_this_frame(0.0);
 
-        native::decision_event::suppress_shocking_events_next_frame();
-        native::decision_event::suppress_agitation_events_next_frame();
+        game::decision_event::suppress_shocking_events_next_frame();
+        game::decision_event::suppress_agitation_events_next_frame();
 
 
         /*if let Some(vehicles) = native::pool::get_vehicles() {
@@ -213,8 +213,8 @@ impl ScriptCleanWorld {
         game::streaming::set_vehicle_population_budget(0);
         game::streaming::set_ped_population_budget(0);
 
-        native::vehicle::set_distant_lights_visible(false);
-        native::vehicle::set_parked_density_multiplier_this_frame(0.0);
+        game::vehicle::set_distant_lights_visible(false);
+        game::vehicle::set_parked_density_multiplier_this_frame(0.0);
 
         native::ui::set_map_revealed(true);
     }
@@ -234,10 +234,10 @@ impl ScriptCleanWorld {
 
     fn terminate_script(&self, script: &str, cleanup: bool) {
         if cleanup {
-            native::script::mark_unused(script);
-            native::script::force_cleanup(script, 8);
+            game::script::mark_unused(script);
+            game::script::force_cleanup(script, 8);
         }
-        native::script::terminate_all(script);
+        game::script::terminate_all(script);
     }
 }
 

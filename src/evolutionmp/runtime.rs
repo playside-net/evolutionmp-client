@@ -1,6 +1,5 @@
 use crate::hash::Hash;
 use crate::pattern::MemoryRegion;
-use crate::native::collection::PtrCollection;
 use crate::GameState;
 use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
 use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe, NativeFunction};

@@ -138,10 +138,6 @@ pub struct VehicleColors {
 }
 
 impl Entity for Vehicle {
-    fn get_handle(&self) -> Handle {
-        self.handle
-    }
-
     fn delete(&mut self) {
         self.set_persistent(false);
         invoke!((), 0xEA386986E786A54F, &mut self.handle)

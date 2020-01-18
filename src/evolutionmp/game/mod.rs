@@ -20,6 +20,8 @@ pub mod worldprobe;
 pub mod checkpoint;
 pub mod object;
 pub mod pickup;
+pub mod decision_event;
+pub mod system;
 
 pub type Handle = u32;
 

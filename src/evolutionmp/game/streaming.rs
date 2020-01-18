@@ -27,10 +27,6 @@ pub fn set_ped_population_budget(budget: u32) {
     invoke!((), 0x8C95333CFC3340F3, budget)
 }
 
-pub fn stop_player_switch() {
-    invoke!((), 0x95C0A5BBDC189AA1)
-}
-
 pub fn load_scene(pos: Vector3<f32>) {
     invoke!((), 0x4448EB75B4904BDB, pos)
 }
@@ -41,6 +37,14 @@ pub fn request_menu_ped_model(model: Hash) {
 
 pub fn request_models_in_room(interior: u32, room: &str) {
     invoke!((), 0x8A7A40100EDFEC58, interior, room)
+}
+
+pub fn is_player_switch_in_progress() -> bool {
+    invoke!(bool, 0xD9D2CFFF49FAB35F)
+}
+
+pub fn stop_player_switch() {
+    invoke!((), 0x95C0A5BBDC189AA1)
 }
 
 impl Model {
