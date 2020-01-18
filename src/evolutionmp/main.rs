@@ -1,35 +1,21 @@
 #![feature(asm, set_stdio, fn_traits)]
-use crate::pattern::{MemoryRegion, RegionIterator};
-use crate::game::vehicle::Vehicle;
-use crate::hash::joaat;
-use crate::game::player::Player;
+use crate::pattern::MemoryRegion;
 use crate::game::entity::Entity;
-use crate::game::ui::{CursorSprite, LoadingPrompt};
-use crate::win::input::{InputHook, KeyboardEvent};
-use crate::game::scaleform::Scaleform;
-use crate::runtime::Script;
+use crate::win::input::InputHook;
 use crate::game::GameState;
 use std::ptr::null_mut;
 use std::time::Duration;
 use std::path::{Path, PathBuf};
 use std::io::prelude::*;
-use std::fs::File;
-use std::env::current_dir;
-use std::collections::HashMap;
-use std::time::Instant;
 use std::panic::PanicInfo;
 use std::io::stdout;
 use backtrace::Backtrace;
-use winapi::shared::minwindef::{HINSTANCE, DWORD, LPVOID, BOOL, TRUE, HMODULE};
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleW};
-use winapi::ctypes::c_void;
-use winapi::um::winuser::{VK_BACK, VK_NUMPAD5};
-use dirs::desktop_dir;
+use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE};
+use winapi::um::libloaderapi::DisableThreadLibraryCalls;
 use colored::{Color, Colorize};
 use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
 use log::{info, debug, error};
-use serde_derive::{Serialize, Deserialize};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 #[cfg(target_os = "windows")]

@@ -1,10 +1,8 @@
 use winapi::shared::windef::HWND;
 use winapi::shared::minwindef::UINT;
 use winapi::um::winuser::{MB_OK, MB_OKCANCEL, MB_ABORTRETRYIGNORE, MB_YESNOCANCEL, MB_YESNO, MB_RETRYCANCEL, MB_CANCELTRYCONTINUE, IDABORT, MB_ICONHAND, MB_ICONQUESTION, MB_ICONEXCLAMATION, MB_ICONASTERISK, MB_USERICON, MB_ICONWARNING, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONSTOP, IDCANCEL, IDIGNORE, IDNO, IDOK, IDRETRY, IDYES, MessageBoxW};
-use crate::win::user::MessageBoxResult::Abort;
 use std::os::raw::c_int;
 use std::ptr::null_mut;
-use std::ffi::{OsStr, OsString};
 use widestring::{WideCString};
 
 pub unsafe fn message_box<T, C>(window: Option<HWND>, text: T, caption: C, buttons: MessageBoxButtons, icon: Option<MessageBoxIcon>) -> Option<MessageBoxResult>

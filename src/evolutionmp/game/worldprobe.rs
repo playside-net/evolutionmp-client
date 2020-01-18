@@ -3,7 +3,7 @@ use cgmath::Vector3;
 use crate::game::entity::Entity;
 use crate::game::Handle;
 use crate::native::scaleform::end_method_returnable;
-use crate::native::pool::FromHandle;
+use crate::native::pool::Handleable;
 
 pub struct Probe {
     handle: Handle

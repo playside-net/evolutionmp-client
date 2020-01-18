@@ -3,65 +3,99 @@ use crate::native;
 use crate::game::entity::Entity;
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
-use crate::native::pool::FromHandle;
+use crate::invoke;
+use crate::native::pool::{Handleable, Pool};
 use crate::hash::Hashable;
-use cgmath::Vector3;
+use cgmath::{Vector3, MetricSpace};
+use crate::game::streaming::AnimDict;
 
 #[derive(Debug)]
 pub struct Ped {
     handle: Handle
 }
 
+pub fn set_density_multiplier_this_frame(multiplier: f32) {
+    invoke!((), 0x95E3D6257B166CF2, multiplier)
+}
+
+pub fn set_scenario_density_multiplier_this_frame(multiplier: f32) {
+    invoke!((), 0x7A556143A1C03898, multiplier)
+}
+
+pub fn set_non_scenario_cops(enabled: bool) {
+    invoke!((), 0x8A4986851C4EF6E7, enabled)
+}
+
+pub fn set_scenario_cops(enabled: bool) {
+    invoke!((), 0x444CB7D7DBE6973D, enabled)
+}
+
+pub fn set_cops(enabled: bool) {
+    invoke!((), 0x102E68B2024D536D, enabled)
+}
+
 impl Ped {
     pub fn new<H>(ty: u32, model: H, pos: Vector3<f32>, heading: f32, network: bool, this_script_check: bool) -> Option<Ped> where H: Hashable {
-        Self::from_handle(native::ped::new(ty, model, pos, heading, network, this_script_check))
+        invoke!(Option<Ped>, 0xD49F9B0955C367DE, ty, model.joaat(), pos, heading, network, this_script_check)
     }
 
     pub fn from_player(player: &Player) -> Ped {
-        Ped {
-            handle: native::player::get_ped(player.get_handle())
-        }
+        invoke!(Ped, 0x43A66C31C68491C0, player.get_handle())
     }
 
     pub fn local() -> Ped {
-        Ped {
-            handle: native::player::get_local_ped()
-        }
+        invoke!(Ped, 0xD80958FC74E988A6)
     }
 
     pub fn is_in_any_vehicle(&self, at_get_in: bool) -> bool {
-        native::ped::is_in_any_vehicle(self.handle, at_get_in)
+        invoke!(bool, 0x997ABD671D25CA0B, self.handle, at_get_in)
     }
 
     pub fn get_in_vehicle(&self, last: bool) -> Option<Vehicle> {
-        let handle = native::ped::get_in_vehicle(self.handle, last);
-        Vehicle::from_handle(handle)
+        invoke!(Option<Vehicle>, 0x9A9112A0FE9A4713, self.handle, last)
     }
 
     pub fn get_using_vehicle(&self) -> Option<Vehicle> {
-        let handle = native::ped::get_using_vehicle(self.handle);
-        Vehicle::from_handle(handle)
+        invoke!(Option<Vehicle>, 0x6094AD011A2EA87D, self.handle)
     }
 
     pub fn get_entering_vehicle(&self) -> Option<Vehicle> {
-        let handle = native::ped::get_entering_vehicle(self.handle);
-        Vehicle::from_handle(handle)
+        invoke!(Option<Vehicle>, 0xF92691AED837A5FC, self.handle)
     }
 
     pub fn put_into_vehicle(&self, vehicle: &Vehicle, seat: i32) {
-        native::ped::put_into_vehicle(self.handle, vehicle.get_handle(), seat)
+        invoke!((), 0xF75B0D629E1C063D, self.handle, vehicle.get_handle(), seat)
     }
 
     pub fn set_current_weapon_visible(&self, visible: bool, deselect: bool, p3: bool, p4: bool) {
-        native::ped::set_current_weapon_visible(self.handle, visible, deselect, p3, p4)
+        invoke!((), 0x0725A4CCFDED9A70, self.handle, visible, deselect, p3, p4)
     }
 
     pub fn set_config_flag(&self, flag: u32, value: bool) {
-        native::ped::set_config_flag(self.handle, flag, value)
+        invoke!((), 0x1913FE4CBF41C463, self.handle, flag, value)
     }
 
     pub fn set_default_component_variation(&self) {
-        native::ped::set_default_component_variation(self.handle)
+        invoke!((), 0x45EEE61580806D63, self.handle)
+    }
+
+    pub fn get_closest_vehicle(&self, max_distance: f32) -> Option<Vehicle> {
+        let pos = self.get_position_by_offset(Vector3::new(0.0, 0.0, -1.0));
+        let mut result = None;
+        let mut last_max_distance = max_distance;
+        if let Some(vehicles) = native::pool::get_vehicles() {
+            for vehicle in vehicles.iter() {
+                if vehicle.exists() {
+                    let v_pos = vehicle.get_position_by_offset(Vector3::new(0.0, 0.0, 0.0));
+                    let distance = v_pos.distance(pos);
+                    if distance < last_max_distance {
+                        last_max_distance = distance;
+                        result = Some(vehicle);
+                    }
+                }
+            }
+        }
+        result
     }
 
     pub fn get_tasks(&self) -> PedTasks {
@@ -82,13 +116,17 @@ impl Entity for Ped {
     }
 }
 
-impl FromHandle for Ped {
+impl Handleable for Ped {
     fn from_handle(handle: Handle) -> Option<Self> {
         if handle == 0 {
             None
         } else {
             Some(Self { handle })
         }
+    }
+
+    fn get_handle(&self) -> u32 {
+        self.handle
     }
 }
 
@@ -98,13 +136,13 @@ pub trait NetworkSignalValue {
 
 impl NetworkSignalValue for f32 {
     fn set(&self, ped: &Ped, name: &str) {
-        native::ped::task::set_network_move_signal_float(ped.get_handle(), name, *self)
+        invoke!((), 0xD5BB4025AE449A4E, ped.get_handle(), name, *self)
     }
 }
 
 impl NetworkSignalValue for bool {
     fn set(&self, ped: &Ped, name: &str) {
-        native::ped::task::set_network_move_signal_bool(ped.get_handle(), name, *self)
+        invoke!((), 0xB0A6CFD2C69C1088, ped.get_handle(), name, *self)
     }
 }
 
@@ -120,15 +158,15 @@ impl<'a> PedTasks<'a> {
     }
 
     pub fn clear_immediately(&self) {
-        native::ped::task::clear_immediately(self.ped.handle)
+        invoke!((), 0xAAA34F8A7CB32098, self.ped.handle)
     }
 
     pub fn clear_secondary(&self) {
-        native::ped::task::clear_secondary(self.ped.handle)
+        invoke!((), 0x176CECF6F920D707, self.ped.handle)
     }
 
     pub fn enter_vehicle(&self, vehicle: Vehicle, timeout: u32, seat: i32, speed: f32, flag: i32) {
-        native::ped::task::enter_vehicle(self.ped.handle, vehicle.get_handle(), timeout, seat, speed, flag)
+        invoke!((), 0xC20E50AA46D09CA8, self.ped.handle, vehicle.get_handle(), timeout, seat, speed, flag, 0u32)
     }
 }
 
@@ -137,12 +175,12 @@ pub struct PedNetworkTasks<'a> {
 }
 
 impl<'a> PedNetworkTasks<'a> {
-    pub fn do_move(&self, name: &str, multiplier: f32, p3: bool, dict: &str, flags: u32) {
-        native::ped::task::network_move(self.ped.handle, name, multiplier, p3, dict, flags)
+    pub fn do_move(&self, name: &str, multiplier: f32, p3: bool, dict: &AnimDict, flags: u32) {
+        invoke!((), 0x2D537BA194896636, self.ped.handle, name, multiplier, p3, dict.get_name(), flags)
     }
 
     pub fn is_move_active(&self) -> bool {
-        native::ped::task::is_network_move_active(self.ped.handle)
+        invoke!(bool, 0x921CE12C489C4C41, self.ped.handle)
     }
 
     pub fn set_move_signal<S>(&self, name: &str, value: S) where S: NetworkSignalValue {
@@ -150,6 +188,6 @@ impl<'a> PedNetworkTasks<'a> {
     }
 
     pub fn request_move_state_transition(&self, name: &str) -> bool {
-        native::ped::task::request_network_move_state_transition(self.ped.handle, name)
+        invoke!(bool, 0xD01015C7316AE176, self.ped.handle, name)
     }
 }

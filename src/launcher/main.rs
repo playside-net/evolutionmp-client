@@ -1,15 +1,13 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE};
+use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE};
 use winapi::um::tlhelp32::TH32CS_SNAPPROCESS;
 use evolutionmp::registry::Registry;
-use evolutionmp::win::ps::{ProcessIterator, get_process, ModuleEntry, ProcessHandle, get_procedure_address};
+use evolutionmp::win::ps::{ProcessIterator, get_process, ModuleEntry, ProcessHandle};
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::psapi::LIST_MODULES_ALL;
 use evolutionmp::launcher_dir;
 use std::path::Path;
-use winapi::um::winbase::INFINITE;
-use winapi::_core::ptr::null_mut;
 
 fn main() {
     let gta_exe = "GTA5.exe";

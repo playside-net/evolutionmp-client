@@ -407,3 +407,11 @@ pub fn enable_all_actions(group: Group) {
 pub fn is_pressed(group: Group, control: Control) -> bool {
     crate::native::controls::is_pressed(group as u32, control as u32)
 }
+
+pub fn is_disabled_just_pressed(group: Group, control: Control) -> bool {
+    crate::native::controls::is_disabled_just_pressed(group as u32, control as u32)
+}
+
+pub fn is_disabled_pressed(group: Group, control: Control) -> bool {
+    crate::native::controls::is_disabled_pressed(group as u32, control as u32)
+}

@@ -1,7 +1,7 @@
 use crate::hash::Hash;
 use super::Handle;
 use crate::native;
-use crate::native::pool::FromHandle;
+use crate::native::pool::Handleable;
 use cgmath::Vector3;
 
 pub trait Entity {

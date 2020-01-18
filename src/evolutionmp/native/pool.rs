@@ -16,14 +16,14 @@ pub static ENTITY_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSa
 pub static PLAYER_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
 static ADDRESS_TO_HANDLE: ThreadSafe<Cell<Option<GetAddressHandle>>> = ThreadSafe::new(Cell::new(None));
 
-pub type PoolRef<T> = *mut Option<ManuallyDrop<Box<T>>>;
+pub type RefPool<T> = *mut Option<ManuallyDrop<Box<T>>>;
 
-static mut PED_POOL: PoolRef<GenericPool<Ped>> = std::ptr::null_mut();
-static mut GLOBAL_POOL: PoolRef<GlobalPool> = std::ptr::null_mut();
-static mut OBJECT_POOL: PoolRef<GenericPool<Object>> = std::ptr::null_mut();
-static mut PICKUP_POOL: PoolRef<GenericPool<Pickup>> = std::ptr::null_mut();
-static mut VEHICLE_POOL: PoolRef<Box<VehiclePool>> = std::ptr::null_mut();
-static mut CHECKPOINT_POOL: PoolRef<GenericPool<Checkpoint>> = std::ptr::null_mut();
+static mut PED_POOL: RefPool<GenericPool<Ped>> = std::ptr::null_mut();
+static mut GLOBAL_POOL: RefPool<GlobalPool> = std::ptr::null_mut();
+static mut OBJECT_POOL: RefPool<GenericPool<Object>> = std::ptr::null_mut();
+static mut PICKUP_POOL: RefPool<GenericPool<Pickup>> = std::ptr::null_mut();
+static mut VEHICLE_POOL: RefPool<Box<VehiclePool>> = std::ptr::null_mut();
+static mut CHECKPOINT_POOL: RefPool<GenericPool<Checkpoint>> = std::ptr::null_mut();
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     PARTICLE_ADDRESS.set(Some(std::mem::transmute(mem.find("74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8")
@@ -74,14 +74,15 @@ impl GlobalPool {
     }
 }
 
-pub trait Pool<T: FromHandle> {
+pub trait Pool<T: Handleable> {
     fn is_valid(&self, index: u32) -> bool;
 
     fn get_address(&self, index: u32) -> *mut u8;
 
     fn get_handle(&self, index: u32) -> Option<Handle> {
         if self.is_valid(index) {
-            let handle = unsafe { (ADDRESS_TO_HANDLE.get().unwrap())(self.get_address(index)) };
+            let address = self.get_address(index);
+            let handle = unsafe { (ADDRESS_TO_HANDLE.get().unwrap())(address) };
             Some(handle)
         } else {
             None
@@ -115,13 +116,13 @@ pub struct VehiclePool {
 
 impl Pool<Vehicle> for VehiclePool {
     fn is_valid(&self, index: u32) -> bool {
-        unsafe {
-            ((self.bit_array.wrapping_add(index as usize >> 5).read() >> (index as i32 & 0x1F) as u32) & 1) != 0
-        }
+        let block = unsafe { self.bit_array.wrapping_add(index as usize >> 5).read() };
+        let offset = (index & 0x1F) as u32;
+        ((block >> offset) & 1) != 0
     }
 
     fn get_address(&self, index: u32) -> *mut u8 {
-        unsafe { self.pool_address.wrapping_add(index as usize).read() as _ }
+        unsafe { self.pool_address.wrapping_add(index as usize).read() as *mut u8 }
     }
 
     fn len(&self) -> u32 {
@@ -134,7 +135,7 @@ impl Pool<Vehicle> for VehiclePool {
 }
 
 #[repr(C)]
-pub struct GenericPool<T: FromHandle> {
+pub struct GenericPool<T: Handleable> {
     start_address: u64,
     byte_array: *mut u8,
     capacity: u32,
@@ -142,14 +143,14 @@ pub struct GenericPool<T: FromHandle> {
     _ty: PhantomData<T>
 }
 
-impl<T> GenericPool<T> where T: FromHandle {
+impl<T> GenericPool<T> where T: Handleable {
     pub fn mask(&self, index: u32) -> u64 {
         let num1 = unsafe { (self.byte_array.add(index as usize).read() & 0x80) as i64 };
         !((num1 | -num1) >> 63) as u64
     }
 }
 
-impl<T> Pool<T> for GenericPool<T> where T: FromHandle {
+impl<T> Pool<T> for GenericPool<T> where T: Handleable {
     fn is_valid(&self, index: u32) -> bool {
         self.mask(index) != 0
     }
@@ -191,12 +192,12 @@ pub fn get_checkpoints() -> Option<ManuallyDrop<Box<GenericPool<Checkpoint>>>> {
     unsafe { CHECKPOINT_POOL.read() }
 }
 
-pub struct PoolIterator<'a, T: FromHandle> {
+pub struct PoolIterator<'a, T: Handleable> {
     pool: &'a dyn Pool<T>,
     index: u32
 }
 
-impl<'a, T> Iterator for PoolIterator<'a, T> where T: FromHandle {
+impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -208,18 +209,18 @@ impl<'a, T> Iterator for PoolIterator<'a, T> where T: FromHandle {
             return None;
         }
         let capacity = self.pool.capacity();
-        let valid = self.pool.is_valid(self.index);
-        crate::info!("valid: {}", valid);
-        if self.index < capacity && valid {
-            let entity = self.pool.get(self.index);
+        while self.index < capacity {
+            let index = self.index;
             self.index += 1;
-            entity
-        } else {
-            None
+            if let Some(result) = self.pool.get(index) {
+                return Some(result);
+            }
         }
+        None
     }
 }
 
-pub trait FromHandle {
+pub trait Handleable {
     fn from_handle(handle: Handle) -> Option<Self> where Self: Sized;
+    fn get_handle(&self) -> Handle;
 }

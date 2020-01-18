@@ -129,6 +129,13 @@ pub enum NativeEvent {
         is_network: bool,
         this_script_check: bool
     },
+    NewPed {
+        model: Hash,
+        pos: Vector3<f32>,
+        heading: f32,
+        is_network: bool,
+        this_script_check: bool
+    },
     TaskEnterVehicle {
         ped: Ped,
         vehicle: Vehicle,
@@ -137,13 +144,29 @@ pub enum NativeEvent {
         speed: f32,
         flag: i32,
         unknown: u32
+    },
+    TaskLeaveVehicle {
+        ped: Ped,
+        vehicle: Vehicle,
+        flag: i32
     }
 }
 
 impl NativeEvent {
-    pub fn vehicle(context: &mut NativeCallContext) -> NativeEvent {
+    pub fn new_vehicle(context: &mut NativeCallContext) -> NativeEvent {
         let mut args = context.get_args();
         NativeEvent::NewVehicle {
+            model: args.read(),
+            pos: args.read(),
+            heading: args.read(),
+            is_network: args.read(),
+            this_script_check: args.read(),
+        }
+    }
+
+    pub fn new_ped(context: &mut NativeCallContext) -> NativeEvent {
+        let mut args = context.get_args();
+        NativeEvent::NewPed {
             model: args.read(),
             pos: args.read(),
             heading: args.read(),
@@ -162,6 +185,15 @@ impl NativeEvent {
             speed: args.read(),
             flag: args.read(),
             unknown: args.read()
+        }
+    }
+
+    pub fn task_leave_vehicle(context: &mut NativeCallContext) -> NativeEvent {
+        let mut args = context.get_args();
+        NativeEvent::TaskLeaveVehicle {
+            ped: args.read(),
+            vehicle: args.read(),
+            flag: args.read()
         }
     }
 }
@@ -194,8 +226,10 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
         }
         call_native_trampoline(0xFC8202EFC642E6F2, context)
     });
-    native_event!(0xAF35D0D2583051B0, vehicle);
+    native_event!(0xAF35D0D2583051B0, new_vehicle);
+    native_event!(0xD49F9B0955C367DE, new_ped);
     native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
+    native_event!(0xD3DBCE61A490BE02, task_leave_vehicle);
 }
 
 fn push_native_event(event: NativeEvent) {

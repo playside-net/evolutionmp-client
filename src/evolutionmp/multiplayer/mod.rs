@@ -19,6 +19,7 @@ use std::collections::VecDeque;
 use crate::game::streaming::{Model, AnimDict};
 use crate::game::camera::Camera;
 use crate::native::pool::Pool;
+use winapi::_core::sync::atomic::Ordering;
 
 pub mod console;
 //pub mod network;
@@ -74,7 +75,7 @@ impl Script for ScriptCleanWorld {
         self.cleanup();
 
         for flag in AUDIO_FLAGS.iter() {
-            native::audio::set_flag(flag, true);
+            game::audio::set_flag(flag, true);
         }
     }
 
@@ -88,8 +89,8 @@ impl Script for ScriptCleanWorld {
 
         self.cleanup();
 
-        native::ped::set_density_multiplier_this_frame(0.0);
-        native::ped::set_scenario_density_multiplier_this_frame(0.0);
+        game::ped::set_density_multiplier_this_frame(0.0);
+        game::ped::set_scenario_density_multiplier_this_frame(0.0);
 
         native::vehicle::set_density_multiplier_this_frame(0.0);
         native::vehicle::set_random_density_multiplier_this_frame(0.0);
@@ -115,7 +116,7 @@ impl Script for ScriptCleanWorld {
         match event {
             ScriptEvent::UserInput(event) => {
                 match event {
-                    InputEvent::Keyboard(KeyboardEvent::Key { key, .. }) => {
+                    InputEvent::Keyboard(KeyboardEvent::Key { key, is_up, .. }) => {
                         match *key {
                             VK_NUMPAD0 => {
                                 /*if let Some(vehicles) = native::pool::get_vehicles() {
@@ -132,6 +133,24 @@ impl Script for ScriptCleanWorld {
                                     }
                                 });
                             },
+                            0x46 /*F*/ if !is_up => {
+                                self.tasks.push(move |env| {
+                                    let player = Player::local();
+                                    let ped = player.get_ped();
+                                    if !crate::runtime::CONSOLE_VISIBLE.load(Ordering::SeqCst) && ped.exists() {
+                                        if !ped.is_in_any_vehicle(true) {
+                                            if let Some(vehicle) = ped.get_closest_vehicle(10.0) {
+                                                if vehicle.is_seat_free(-1) {
+                                                    ped.get_tasks().enter_vehicle(vehicle, 5000, -1, 2.0, 1);
+                                                }
+                                            }
+                                        } else if ped.is_in_any_vehicle(false) {
+                                            let vehicle = ped.get_using_vehicle().unwrap();
+
+                                        }
+                                    }
+                                });
+                            }
                             _ => {}
                         }
                     },
@@ -169,30 +188,30 @@ impl ScriptCleanWorld {
         let player = Player::local();
         player.disable_vehicle_rewards();
 
-        native::player::set_max_wanted_level(0);
+        game::player::set_max_wanted_level(0);
 
-        native::vehicle::set_garbage_trucks(false);
-        native::vehicle::set_random_boats(false);
-        native::vehicle::set_random_trains(false);
-        native::vehicle::set_far_draw(false);
-        native::vehicle::set_distant_visible(false);
-        native::vehicle::delete_all_trains();
-        native::vehicle::set_parked_count(-1);
-        native::vehicle::set_low_priority_generators_active(false);
-        native::vehicle::remove_vehicles_from_generators_in_area(
+        game::vehicle::set_garbage_trucks(false);
+        game::vehicle::set_random_boats(false);
+        game::vehicle::set_random_trains(false);
+        game::vehicle::set_far_draw(false);
+        game::vehicle::set_distant_visible(false);
+        game::vehicle::delete_all_trains();
+        game::vehicle::set_parked_count(-1);
+        game::vehicle::set_low_priority_generators_active(false);
+        game::vehicle::remove_vehicles_from_generators_in_area(
             Vector3::new(-9999.0, -9999.0, -9999.0),
             Vector3::new(9999.0, 9999.0, 9999.0),
             false
         );
 
-        native::ped::set_non_scenario_cops(false);
-        native::ped::set_cops(false);
-        native::ped::set_scenario_cops(false);
+        game::ped::set_non_scenario_cops(false);
+        game::ped::set_cops(false);
+        game::ped::set_scenario_cops(false);
 
         gameplay::set_time_scale(1.0);
 
-        native::streaming::set_vehicle_population_budget(0);
-        native::streaming::set_ped_population_budget(0);
+        game::streaming::set_vehicle_population_budget(0);
+        game::streaming::set_ped_population_budget(0);
 
         native::vehicle::set_distant_lights_visible(false);
         native::vehicle::set_parked_density_multiplier_this_frame(0.0);
@@ -238,22 +257,23 @@ impl Script for ScriptFingerPointing {
 
         tasks.is_move_active();
 
-        let pitch = (self.get_relative_pitch().max(42.0).max(-70.0) + 70.0) / 112.0;
-        let heading = (game::camera::get_gameplay_relative_heading().min(180.0).max(-180.0)) / 360.0;
+        let pitch = (self.get_relative_pitch().min(42.0).max(-70.0) + 70.0) / 112.0;
+        let heading = (game::camera::get_gameplay_relative_heading().min(180.0).max(-180.0) + 180.0) / 360.0;
 
         tasks.set_move_signal("Pitch", pitch);
         tasks.set_move_signal("Heading", heading * -1.0 + 1.0);
         tasks.set_move_signal("isBlocked", false);
-        let first_person = false;
+        use crate::invoke;
+        let first_person = invoke!(u32, 0xEE778F8C7E1142E2, invoke!(u32, 0x19CAFA3C87F7C2FF)) == 4;
         tasks.set_move_signal("isFirstPerson", first_person);
 
-        if game::controls::is_pressed(ControlGroup::Move, Control::SpecialAbilitySecondary) {
+        if game::controls::is_disabled_pressed(ControlGroup::Move, Control::Cover) && !player.is_in_any_vehicle(false) {
             if !self.active {
                 self.active = true;
                 let dict = AnimDict::new("anim@mp_point");
                 env.wait_for_resource(&dict);
                 player.set_config_flag(36, true);
-                tasks.do_move("task_mp_pointing", 0.5, false, dict.get_name(), 24);
+                tasks.do_move("task_mp_pointing", 0.5, false, &dict, 24);
                 dict.mark_unused();
             }
         } else if self.active {
@@ -271,7 +291,9 @@ impl ScriptFingerPointing {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 13] = [
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 15] = [
+    Control::Enter,
+    Control::Cover,
     Control::EnterCheatCode,
     Control::FrontendSocialClub,
     Control::FrontendSocialClubSecondary,

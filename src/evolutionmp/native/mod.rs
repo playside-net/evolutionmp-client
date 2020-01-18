@@ -17,7 +17,7 @@ use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ops::Deref;
 use std::ptr::{null_mut, null};
-use crate::native::pool::FromHandle;
+use crate::native::pool::Handleable;
 use crate::game::entity::Entity;
 
 pub mod ui;
@@ -25,22 +25,14 @@ pub mod graphics;
 pub mod scaleform;
 pub mod system;
 pub mod entity;
-pub mod player;
 pub mod vehicle;
 pub mod socialclub;
 pub mod collection;
 pub mod script;
 pub mod controls;
-pub mod streaming;
-pub mod ped;
-pub mod audio;
-pub mod stats;
 pub mod gameplay;
-pub mod dlc;
-pub mod clock;
 pub mod decision_event;
 pub mod pool;
-pub mod camera;
 pub mod worldprobe;
 
 pub struct ThreadSafe<T> {
@@ -96,12 +88,12 @@ pub fn get_handler(hash: u64) -> NativeFunction {
 }
 
 #[repr(C)]
-struct PtrMagic {
+struct ObfuscatedPtr {
     prev: u64,
     next: u64
 }
 
-impl PtrMagic {
+impl ObfuscatedPtr {
     unsafe fn get(&self) -> u64 {
         let addr = self as *const Self as *const u32;
         let mask = (addr as u64 as u32 ^ *addr.wrapping_add(2)) as u64;
@@ -111,12 +103,12 @@ impl PtrMagic {
 
 #[repr(C)]
 struct NativeGroup {
-    next_group: PtrMagic,
+    next_group: ObfuscatedPtr,
     handlers: [NativeFunction; 7],
     len_1: u32,
     len_2: u32,
     pad: u32,
-    hashes: [PtrMagic; 7]
+    hashes: [ObfuscatedPtr; 7]
 }
 
 #[repr(C)]
@@ -434,6 +426,27 @@ impl<T> NativeStackValue for Vector2<T> where T: NativeStackValue + Copy + Clone
     }
 }
 
+impl<H> NativeStackValue for H where H: Handleable + Sized {
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        H::from_handle(stack.read::<Handle>()).expect("got zero handle")
+    }
+
+    fn write_to_stack(self, stack: &mut NativeStackWriter) {
+        stack.write(self.get_handle());
+    }
+}
+
+impl<H> NativeStackValue for Option<H> where H: Handleable + Sized {
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        H::from_handle(stack.read::<Handle>())
+    }
+
+    fn write_to_stack(self, stack: &mut NativeStackWriter) {
+        let handle = self.expect("cannot pass invalid handle as native arg").get_handle();
+        stack.write(handle);
+    }
+}
+
 impl NativeStackValue for Rgba {
     fn read_from_stack(stack: &mut NativeStackReader) -> Self {
         panic!("Reading Rgba color from stack is not possible")
@@ -488,7 +501,7 @@ impl NativeStackValue for Hash {}
 impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
 impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}
 
-impl<E> NativeStackValue for E where E: Entity + FromHandle {
+impl<E> NativeStackValue for E where E: Entity + Handleable {
     fn read_from_stack(stack: &mut NativeStackReader) -> Self {
         E::from_handle(stack.read::<Handle>()).unwrap()
     }

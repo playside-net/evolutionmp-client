@@ -1,8 +1,5 @@
-use std::iter::once;
-use std::string::FromUtf16Error;
 use winapi::shared::minwindef::{HMODULE, DWORD};
-use std::ffi::{OsStr, OsString};
-use winapi::um::winbase::SetDllDirectoryW;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
 use winapi::shared::winerror::ERROR_INSUFFICIENT_BUFFER;

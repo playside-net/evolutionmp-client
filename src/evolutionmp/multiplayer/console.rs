@@ -76,33 +76,8 @@ impl Script for ScriptConsole {
                                 const VK_KEY_T: c_int = 0x54;
 
                                 match *key {
-                                    VK_BACK if open => {
-                                        let pos = self.cursor_pos;
-                                        let len = self.get_input().len();
-                                        if len > 0 && pos > 0 {
-                                            let mut input = String::with_capacity(len - 1);
-                                            for (i, c) in self.get_input().chars().enumerate() {
-                                                if i != pos - 1 {
-                                                    input.push(c);
-                                                }
-                                            }
-                                            std::mem::replace(self.get_input_mut(), input);
-                                            self.cursor_pos -= 1;
-                                        }
-                                    },
-                                    VK_DELETE if open => {
-                                        let pos = self.cursor_pos;
-                                        let len = self.get_input().len();
-                                        if len > 0 && pos < len {
-                                            let mut input = String::with_capacity(len - 1);
-                                            for (i, c) in self.get_input().chars().enumerate() {
-                                                if i != pos {
-                                                    input.push(c);
-                                                }
-                                            }
-                                            std::mem::replace(self.get_input_mut(), input);
-                                        }
-                                    },
+                                    //VK_BACK if open => self.erase_left(),
+                                    //VK_DELETE if open => self.erase_right(),
                                     VK_LEFT if open => {
                                         if *control {
 
@@ -174,10 +149,15 @@ impl Script for ScriptConsole {
                                     _ => {}
                                 }
                             },
-                            KeyboardEvent::Char(c) => {
-                                if open && !c.is_control() {
-                                    self.get_input_mut().push(*c);
-                                    self.cursor_pos += 1;
+                            KeyboardEvent::Char(c) if open => {
+                                match c {
+                                    &'\u{0008}' => self.erase_left(),
+                                    &'\u{007F}' => self.erase_right(),
+                                    c if !c.is_control() => {
+                                        self.get_input_mut().push(*c);
+                                        self.cursor_pos += 1;
+                                    },
+                                    _ => {}
                                 }
                             },
                             _ => {}
@@ -212,6 +192,35 @@ impl ScriptConsole {
         if !open {
             self.last_closed = Instant::now() + Duration::from_millis(200);
             self.lock_controls();
+        }
+    }
+
+    fn erase_left(&mut self) {
+        let pos = self.cursor_pos;
+        let len = self.get_input().len();
+        if len > 0 && pos > 0 {
+            let mut input = String::with_capacity(len - 1);
+            for (i, c) in self.get_input().chars().enumerate() {
+                if i != pos - 1 {
+                    input.push(c);
+                }
+            }
+            std::mem::replace(self.get_input_mut(), input);
+            self.cursor_pos -= 1;
+        }
+    }
+
+    fn erase_right(&mut self) {
+        let pos = self.cursor_pos;
+        let len = self.get_input().len();
+        if len > 0 && pos < len {
+            let mut input = String::with_capacity(len - 1);
+            for (i, c) in self.get_input().chars().enumerate() {
+                if i != pos {
+                    input.push(c);
+                }
+            }
+            std::mem::replace(self.get_input_mut(), input);
         }
     }
 

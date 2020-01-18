@@ -1,6 +1,7 @@
 use crate::pattern::MemoryRegion;
 use crate::native::NativeStackValue;
 
+pub mod audio;
 pub mod entity;
 pub mod player;
 pub mod ped;
