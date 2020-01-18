@@ -216,7 +216,7 @@ impl ScriptCleanWorld {
         game::vehicle::set_distant_lights_visible(false);
         game::vehicle::set_parked_density_multiplier_this_frame(0.0);
 
-        native::ui::set_map_revealed(true);
+        game::ui::set_map_revealed(true);
     }
 
     fn disable_controls(&self) {

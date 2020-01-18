@@ -1,4 +1,4 @@
-use crate::native::invoke;
+use crate::invoke;
 use crate::game::Handle;
 use crate::native::pool::Handleable;
 

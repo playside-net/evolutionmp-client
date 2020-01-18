@@ -13,7 +13,7 @@ pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {
 
 pub fn show_subtitle(text: &str, duration: i32, immediately: bool) {
     invoke!((), 0xB87A37EEB7FAA67D, "STRING");
-    crate::native::ui::push_string(text);
+    push_string(text);
     invoke!((), 0x9D77056A530643F6, duration, immediately);
 }
 
@@ -165,7 +165,7 @@ pub fn set_cursor_sprite(sprite: u32) {
 }
 
 pub fn get_cursor_sprite() -> CursorSprite {
-    unsafe { super::CURSOR_SPRITE.load(std::sync::atomic::Ordering::SeqCst).read() }
+    unsafe { native::CURSOR_SPRITE.load(std::sync::atomic::Ordering::SeqCst).read() }
 }
 
 pub fn set_notification_text_entry(ty: &str) {
@@ -185,11 +185,11 @@ pub fn set_big_map_active(toggle: bool, full: bool) {
 }
 
 pub fn is_big_map_active() -> bool {
-    unsafe { super::EXPANDED_RADAR.load(std::sync::atomic::Ordering::SeqCst).read() }
+    unsafe { native::EXPANDED_RADAR.load(std::sync::atomic::Ordering::SeqCst).read() }
 }
 
 pub fn is_big_map_full() -> bool {
-    unsafe { super::REVEAL_FULL_MAP.load(std::sync::atomic::Ordering::SeqCst).read() }
+    unsafe { native::REVEAL_FULL_MAP.load(std::sync::atomic::Ordering::SeqCst).read() }
 }
 
 fn set_text_font(font: u32) {

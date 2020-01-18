@@ -1,8 +1,8 @@
 use crate::invoke;
-use cgmath::Vector3;
 use crate::game::entity::Entity;
 use crate::game::Handle;
 use crate::native::pool::Handleable;
+use cgmath::Vector3;
 
 pub struct Probe {
     handle: Handle
@@ -58,7 +58,7 @@ pub struct ProbeEntity {
 impl Entity for ProbeEntity {
     fn delete(&mut self) {
         self.set_persistent(false);
-        crate::native::entity::delete(&mut self.handle)
+        invoke!((), 0xAE3CBE5BF394C9C9, &mut self.handle)
     }
 }
 

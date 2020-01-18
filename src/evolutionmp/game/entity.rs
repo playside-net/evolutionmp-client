@@ -1,7 +1,7 @@
 use crate::hash::Hash;
 use super::Handle;
-use crate::native;
-use crate::native::pool::Handleable;
+use crate::invoke;
+use crate::native::pool::{self, Handleable};
 use cgmath::Vector3;
 
 pub trait Entity: Handleable {
@@ -10,11 +10,11 @@ pub trait Entity: Handleable {
     }
 
     fn get_address(&self) -> *mut u8 {
-        (native::pool::ENTITY_ADDRESS.get().unwrap())(self.get_handle())
+        (pool::ENTITY_ADDRESS.get().unwrap())(self.get_handle())
     }
 
     fn is_dead(&self) -> bool {
-        native::entity::is_dead(self.get_handle())
+        invoke!(bool, 0x5F9532F3B5CC2551, self.get_handle())
     }
 
     fn get_position(&self) -> Vector3<f32> {
@@ -81,7 +81,7 @@ pub trait Entity: Handleable {
     }
 
     fn is_belong_to_this_script(&self, p2: bool) -> bool {
-        invoke!(bool, 0xDDE6DF5AE89981D2, handle, p2)
+        invoke!(bool, 0xDDE6DF5AE89981D2, self.get_handle(), p2)
     }
 
     fn has_drawable(&self) -> bool {
