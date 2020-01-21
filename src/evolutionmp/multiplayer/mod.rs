@@ -205,7 +205,7 @@ impl ScriptCleanWorld {
         game::ped::set_cops(false);
         game::ped::set_scenario_cops(false);
 
-        gameplay::set_time_scale(10.0);
+        gameplay::set_time_scale(1.0);
 
         game::streaming::set_vehicle_population_budget(0);
         game::streaming::set_ped_population_budget(0);
