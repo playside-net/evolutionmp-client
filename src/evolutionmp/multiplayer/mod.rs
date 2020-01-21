@@ -7,19 +7,21 @@ use crate::game::stats::Stat;
 use crate::game::ped::Ped;
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
-use crate::game::{streaming, gameplay, dlc, script, clock};
+use crate::game::{streaming, gameplay, dlc, script, clock, Rgb};
 use crate::win::input::{KeyboardEvent, InputEvent};
 use crate::info;
 use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
-use cgmath::Vector3;
+use cgmath::{Vector3, Vector2};
 use std::collections::VecDeque;
 use crate::game::streaming::{Model, AnimDict};
 use crate::game::camera::Camera;
 use winapi::_core::sync::atomic::Ordering;
 use crate::events::ScriptEvent;
+use crate::game::blip::{Blip, BlipName};
+use crate::native::pool::{Pool, Handleable};
 
 pub mod console;
 //pub mod network;
@@ -119,24 +121,13 @@ impl Script for ScriptCleanWorld {
                 match event {
                     InputEvent::Keyboard(KeyboardEvent::Key { key, is_up, .. }) => {
                         match *key {
-                            VK_NUMPAD0 => {
-                                /*if let Some(vehicles) = native::pool::get_vehicles() {
-                                    for (i, mut v) in vehicles.iter().enumerate() {
-                                        crate::info!("deleting vehicle: {} ({})", v.get_handle(), i);
-                                        v.delete();
-                                    }
-                                }*/
+                            VK_NUMPAD0 if !is_up => {
                                 self.tasks.push(move |env| {
                                     let player = Player::local();
                                     let ped = player.get_ped();
                                     if let Some(veh) = ped.get_in_vehicle(false) {
                                         veh.repair();
                                     }
-                                });
-                            },
-                            VK_NUMPAD2 => {
-                                self.tasks.push(move |env| {
-                                    invoke!((), 0x1CEA6BFDF248E5D9, "hello world", "meme", "lol");
                                 });
                             },
                             0x46 /*F*/ if !is_up => {
@@ -147,7 +138,7 @@ impl Script for ScriptCleanWorld {
                                         if !ped.is_in_any_vehicle(true) {
                                             if let Some(vehicle) = ped.get_closest_vehicle(10.0) {
                                                 if vehicle.is_seat_free(-1) {
-                                                    ped.get_tasks().enter_vehicle(vehicle, 5000, -1, 2.0, 1);
+                                                    ped.get_tasks().enter_vehicle(vehicle, 5000, -1, 1.0, 1);
                                                 }
                                             }
                                         } else if ped.is_in_any_vehicle(false) {
@@ -214,7 +205,7 @@ impl ScriptCleanWorld {
         game::ped::set_cops(false);
         game::ped::set_scenario_cops(false);
 
-        gameplay::set_time_scale(1.0);
+        gameplay::set_time_scale(10.0);
 
         game::streaming::set_vehicle_population_budget(0);
         game::streaming::set_ped_population_budget(0);

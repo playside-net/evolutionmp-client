@@ -33,7 +33,7 @@ pub fn draw_text<T, P, S>(text: T, pos: P, color: Rgba, font: Font, scale: S)
 {
     let pos = pos.into();
     let pos = Vector2::new(pos.x / BASE_WIDTH, pos.y / BASE_HEIGHT);
-    set_text_font(font as u32);
+    set_text_font(font);
     set_text_scale(scale.into());
     set_text_color(color);
     begin_text_command_draw("CELL_EMAIL_BCON");
@@ -42,7 +42,7 @@ pub fn draw_text<T, P, S>(text: T, pos: P, color: Rgba, font: Font, scale: S)
 }
 
 pub fn get_text_width<T>(text: T, font: Font, scale: Vector2<f32>) -> f32 where T: AsRef<str> {
-    set_text_font(font as u32);
+    set_text_font(font);
     set_text_scale(scale);
     begin_text_command_width("CELL_EMAIL_BCON");
     push_string(text.as_ref());
@@ -58,6 +58,7 @@ pub enum Font {
     Pricedown = 7
 }
 
+#[repr(C)]
 pub enum LoadingPrompt {
     LoadingLeft,
     LoadingLeft2,
@@ -83,7 +84,8 @@ pub enum CursorSprite {
     Remove
 }
 
-pub enum HudComponent {
+#[repr(C)]
+pub enum HudElement {
     Main,
     WantedStars,
     WeaponIcon,
@@ -192,8 +194,20 @@ pub fn is_big_map_full() -> bool {
     unsafe { native::REVEAL_FULL_MAP.load(std::sync::atomic::Ordering::SeqCst).read() }
 }
 
-fn set_text_font(font: u32) {
-    invoke!((), 0x66E0276CC5F6B9DA, font)
+pub fn is_hud_element_active(element: HudElement) -> bool {
+    invoke!(bool, 0xBC4C9EA5391ECC0D, element as u32)
+}
+
+pub fn set_hud_element_visible_this_frame(element: HudElement, visible: bool) {
+    if visible {
+        invoke!((), 0x0B4DF1FA60C0E664, element as u32)
+    } else {
+        invoke!((), 0x6806C51AD12B83B8, element as u32)
+    }
+}
+
+fn set_text_font(font: Font) {
+    invoke!((), 0x66E0276CC5F6B9DA, font as u32)
 }
 
 fn set_text_scale(scale: Vector2<f32>) {

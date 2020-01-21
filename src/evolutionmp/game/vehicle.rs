@@ -130,6 +130,14 @@ impl Vehicle {
     pub fn start_horn<H>(&self, duration: u32, hash: H, forever: bool) where H: Hashable {
         invoke!((), 0x9C8C6504B5B63D2C, self.handle, duration, hash.joaat(), forever)
     }
+
+    pub fn get_waypoint_progress(&self) -> f32 {
+        invoke!(f32, 0x9824CFF8FC66E159, self.handle)
+    }
+
+    pub fn get_waypoint_target_point(&self) -> Handle {
+        invoke!(Handle, 0x416B62AC8B9E5BBD, self.handle)
+    }
 }
 
 pub struct VehicleColors {

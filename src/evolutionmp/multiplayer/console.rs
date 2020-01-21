@@ -3,7 +3,7 @@ use crate::game::ui::{BASE_WIDTH, BASE_HEIGHT, Font};
 use crate::game::Rgba;
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::win::input::{InputEvent, KeyboardEvent};
-use crate::events::ScriptEvent;
+use crate::events::{ScriptEvent, NativeEvent};
 use std::time::{Instant, UNIX_EPOCH, SystemTime};
 use std::collections::VecDeque;
 use std::os::raw::c_int;
@@ -93,7 +93,7 @@ impl Script for ScriptConsole {
 
                                         } else {
                                             if self.cursor_pos < self.get_input().len() {
-                                                self.cursor_pos -= 1;
+                                                self.cursor_pos += 1;
                                             }
                                         }
                                     },
@@ -169,6 +169,12 @@ impl Script for ScriptConsole {
             },
             ScriptEvent::NativeEvent(event) => {
                 self.line_history.push(format!("Native event received: {:?}", event));
+                match event {
+                    NativeEvent::NewPed { model, pos, heading, is_network, this_script_check } => {
+                        crate::game::gps::set_waypoint(pos.truncate());
+                    },
+                    _ => {}
+                }
                 return true;
             },
             ScriptEvent::ConsoleOutput(line) => {

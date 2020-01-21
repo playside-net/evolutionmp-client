@@ -4,7 +4,7 @@ use crate::game::vehicle::Vehicle;
 use crate::game::ped::Ped;
 use crate::hash::Hash;
 use crate::win::input::InputEvent;
-use cgmath::Vector3;
+use cgmath::{Vector3, Vector2};
 use std::collections::VecDeque;
 use winapi::_core::cell::RefCell;
 
@@ -77,6 +77,13 @@ pub enum NativeEvent {
         ped: Ped,
         vehicle: Vehicle,
         flag: i32
+    },
+    SetPedWetness {
+        ped: Ped,
+        wetness: f32
+    },
+    SetWaypoint {
+        pos: Vector2<f32>
     }
 }
 
@@ -124,6 +131,13 @@ impl NativeEvent {
             flag: args.read()
         }
     }
+
+    pub fn set_waypoint(context: &mut NativeCallContext) -> NativeEvent {
+        let mut args = context.get_args();
+        NativeEvent::SetWaypoint {
+            pos: args.read()
+        }
+    }
 }
 
 pub(crate) static EVENTS: ThreadSafe<RefCell<Option<VecDeque<NativeEvent>>>> = ThreadSafe::new(RefCell::new(None));
@@ -152,4 +166,5 @@ pub unsafe fn init(mem: &MemoryRegion) {
     native_event!(0xD49F9B0955C367DE, new_ped);
     native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
     native_event!(0xD3DBCE61A490BE02, task_leave_vehicle);
+    native_event!(0xFE43368D2AA4F2FC, set_waypoint);
 }

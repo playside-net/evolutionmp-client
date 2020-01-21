@@ -79,6 +79,14 @@ impl Ped {
         invoke!((), 0x45EEE61580806D63, self.handle)
     }
 
+    pub fn get_waypoint_distance(&self) -> f32 {
+        invoke!(f32, 0xE6A877C64CAF1BC5, self.handle)
+    }
+
+    pub fn get_waypoint_progress(&self) -> f32 {
+        invoke!(f32, 0x2720AAA75001E094, self.handle)
+    }
+
     pub fn get_closest_vehicle(&self, max_distance: f32) -> Option<Vehicle> {
         let pos = self.get_position_by_offset(Vector3::new(0.0, 0.0, -1.0));
         let mut result = None;
