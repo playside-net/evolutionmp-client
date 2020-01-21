@@ -1,4 +1,4 @@
-use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, ScriptEvent, TaskQueue};
+use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, TaskQueue};
 use crate::pattern::MemoryRegion;
 use crate::GameState;
 use crate::{invoke, game, native};
@@ -19,6 +19,7 @@ use std::collections::VecDeque;
 use crate::game::streaming::{Model, AnimDict};
 use crate::game::camera::Camera;
 use winapi::_core::sync::atomic::Ordering;
+use crate::events::ScriptEvent;
 
 pub mod console;
 //pub mod network;
@@ -131,6 +132,11 @@ impl Script for ScriptCleanWorld {
                                     if let Some(veh) = ped.get_in_vehicle(false) {
                                         veh.repair();
                                     }
+                                });
+                            },
+                            VK_NUMPAD2 => {
+                                self.tasks.push(move |env| {
+                                    invoke!((), 0x1CEA6BFDF248E5D9, "hello world", "meme", "lol");
                                 });
                             },
                             0x46 /*F*/ if !is_up => {

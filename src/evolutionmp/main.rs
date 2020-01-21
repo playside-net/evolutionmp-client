@@ -1,4 +1,4 @@
-#![feature(asm, set_stdio, fn_traits)]
+#![feature(asm, set_stdio, core_intrinsics)]
 use crate::pattern::MemoryRegion;
 use crate::game::entity::Entity;
 use crate::win::input::InputHook;
@@ -24,6 +24,8 @@ pub mod win;
 pub mod native;
 #[cfg(target_os = "windows")]
 pub mod runtime;
+#[cfg(target_os = "windows")]
+pub mod events;
 #[cfg(target_os = "windows")]
 pub mod mappings;
 #[cfg(target_os = "windows")]

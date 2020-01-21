@@ -1,8 +1,9 @@
-use crate::runtime::{Script, ScriptEnv, Runtime, ScriptEvent};
+use crate::runtime::{Script, ScriptEnv, Runtime};
 use crate::game::ui::{BASE_WIDTH, BASE_HEIGHT, Font};
 use crate::game::Rgba;
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::win::input::{InputEvent, KeyboardEvent};
+use crate::events::ScriptEvent;
 use std::time::{Instant, UNIX_EPOCH, SystemTime};
 use std::collections::VecDeque;
 use std::os::raw::c_int;

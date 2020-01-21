@@ -1,7 +1,7 @@
 use winapi::shared::windef::{HWND, POINT};
 use winapi::shared::basetsd::LONG_PTR;
 use winapi::shared::minwindef::{UINT, WPARAM, LPARAM, LRESULT, HKL};
-use winapi::um::winuser::{WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_MOUSEMOVE, CallWindowProcA, WNDPROC, FindWindowA, SetWindowLongPtrA, GWLP_WNDPROC, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, VK_SHIFT, VK_CONTROL, WM_CHAR, WM_UNICHAR, SetWindowLongPtrW, CallWindowProcW, TranslateMessage, GetMessageW, MSG, WM_SYSCHAR, WM_KEYFIRST, WM_KEYLAST, GetKeyboardState, ToUnicode, MapVirtualKeyA, GetKeyboardLayout, MAPVK_VK_TO_CHAR, MapVirtualKeyW, LoadKeyboardLayoutW, MapVirtualKeyExW, MAPVK_VK_TO_VSC, MAPVK_VSC_TO_VK, WM_INPUT, HRAWINPUT, RAWINPUT, RAWINPUTHEADER, GetRawInputData, RID_INPUT, RIM_TYPEKEYBOARD, RI_KEY_E0, RI_KEY_E1, MAPVK_VSC_TO_VK_EX, VK_RCONTROL, VK_LCONTROL, VK_RMENU, VK_LMENU, VK_PAUSE, VK_SCROLL, GetForegroundWindow, GetWindowThreadProcessId, WM_INPUTLANGCHANGE, WM_INPUTLANGCHANGEREQUEST, ActivateKeyboardLayout, KLF_RESET, KLF_REPLACELANG, KLF_SETFORPROCESS, ToUnicodeEx, VK_DELETE};
+use winapi::um::winuser::{WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_MOUSEMOVE, CallWindowProcA, WNDPROC, FindWindowA, SetWindowLongPtrA, GWLP_WNDPROC, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, VK_SHIFT, VK_CONTROL, WM_CHAR, WM_UNICHAR, SetWindowLongPtrW, CallWindowProcW, TranslateMessage, GetMessageW, MSG, WM_SYSCHAR, WM_KEYFIRST, WM_KEYLAST, GetKeyboardState, ToUnicode, MapVirtualKeyA, GetKeyboardLayout, MAPVK_VK_TO_CHAR, MapVirtualKeyW, LoadKeyboardLayoutW, MapVirtualKeyExW, MAPVK_VK_TO_VSC, MAPVK_VSC_TO_VK, WM_INPUT, HRAWINPUT, RAWINPUT, RAWINPUTHEADER, GetRawInputData, RID_INPUT, RIM_TYPEKEYBOARD, RI_KEY_E0, RI_KEY_E1, MAPVK_VSC_TO_VK_EX, VK_RCONTROL, VK_LCONTROL, VK_RMENU, VK_LMENU, VK_PAUSE, VK_SCROLL, GetForegroundWindow, GetWindowThreadProcessId, WM_INPUTLANGCHANGE, WM_INPUTLANGCHANGEREQUEST, ActivateKeyboardLayout, KLF_RESET, KLF_REPLACELANG, KLF_SETFORPROCESS, ToUnicodeEx, VK_DELETE, WM_CREATE, SetWindowTextA};
 use winapi::um::sysinfoapi::GetTickCount;
 use std::sync::{Arc, Mutex};
 use std::cell::UnsafeCell;
@@ -13,7 +13,7 @@ use std::sync::atomic::AtomicPtr;
 use crate::win::input::InputEvent::{Mouse, Keyboard};
 use crate::pattern::MemoryRegion;
 use std::ptr::{null, null_mut};
-use winapi::um::winnt::LANG_RUSSIAN;
+use winapi::um::winnt::{LANG_RUSSIAN, LPSTR};
 use widestring::WideCStr;
 
 static mut EVENT_POOL: Option<EventPool> = None;

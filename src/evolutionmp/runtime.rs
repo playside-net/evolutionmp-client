@@ -28,43 +28,11 @@ use crate::game::player::Player;
 use cgmath::Vector3;
 use crate::game::ped::Ped;
 use crate::game::vehicle::Vehicle;
+use crate::events::{NativeEvent, ScriptEvent, EventPool};
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
 pub(crate) static CONSOLE_VISIBLE: AtomicBool = AtomicBool::new(false);
-
-pub struct EventPool {
-    input: Vec<ScriptEvent>,
-    output: VecDeque<ScriptEvent>
-}
-
-impl EventPool {
-    pub fn new() -> EventPool {
-        EventPool {
-            input: Vec::new(),
-            output: VecDeque::new()
-        }
-    }
-
-    pub fn push_input(&mut self, event: ScriptEvent) {
-        self.input.push(event)
-    }
-
-    pub fn push_output(&mut self, event: ScriptEvent) {
-        self.output.push_back(event)
-    }
-
-    pub fn swap(&mut self) {
-        self.input.clear();
-        while let Some(event) = self.output.pop_front() {
-            self.input.push(event)
-        }
-    }
-
-    pub fn iterate<F>(&mut self, mut handler: F) where F: FnMut(&ScriptEvent) -> bool {
-        self.input.retain(|i| !handler(i));
-    }
-}
 
 pub struct Runtime {
     user_input: InputHook,
@@ -91,7 +59,7 @@ impl Runtime {
             let mut event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
             event_pool.push_input(ScriptEvent::UserInput(event));
         }
-        if let Ok(mut native_events) = EVENTS.try_borrow_mut() {
+        if let Ok(mut native_events) = crate::events::EVENTS.try_borrow_mut() {
             if let Some(native_events) = native_events.as_mut() {
                 let event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
                 while let Some(event) = native_events.pop_front() {
@@ -115,103 +83,14 @@ impl Runtime {
     }
 }
 
-static EVENTS: ThreadSafe<RefCell<Option<VecDeque<NativeEvent>>>> = ThreadSafe::new(RefCell::new(None));
 static RUNTIME: ThreadSafe<RefCell<Option<Runtime>>> = ThreadSafe::new(RefCell::new(None));
 static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
-
-#[derive(Debug)]
-pub enum NativeEvent {
-    NewVehicle {
-        model: Hash,
-        pos: Vector3<f32>,
-        heading: f32,
-        is_network: bool,
-        this_script_check: bool
-    },
-    NewPed {
-        model: Hash,
-        pos: Vector3<f32>,
-        heading: f32,
-        is_network: bool,
-        this_script_check: bool
-    },
-    TaskEnterVehicle {
-        ped: Ped,
-        vehicle: Vehicle,
-        timeout: u32,
-        seat: i32,
-        speed: f32,
-        flag: i32,
-        unknown: u32
-    },
-    TaskLeaveVehicle {
-        ped: Ped,
-        vehicle: Vehicle,
-        flag: i32
-    }
-}
-
-impl NativeEvent {
-    pub fn new_vehicle(context: &mut NativeCallContext) -> NativeEvent {
-        let mut args = context.get_args();
-        NativeEvent::NewVehicle {
-            model: args.read(),
-            pos: args.read(),
-            heading: args.read(),
-            is_network: args.read(),
-            this_script_check: args.read(),
-        }
-    }
-
-    pub fn new_ped(context: &mut NativeCallContext) -> NativeEvent {
-        let mut args = context.get_args();
-        NativeEvent::NewPed {
-            model: args.read(),
-            pos: args.read(),
-            heading: args.read(),
-            is_network: args.read(),
-            this_script_check: args.read(),
-        }
-    }
-
-    pub fn task_enter_vehicle(context: &mut NativeCallContext) -> NativeEvent {
-        let mut args = context.get_args();
-        NativeEvent::TaskEnterVehicle {
-            ped: args.read(),
-            vehicle: args.read(),
-            timeout: args.read(),
-            seat: args.read(),
-            speed: args.read(),
-            flag: args.read(),
-            unknown: args.read()
-        }
-    }
-
-    pub fn task_leave_vehicle(context: &mut NativeCallContext) -> NativeEvent {
-        let mut args = context.get_args();
-        NativeEvent::TaskLeaveVehicle {
-            ped: args.read(),
-            vehicle: args.read(),
-            flag: args.read()
-        }
-    }
-}
-
-macro_rules! native_event {
-    ($hash:literal, $constructor:ident) => {
-        hook_native($hash, |context| {
-            push_native_event(NativeEvent::$constructor(context));
-            call_native_trampoline($hash, context);
-        });
-    };
-}
 
 pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     let mut runtime = Runtime::new(input);
     info!("Initializing multiplayer");
     crate::multiplayer::init(&mut runtime);
 
-    EVENTS.replace(Some(VecDeque::new()));
     RUNTIME.replace(Some(runtime));
     HOOKS.replace(Some(HashMap::new()));
 
@@ -225,21 +104,11 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
         }
         call_native_trampoline(0xFC8202EFC642E6F2, context)
     });
-    native_event!(0xAF35D0D2583051B0, new_vehicle);
-    native_event!(0xD49F9B0955C367DE, new_ped);
-    native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
-    native_event!(0xD3DBCE61A490BE02, task_leave_vehicle);
+
+    crate::events::init(mem);
 }
 
-fn push_native_event(event: NativeEvent) {
-    if let Ok(mut events) = EVENTS.try_borrow_mut() {
-        if let Some(events) = events.as_mut() {
-            events.push_back(event);
-        }
-    }
-}
-
-fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
+pub fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
     let hooks = HOOKS.try_borrow().expect("unable to borrow hook map");
     let hooks = hooks.as_ref().expect("hook map is not initialized");
     let detour = hooks.get(&hash).expect(&format!("missing native trampoline for 0x{:016X}", hash));
@@ -249,7 +118,7 @@ fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
     }
 }
 
-fn hook_native(hash: u64, hook: fn(&mut NativeCallContext)) {
+pub fn hook_native(hash: u64, hook: fn(&mut NativeCallContext)) {
     let original = crate::native::get_handler(hash);
     unsafe {
         let detour = GenericDetour::new(original, std::mem::transmute(hook))
@@ -383,11 +252,4 @@ impl<'a> ScriptEnv<'a> {
             self.wait(Duration::from_millis(0));
         }
     }
-}
-
-pub enum ScriptEvent {
-    ConsoleInput(String),
-    ConsoleOutput(String),
-    NativeEvent(NativeEvent),
-    UserInput(InputEvent)
 }
