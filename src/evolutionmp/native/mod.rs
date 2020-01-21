@@ -228,9 +228,9 @@ impl<'a> NativeStackWriter<'a> {
     }
 
     pub fn write<T>(&mut self, value: T) -> usize where T: NativeStackValue {
-        let len = value.get_stack_size();
+        let pos = self.pos;
         value.write_to_stack(self);
-        len
+        self.pos - pos
     }
 }
 
@@ -263,10 +263,6 @@ pub trait NativeStackValue {
                 size
             )
         }
-    }
-
-    fn get_stack_size(&self) -> usize {
-        1
     }
 }
 
@@ -398,10 +394,6 @@ impl<T> NativeStackValue for Vector3<T> where T: NativeStackValue + Copy + Clone
         stack.write(self.y);
         stack.write(self.z);
     }
-
-    fn get_stack_size(&self) -> usize {
-        3
-    }
 }
 
 impl<T> NativeStackValue for Vector2<T> where T: NativeStackValue + Copy + Clone {
@@ -414,10 +406,6 @@ impl<T> NativeStackValue for Vector2<T> where T: NativeStackValue + Copy + Clone
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         stack.write(self.x);
         stack.write(self.y);
-    }
-
-    fn get_stack_size(&self) -> usize {
-        2
     }
 }
 
@@ -453,10 +441,6 @@ impl NativeStackValue for Rgba {
         stack.write(self.b);
         stack.write(self.a);
     }
-
-    fn get_stack_size(&self) -> usize {
-        4
-    }
 }
 
 impl NativeStackValue for Rgb {
@@ -471,10 +455,6 @@ impl NativeStackValue for Rgb {
         stack.write(self.r);
         stack.write(self.g);
         stack.write(self.b);
-    }
-
-    fn get_stack_size(&self) -> usize {
-        3
     }
 }
 
