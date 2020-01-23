@@ -1,24 +1,16 @@
 use crate::pattern::MemoryRegion;
 use crate::game::{Rgba, Rgb, Handle};
-use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ffi::{CString, CStr};
-use std::mem::ManuallyDrop;
-use std::os::raw::c_char;
-use winapi::shared::minwindef::DWORD;
-use winapi::shared::basetsd::DWORD64;
-use winapi::ctypes::c_void;
-use std::time::Duration;
 use cgmath::{Vector3, Vector2};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
-use byteorder::{ReadBytesExt, WriteBytesExt};
+use byteorder::WriteBytesExt;
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ops::Deref;
-use std::ptr::{null_mut, null};
+use std::ptr::null_mut;
 use crate::native::pool::Handleable;
-use crate::game::entity::Entity;
 
 pub mod vehicle;
 pub mod pool;
@@ -179,20 +171,33 @@ impl<'a> NativeStackReader<'a> {
         self.pos
     }
 
+    pub fn is_null(&self) -> bool {
+        self.stack[self.pos] == 0
+    }
+
     pub fn read_u64(&mut self) -> u64 {
         let pos = self.pos;
         self.pos += 1;
         self.stack[pos]
     }
 
-    pub fn read_ptr<T>(&mut self) -> *const T where T: NativeStackValue {
+    pub unsafe fn read_ptr<T>(&mut self) -> T where T: Sized {
         let pos = self.pos;
         self.pos += 1;
-        self.stack[pos..].as_ptr().cast::<T>()
+        self.stack[pos..].as_ptr().cast::<T>().read()
     }
 
     pub fn read<T>(&mut self) -> T where T: NativeStackValue {
         T::read_from_stack(self)
+    }
+
+    pub fn read_option<T>(&mut self) -> Option<T> where T: NativeStackValue {
+        if self.is_null() {
+            self.pos += 1;
+            None
+        } else {
+            Some(self.read())
+        }
     }
 }
 
@@ -216,21 +221,31 @@ impl<'a> NativeStackWriter<'a> {
         self.pos
     }
 
-    pub fn write_u64(&mut self, raw: u64) {
+    pub fn write_u64(&mut self, raw: u64) -> usize {
         self.stack[self.pos] = raw;
         self.pos += 1;
+        1
     }
 
-    pub fn write_ptr<T>(&mut self) -> *mut T where T: NativeStackValue {
+    pub unsafe fn write_ptr<T>(&mut self, value: T) -> usize where T: Sized {
         let pos = self.pos;
         self.pos += 1;
-        self.stack[pos..].as_mut_ptr().cast()
+        self.stack[pos..].as_mut_ptr().cast::<T>().write(value);
+        1
     }
 
     pub fn write<T>(&mut self, value: T) -> usize where T: NativeStackValue {
         let pos = self.pos;
         value.write_to_stack(self);
         self.pos - pos
+    }
+
+    pub fn write_option<T>(&mut self, value: Option<T>) -> usize where T: NativeStackValue {
+        if let Some(value) = value {
+            self.write(value)
+        } else {
+            self.write_u64(0)
+        }
     }
 }
 
@@ -239,7 +254,7 @@ pub trait NativeStackValue {
         let size = std::mem::size_of::<Self>();
         if size <= 8 {
             unsafe {
-                stack.read_ptr::<Self>().read()
+                stack.read_ptr::<Self>()
             }
         } else {
             panic!(
@@ -254,7 +269,7 @@ pub trait NativeStackValue {
         let size = std::mem::size_of::<Self>();
         if size <= 8 {
             unsafe {
-                stack.write_ptr::<Self>().write(self);
+                stack.write_ptr(self);
             }
         } else {
             panic!(
@@ -369,15 +384,25 @@ macro_rules! invoke {
 
 impl NativeStackValue for &str {
     fn read_from_stack(stack: &mut NativeStackReader) -> Self {
-        let ptr = stack.read_ptr::<u8>();
-        unsafe { CStr::from_ptr(ptr as *mut _) }.to_str()
-            .expect("Failed to read C string")
+        let c_str = unsafe { CStr::from_ptr(stack.read_u64() as *mut _) };
+        c_str.to_str().expect(&format!("Failed to read C string: {:?}", c_str))
     }
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         let native = CString::new(self).expect("Failed to write C string");
         stack.write_u64(native.as_ptr() as u64);
         std::mem::forget(native);
+    }
+}
+
+impl NativeStackValue for String {
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        <&str as NativeStackValue>::read_from_stack(stack).to_owned()
+    }
+
+    fn write_to_stack(self, stack: &mut NativeStackWriter) {
+        self.as_str().write_to_stack(stack);
+        std::mem::forget(self);
     }
 }
 
@@ -436,25 +461,25 @@ impl NativeStackValue for Rgba {
     }
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
-        stack.write(self.r);
-        stack.write(self.g);
-        stack.write(self.b);
-        stack.write(self.a);
+        stack.write(self.r as u32);
+        stack.write(self.g as u32);
+        stack.write(self.b as u32);
+        stack.write(self.a as u32);
     }
 }
 
 impl NativeStackValue for Rgb {
     fn read_from_stack(stack: &mut NativeStackReader) -> Self {
-        let r = stack.read();
-        let g = stack.read();
-        let b = stack.read();
-        Rgb::new(r, g, b)
+        let r = stack.read::<u32>();
+        let g = stack.read::<u32>();
+        let b = stack.read::<u32>();
+        Rgb::new(r as u8, g as u8, b as u8)
     }
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
-        stack.write(self.r);
-        stack.write(self.g);
-        stack.write(self.b);
+        stack.write(self.r as u32);
+        stack.write(self.g as u32);
+        stack.write(self.b as u32);
     }
 }
 
