@@ -46,16 +46,4 @@ impl Camera {
     }
 }
 
-impl Handleable for Camera {
-    fn from_handle(handle: Handle) -> Option<Self> where Self: Sized {
-        if handle == 0  {
-            None
-        } else {
-            Some(Camera { handle })
-        }
-    }
-
-    fn get_handle(&self) -> Handle {
-        self.handle
-    }
-}
+crate::impl_handle!(Camera);

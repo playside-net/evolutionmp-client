@@ -83,3 +83,11 @@ pub fn set_waypoint_locked(locked: bool) {
 pub fn set_waypoint(pos: Vector2<f32>) {
     invoke!((), 0xFE43368D2AA4F2FC, pos)
 }
+
+pub fn get_ground_elevation(pos: Vector3<f32>, elevation: &mut f32, unknown: bool) -> bool {
+    invoke!(bool, 0xC906A7DAB05C8D2B, pos, elevation, unknown)
+}
+
+pub fn get_ground_elevation_and_normal(pos: Vector3<f32>, elevation: &mut f32, normal: &mut Vector3<f32>) -> bool {
+    invoke!(bool, 0x8BDC7BFC57A81E76, pos, elevation, normal)
+}

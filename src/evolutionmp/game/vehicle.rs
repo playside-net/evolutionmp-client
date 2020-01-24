@@ -7,10 +7,16 @@ use crate::game::ped::Ped;
 use crate::game::streaming::Model;
 use crate::runtime::ScriptEnv;
 use crate::native::vehicle::GEARS_OFFSET;
-use crate::native::pool::Handleable;
+use crate::native::pool::{Handleable, Pool, VehiclePool};
+use crate::game::radio::RadioStation;
 use std::time::Duration;
 use std::sync::atomic::Ordering;
 use cgmath::Vector3;
+use winapi::_core::mem::ManuallyDrop;
+
+pub fn get_pool() -> ManuallyDrop<Box<Box<VehiclePool>>> {
+    crate::native::pool::get_vehicles().expect("vehicle pool not initialized")
+}
 
 #[derive(Debug)]
 pub struct Vehicle {
@@ -74,9 +80,7 @@ impl Vehicle {
         let model = Model::new(model);
         if model.is_in_cd_image() && model.is_valid() && model.is_vehicle() {
             env.wait_for_resource(&model);
-            let result = invoke!(Option<Vehicle>, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check);
-            model.mark_unused();
-            result
+            invoke!(Option<Vehicle>, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check)
         } else {
             None
         }
@@ -138,6 +142,12 @@ impl Vehicle {
     pub fn get_waypoint_target_point(&self) -> Handle {
         invoke!(Handle, 0x416B62AC8B9E5BBD, self.handle)
     }
+
+    pub fn get_radio(&self) -> VehicleRadio {
+        VehicleRadio {
+            vehicle: self
+        }
+    }
 }
 
 pub struct VehicleColors {
@@ -152,16 +162,26 @@ impl Entity for Vehicle {
     }
 }
 
-impl Handleable for Vehicle {
-    fn from_handle(handle: Handle) -> Option<Self> {
-        if handle == 0 {
-            None
-        } else {
-            Some(Self { handle })
-        }
+crate::impl_handle!(Vehicle);
+
+pub struct VehicleRadio<'a> {
+    vehicle: &'a Vehicle
+}
+
+impl<'a> VehicleRadio<'a> {
+    pub fn is_loud(&self) -> bool {
+        invoke!(bool, 0x032A116663A4D5AC, self.vehicle.handle)
     }
 
-    fn get_handle(&self) -> Handle {
-        self.handle
+    pub fn set_loud(&self, loud: bool) {
+        invoke!((), 0xBB6F1CAEC68B0BCE, self.vehicle.handle, loud)
+    }
+
+    pub fn set_enabled(&self, enabled: bool) {
+        invoke!((), 0x3B988190C0AA6C0B, self.vehicle.handle, enabled)
+    }
+
+    pub fn set_station(&self, station: &RadioStation) {
+        invoke!((), 0x1B9C0099CB942AC6, self.vehicle.handle, station.get_name())
     }
 }

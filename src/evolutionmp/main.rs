@@ -38,6 +38,8 @@ pub mod process;
 pub mod registry;
 #[cfg(target_os = "windows")]
 pub mod multiplayer;
+#[cfg(target_os = "windows")]
+pub mod locale;
 
 //pub mod network;
 pub mod hash;
@@ -77,6 +79,8 @@ fn attach(instance: HINSTANCE) {
 
             let input = InputHook::new(&mem).expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");
+
+            locale::init(&mem);
 
             while !get_game_state().is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));

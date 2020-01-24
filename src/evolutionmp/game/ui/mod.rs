@@ -1,6 +1,8 @@
 use crate::{invoke, native};
-use crate::game::Rgba;
+use crate::game::{Rgba, Handle};
 use cgmath::Vector2;
+
+pub mod notification;
 
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
@@ -156,10 +158,14 @@ pub fn is_loading_prompt_visible() -> bool {
     invoke!(bool, 0xD422FCC5F239A915)
 }
 
-pub fn push_string(string: &str) {
-    for s in string.as_bytes().chunks(99).map(|c| unsafe { std::str::from_utf8_unchecked(c) }) {
+pub fn push_string(value: &str) {
+    for s in value.as_bytes().chunks(99).map(|c| unsafe { std::str::from_utf8_unchecked(c) }) {
         invoke!((), 0x6C188BE134E074AA, s)
     }
+}
+
+pub fn push_int(value: u32) {
+    invoke!((), 0x03B504CF259931BC)
 }
 
 pub fn set_cursor_sprite(sprite: u32) {
@@ -170,12 +176,12 @@ pub fn get_cursor_sprite() -> CursorSprite {
     unsafe { native::CURSOR_SPRITE.load(std::sync::atomic::Ordering::SeqCst).read() }
 }
 
-pub fn set_notification_text_entry(ty: &str) {
-    invoke!((), 0x202709F4C58A0424, ty)
+pub fn set_cursor_active_this_frame() {
+    invoke!((), 0xAAE7CE1D63167423)
 }
 
-pub fn show_notification(duration: bool, immediately: bool) {
-    invoke!((), 0x9D77056A530643F6, duration, immediately)
+pub fn set_cursor_position(pos: Vector2<f32>) {
+    invoke!((), 0xFC695459D4D0E219, pos)
 }
 
 pub fn set_map_revealed(revealed: bool) {

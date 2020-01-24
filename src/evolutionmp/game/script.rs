@@ -24,19 +24,7 @@ impl ScriptThread {
     }
 }
 
-impl Handleable for ScriptThread {
-    fn from_handle(handle: Handle) -> Option<Self> where Self: Sized {
-        if handle == 0 {
-            None
-        } else {
-            Some(Self { handle })
-        }
-    }
-
-    fn get_handle(&self) -> u32 {
-        self.handle
-    }
-}
+crate::impl_handle!(ScriptThread);
 
 pub fn terminate_all(name: &str) {
     invoke!((), 0x9DC711BC69C548DF, name)

@@ -7,16 +7,16 @@ use crate::game::stats::Stat;
 use crate::game::ped::Ped;
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
-use crate::game::{streaming, gameplay, dlc, script, clock, Rgb};
+use crate::game::{streaming, gameplay, dlc, script, clock, Rgb, Rgba};
 use crate::win::input::{KeyboardEvent, InputEvent};
 use crate::info;
 use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
-use cgmath::{Vector3, Vector2};
+use cgmath::{Vector3, Vector2, Matrix4, Transform};
 use std::collections::VecDeque;
-use crate::game::streaming::{Model, AnimDict};
+use crate::game::streaming::{Model, AnimDict, Resource};
 use crate::game::camera::Camera;
 use winapi::_core::sync::atomic::Ordering;
 use crate::events::ScriptEvent;
@@ -101,6 +101,21 @@ impl Script for ScriptCleanWorld {
         game::decision_event::suppress_shocking_events_next_frame();
         game::decision_event::suppress_agitation_events_next_frame();
 
+        if game::misc::is_stunt_jump_in_progress() {
+            game::misc::cancel_stunt_jump();
+        }
+
+        if game::misc::get_mission_flag() {
+            game::misc::set_mission_flag(false);
+        }
+
+        if game::misc::get_random_event_flag() {
+            game::misc::set_random_event_flag(false);
+        }
+
+        if game::misc::is_cutscene_active() {
+            game::misc::cancel_cutscene();
+        }
 
         /*if let Some(vehicles) = native::pool::get_vehicles() {
             let len = vehicles.len();
@@ -125,8 +140,26 @@ impl Script for ScriptCleanWorld {
                                 self.tasks.push(move |env| {
                                     let player = Player::local();
                                     let ped = player.get_ped();
+
                                     if let Some(veh) = ped.get_in_vehicle(false) {
-                                        veh.repair();
+                                        //veh.repair();
+                                        let station = game::radio::get_player_station();
+                                        let t = format!("Station: {}", station.get_name());
+                                        game::ui::notification::send_notification(&t, None, None, false);
+                                    }
+                                });
+                            },
+                            VK_NUMPAD2 if !is_up => {
+                                self.tasks.push(move |env| {
+                                    let player = Player::local();
+                                    let ped = player.get_ped();
+
+                                    if game::gps::is_waypoint_active() {
+                                        for blip in game::blip::get_pool() {
+                                            if blip.get_type() == 4 {
+
+                                            }
+                                        }
                                     }
                                 });
                             },
@@ -205,7 +238,7 @@ impl ScriptCleanWorld {
         game::ped::set_cops(false);
         game::ped::set_scenario_cops(false);
 
-        gameplay::set_time_scale(1.0);
+        //gameplay::set_time_scale(1.0);
 
         game::streaming::set_vehicle_population_budget(0);
         game::streaming::set_ped_population_budget(0);
@@ -271,7 +304,6 @@ impl Script for ScriptFingerPointing {
                 env.wait_for_resource(&dict);
                 player.set_config_flag(36, true);
                 tasks.do_move("task_mp_pointing", 0.5, false, &dict, 24);
-                dict.mark_unused();
             }
         } else if self.active {
             player.get_tasks().get_network().request_move_state_transition("Stop");

@@ -1,6 +1,7 @@
 use crate::invoke;
 use crate::game::{Handle, Rgba};
 use cgmath::{Vector2, Vector3};
+use crate::native::pool::Handleable;
 
 pub struct Scaleform {
     handle: Handle,
@@ -93,4 +94,14 @@ impl ScaleformResult for bool {
 
 fn end_method_returnable() -> Handle {
     invoke!(Handle, 0xC50AA39A577AF886)
+}
+
+impl Handleable for Scaleform {
+    fn from_handle(handle: u32) -> Option<Self> where Self: Sized {
+        unimplemented!()
+    }
+
+    fn get_handle(&self) -> u32 {
+        unimplemented!()
+    }
 }

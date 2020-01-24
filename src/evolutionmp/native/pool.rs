@@ -224,3 +224,22 @@ pub trait Handleable {
     fn from_handle(handle: Handle) -> Option<Self> where Self: Sized;
     fn get_handle(&self) -> Handle;
 }
+
+#[macro_export]
+macro_rules! impl_handle {
+    ($ty:ident) => {
+        impl crate::native::pool::Handleable for $ty {
+            fn from_handle(handle: crate::game::Handle) -> Option<Self> where Self: Sized {
+                if handle == 0 {
+                    None
+                } else {
+                    Some($ty { handle })
+                }
+            }
+
+            fn get_handle(&self) -> crate::game::Handle {
+                self.handle
+            }
+        }
+    };
+}

@@ -6,6 +6,13 @@ use std::any::Any;
 use std::ptr::null_mut;
 use std::time::{Duration, Instant};
 use std::mem::ManuallyDrop;
+use detour::RawDetour;
+use winapi::_core::ptr::replace;
+
+#[cfg(target_pointer_width = "64")]
+const OFFSET: usize = 0x140000000;
+#[cfg(not(target_pointer_width = "64"))]
+const OFFSET: usize = 0x400000;
 
 #[derive(Debug, Clone)]
 pub struct Pattern {
@@ -206,7 +213,11 @@ impl MemoryRegion {
         self.base
     }
 
-    pub unsafe fn get_mut<T>(&self) -> *mut T {
+    pub fn get_mut<T>(&self) -> *mut T {
+        self.base.cast()
+    }
+
+    pub fn get<T>(&self) -> *const T {
         self.base.cast()
     }
 
@@ -214,8 +225,24 @@ impl MemoryRegion {
         ManuallyDrop::new(Box::from_raw(self.base.cast()))
     }
 
-    pub unsafe fn get<T>(&self) -> *const T {
-        self.base.cast()
+    pub unsafe fn get_adjusted_ptr(&self) -> usize {
+        let mut addr = self.as_ptr() as usize;
+        if addr >= 0x140000000 && addr <= 0x146000000 {
+            crate::info!("Adjusting ptr at 0x{:016X}", addr);
+            let handle = GetModuleHandleA(null_mut());
+            addr + handle as usize - OFFSET
+        } else {
+            addr
+        }
+    }
+
+    pub unsafe fn detour(&self, replacement: *const ()) -> *const () {
+        let old = self.add(1).read_ptr(4).get();
+        let detour = RawDetour::new(old, replacement).expect("detour creation failed");
+        detour.enable().expect("detour enabling failed");
+        let old = detour.trampoline() as *const _;
+        std::mem::forget(detour);
+        old
     }
 }
 

@@ -29,19 +29,7 @@ impl Probe {
     }
 }
 
-impl Handleable for Probe {
-    fn from_handle(handle: Handle) -> Option<Self> where Self: Sized {
-        if handle == 0 {
-            None
-        } else {
-            Some(Probe { handle })
-        }
-    }
-
-    fn get_handle(&self) -> Handle {
-        self.handle
-    }
-}
+crate::impl_handle!(Probe);
 
 pub struct ProbeResult {
     pub hit: bool,
@@ -62,16 +50,4 @@ impl Entity for ProbeEntity {
     }
 }
 
-impl Handleable for ProbeEntity {
-    fn from_handle(handle: u32) -> Option<Self> where Self: Sized {
-        if handle == 0 {
-            None
-        } else {
-            Some(ProbeEntity { handle })
-        }
-    }
-
-    fn get_handle(&self) -> u32 {
-        self.handle
-    }
-}
+crate::impl_handle!(ProbeEntity);

@@ -108,12 +108,16 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     crate::events::init(mem);
 }
 
-pub fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
+fn get_trampoline(hash: u64) -> NativeFunction {
     let hooks = HOOKS.try_borrow().expect("unable to borrow hook map");
     let hooks = hooks.as_ref().expect("hook map is not initialized");
     let detour = hooks.get(&hash).expect(&format!("missing native trampoline for 0x{:016X}", hash));
+    unsafe { std::mem::transmute(detour.trampoline()) }
+}
+
+pub fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
+    let trampoline = get_trampoline(hash);
     unsafe {
-        let trampoline: NativeFunction = std::mem::transmute(detour.trampoline());
         trampoline(context);
     }
 }

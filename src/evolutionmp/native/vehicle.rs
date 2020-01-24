@@ -1,7 +1,4 @@
 use crate::invoke;
-use crate::game::Handle;
-use crate::hash::Hashable;
-use cgmath::Vector3;
 use crate::pattern::MemoryRegion;
 use std::sync::atomic::{AtomicI32, Ordering};
 

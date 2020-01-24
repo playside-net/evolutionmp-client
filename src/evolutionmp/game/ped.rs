@@ -4,10 +4,15 @@ use crate::game::entity::Entity;
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
 use crate::invoke;
-use crate::native::pool::{Handleable, Pool};
+use crate::native::pool::{Handleable, Pool, GenericPool};
 use crate::hash::Hashable;
-use crate::game::streaming::AnimDict;
+use crate::game::streaming::{AnimDict, PedPhoto};
 use cgmath::{Vector3, MetricSpace};
+use winapi::_core::mem::ManuallyDrop;
+
+pub fn get_pool() -> ManuallyDrop<Box<GenericPool<Ped>>> {
+    crate::native::pool::get_peds().expect("ped pool not initialized")
+}
 
 #[derive(Debug)]
 pub struct Ped {
@@ -79,6 +84,10 @@ impl Ped {
         invoke!((), 0x45EEE61580806D63, self.handle)
     }
 
+    pub fn set_position_keep_vehicle(&self, pos: Vector3<f32>) {
+        invoke!((), 0x9AFEFF481A85AB2E, self.handle, pos)
+    }
+
     pub fn get_waypoint_distance(&self) -> f32 {
         invoke!(f32, 0xE6A877C64CAF1BC5, self.handle)
     }
@@ -111,6 +120,14 @@ impl Ped {
             ped: self
         }
     }
+
+    pub fn get_photo(&self) -> PedPhoto {
+        PedPhoto::new(self)
+    }
+
+    pub fn get_photo_transparent(&self) -> PedPhoto {
+        PedPhoto::new_transparent(self)
+    }
 }
 
 impl Entity for Ped {
@@ -120,19 +137,7 @@ impl Entity for Ped {
     }
 }
 
-impl Handleable for Ped {
-    fn from_handle(handle: Handle) -> Option<Self> {
-        if handle == 0 {
-            None
-        } else {
-            Some(Self { handle })
-        }
-    }
-
-    fn get_handle(&self) -> u32 {
-        self.handle
-    }
-}
+crate::impl_handle!(Ped);
 
 pub trait NetworkSignalValue {
     fn set(&self, ped: &Ped, name: &str);

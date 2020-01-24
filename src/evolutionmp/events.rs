@@ -2,11 +2,13 @@ use crate::pattern::MemoryRegion;
 use crate::native::{NativeCallContext, ThreadSafe};
 use crate::game::vehicle::Vehicle;
 use crate::game::ped::Ped;
-use crate::hash::Hash;
+use crate::hash::{Hash, Hashable};
 use crate::win::input::InputEvent;
 use cgmath::{Vector3, Vector2};
 use std::collections::VecDeque;
 use winapi::_core::cell::RefCell;
+use detour::RawDetour;
+use std::ffi::CStr;
 
 pub enum ScriptEvent {
     ConsoleInput(String),
@@ -84,6 +86,9 @@ pub enum NativeEvent {
     },
     SetWaypoint {
         pos: Vector2<f32>
+    },
+    SetTimeScale {
+        scale: f32
     }
 }
 
@@ -138,6 +143,13 @@ impl NativeEvent {
             pos: args.read()
         }
     }
+
+    pub fn set_time_scale(context: &mut NativeCallContext) -> NativeEvent {
+        let mut args = context.get_args();
+        NativeEvent::SetTimeScale {
+            scale: args.read()
+        }
+    }
 }
 
 pub(crate) static EVENTS: ThreadSafe<RefCell<Option<VecDeque<NativeEvent>>>> = ThreadSafe::new(RefCell::new(None));
@@ -167,4 +179,5 @@ pub unsafe fn init(mem: &MemoryRegion) {
     native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
     native_event!(0xD3DBCE61A490BE02, task_leave_vehicle);
     native_event!(0xFE43368D2AA4F2FC, set_waypoint);
+    native_event!(0x1D408577D440E81E, set_time_scale);
 }

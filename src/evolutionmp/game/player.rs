@@ -6,6 +6,7 @@ use crate::game::ped::Ped;
 use crate::hash::Hashable;
 use crate::game::streaming::Model;
 use crate::runtime::ScriptEnv;
+use crate::native::pool::Handleable;
 
 pub struct Player {
     handle: Handle
@@ -29,8 +30,7 @@ pub fn set_max_wanted_level(max_level: u32) {
 
 impl Player {
     pub fn local() -> Player {
-        let handle = invoke!(Handle, 0x4F8644AF03D0E0D6);
-        Player { handle }
+        invoke!(Player, 0x4F8644AF03D0E0D6)
     }
 
     pub fn get_handle(&self) -> Handle {
@@ -56,7 +56,6 @@ impl Player {
             invoke!((), 0x00A1CADD00108836, self.handle, model.joaat());
             let ped = self.get_ped();
             ped.set_default_component_variation();
-            model.mark_unused();
             true
         } else {
             false
@@ -81,5 +80,15 @@ impl Player {
 
     pub fn disable_vehicle_rewards(&self) {
         invoke!((), 0xC142BE3BB9CE125F, self.handle)
+    }
+}
+
+impl Handleable for Player {
+    fn from_handle(handle: Handle) -> Option<Self> {
+        Some(Player { handle })
+    }
+
+    fn get_handle(&self) -> Handle {
+        self.handle
     }
 }

@@ -4,23 +4,15 @@ use crate::game::{Handle, Rgb};
 use cgmath::{Vector3, Vector2};
 use crate::game::entity::Entity;
 
+pub fn get_pool() -> BlipIterator {
+    BlipIterator::new()
+}
+
 pub struct Blip {
     handle: Handle
 }
 
-impl Handleable for Blip {
-    fn from_handle(handle: Handle) -> Option<Self> {
-        if handle == 0 {
-            None
-        } else {
-            Some(Self { handle })
-        }
-    }
-
-    fn get_handle(&self) -> Handle {
-        self.handle
-    }
-}
+crate::impl_handle!(Blip);
 
 pub enum BlipName<'a, 'b, 'c> {
     Localized(&'a str, &'b[&'c str]),
@@ -219,6 +211,10 @@ impl Blip {
         invoke!(u32, 0x1FC877464A04FC4F, self.handle)
     }
 
+    pub fn get_type(&self) -> u32 {
+        invoke!(u32, 0xBE9B0959FFD0779B, self.handle)
+    }
+
     pub fn is_flashing(&self) -> bool {
         invoke!(bool, 0xA5E41FD83AD6CEF0, self.handle)
     }
@@ -253,5 +249,32 @@ impl Blip {
 
     pub fn delete(&mut self) {
         invoke!((), 0x86A652570E5F25DD, &mut self.handle)
+    }
+}
+
+pub struct BlipIterator {
+    handle: Handle,
+    first: bool
+}
+
+impl BlipIterator {
+    pub fn new() -> BlipIterator {
+        BlipIterator {
+            handle: invoke!(Handle, 0x186E5D252FA50E7D),
+            first: true
+        }
+    }
+}
+
+impl Iterator for BlipIterator {
+    type Item = Blip;
+
+    fn next(&mut self) -> Option<Blip> {
+        if self.first {
+            self.first = false;
+            invoke!(Option<Blip>, 0x1BEDE233E6CD2A1F, self.handle)
+        } else {
+            invoke!(Option<Blip>, 0x14F96AA50D6FBEA7, self.handle)
+        }
     }
 }
