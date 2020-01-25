@@ -1,4 +1,8 @@
 #![feature(asm, set_stdio, core_intrinsics)]
+
+#[macro_use]
+extern crate lazy_static;
+
 use crate::pattern::MemoryRegion;
 use crate::game::entity::Entity;
 use crate::win::input::InputHook;
@@ -38,8 +42,6 @@ pub mod process;
 pub mod registry;
 #[cfg(target_os = "windows")]
 pub mod multiplayer;
-#[cfg(target_os = "windows")]
-pub mod locale;
 
 //pub mod network;
 pub mod hash;
@@ -80,23 +82,25 @@ fn attach(instance: HINSTANCE) {
             let input = InputHook::new(&mem).expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");
 
-            locale::init(&mem);
-
             while !get_game_state().is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
+
+            info!("Initializing game hooks");
+
+            game::init(&mem);
 
             info!("Initializing natives");
 
             native::init(&mem);
 
-            info!("Natives initialized. Waiting for game being started...");
+            info!("Waiting for game being started...");
 
             while get_game_state() != GameState::Playing {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            info!("Game loaded. Starting runtime...");
+            info!("Starting runtime");
 
             runtime::start(&mem, input);
         });

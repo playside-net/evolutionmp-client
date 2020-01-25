@@ -27,6 +27,7 @@ pub mod misc;
 pub mod gps;
 pub mod graphics;
 pub mod radio;
+pub mod locale;
 
 pub type Handle = u32;
 
@@ -78,4 +79,9 @@ impl GameState {
             _ => false
         }
     }
+}
+
+pub unsafe fn init(mem: &MemoryRegion) {
+    locale::init(mem);
+    ui::init(mem);
 }

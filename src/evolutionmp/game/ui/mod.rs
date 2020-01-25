@@ -1,11 +1,22 @@
 use crate::{invoke, native};
 use crate::game::{Rgba, Handle};
 use cgmath::Vector2;
+use crate::runtime::ScriptEnv;
+use crate::game::controls::{Group, Control};
+use crate::pattern::MemoryRegion;
 
 pub mod notification;
 
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
+
+type GetWarnResult = extern "C" fn(bool, u32) -> FrontendButtons;
+static mut GET_WARN_RESULT: *const () = std::ptr::null();
+
+pub unsafe fn init(mem: &MemoryRegion) {
+    GET_WARN_RESULT = mem.find("33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84")
+        .next().expect("get_warn_result").add(4).get_call()
+}
 
 pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {
     invoke!((), 0xABA17D7CE615ADBF, "STRING");
@@ -238,4 +249,103 @@ fn begin_text_command_width(ty: &str) {
 
 fn end_text_command_width(unknown: bool) -> f32 {
     invoke!(f32, 0x85F061DA64ED2F67, unknown)
+}
+
+pub fn prompt(env: &mut ScriptEnv, title: &str, placeholder: &str, max_length: u32) -> Option<String> {
+    super::locale::set_translation("FMMC_KEY_TIP10", title);
+    invoke!((), 0x00DC833F2568DBF6, 1u32, "FMMC_KEY_TIP10", "", placeholder, "", "", "", max_length);
+    loop {
+        match invoke!(u32, 0x0CF2B696BBF945AE) {
+            1 => {
+                let input = invoke!(&str, 0x8362B09B91893647);
+                break Some(input.to_owned());
+            },
+            2 => {
+                break None;
+            },
+            _ => {
+                env.wait(0);
+            }
+        }
+    }
+}
+
+fn get_warn_result() -> FrontendButtons {
+    let getter: GetWarnResult = unsafe { std::mem::transmute(GET_WARN_RESULT) };
+    getter(true, 0)
+}
+
+pub fn warn(env: &mut ScriptEnv, title: &str, line1: &str, line2: &str, buttons: FrontendButtons, background: bool) -> FrontendButtons {
+    super::locale::set_translation("WNMC_TITLE", title);
+    super::locale::set_translation("WNMC_LINE1", line1);
+    super::locale::set_translation("WNMC_LINE2", line2);
+    let buttons = buttons as u32;
+    loop {
+        env.wait(0);
+        invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, true);
+        let result = get_warn_result();
+        if result != FrontendButtons::None {
+            break result;
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, PartialOrd, PartialEq, Hash)]
+pub enum FrontendButtons {
+    None = 0,
+    Select = 1,
+    Ok = 2,
+    Yes = 4,
+    Back = 8,
+    BackSelect = 9,
+    BackOk = 10,
+    BackYes = 12,
+    Cancel = 16,
+    CancelSelect = 17,
+    CancelOk = 18,
+    CancelYes = 20,
+    No = 32,
+    NoSelect = 33,
+    NoOk = 34,
+    YesNo = 36,
+    Retry = 64,
+    RetrySelect = 65,
+    RetryOk = 66,
+    RetryYes = 68,
+    RetryBack = 72,
+    RetryBackSelect = 73,
+    RetryBackOk = 74,
+    RetryBackYes = 76,
+    RetryCancel = 80,
+    RetryCancelSelect = 81,
+    RetryCancelOk = 82,
+    RetryCancelYes = 84,
+    Skip = 256,
+    SkipSelect = 257,
+    SkipOk = 258,
+    SkipYes = 260,
+    SkipBack = 264,
+    SkipBackSelect = 265,
+    SkipBackOk = 266,
+    SkipBackYes = 268,
+    SkipCancel = 272,
+    SkipCancelSelect = 273,
+    SkipCancelOk = 274,
+    SkipCancelYes = 276,
+    Continue = 16384,
+    BackContinue = 16392,
+    CancelContinue = 16400,
+    LoadingSpinner = 134217728,
+    SelectLoadingSpinner = 134217729,
+    OkLoadingSpinner = 134217730,
+    YesLoadingSpinner = 134217732,
+    BackLoadingSpinner = 134217736,
+    BackSelectLoadingSpinner = 134217737,
+    BackOkLoadingSpinner = 134217738,
+    BackYesLoadingSpinner = 134217740,
+    CancelLoadingSpinner = 134217744,
+    CancelSelectLoadingSpinner = 134217745,
+    CancelOkLoadingSpinner = 134217746,
+    CancelYesLoadingSpinner = 134217748
 }

@@ -22,6 +22,7 @@ use winapi::_core::sync::atomic::Ordering;
 use crate::events::ScriptEvent;
 use crate::game::blip::{Blip, BlipName};
 use crate::native::pool::{Pool, Handleable};
+use crate::game::ui::FrontendButtons;
 
 pub mod console;
 //pub mod network;
@@ -138,7 +139,7 @@ impl Script for ScriptCleanWorld {
                         match *key {
                             VK_NUMPAD0 if !is_up => {
                                 self.tasks.push(move |env| {
-                                    let player = Player::local();
+                                    /*let player = Player::local();
                                     let ped = player.get_ped();
 
                                     if let Some(veh) = ped.get_in_vehicle(false) {
@@ -146,6 +147,9 @@ impl Script for ScriptCleanWorld {
                                         let station = game::radio::get_player_station();
                                         let t = format!("Station: {}", station.get_name());
                                         game::ui::notification::send_notification(&t, None, None, false);
+                                    }*/
+                                    match env.warn("Выход", "Вы точно уверены в том, что", "хотите выйти?", FrontendButtons::No, true) {
+                                        o => env.log(format!("pressed: {:?}", o))
                                     }
                                 });
                             },
@@ -154,16 +158,24 @@ impl Script for ScriptCleanWorld {
                                     let player = Player::local();
                                     let ped = player.get_ped();
 
-                                    if game::gps::is_waypoint_active() {
-                                        for blip in game::blip::get_pool() {
-                                            if blip.get_type() == 4 {
-
+                                    if let Some(input) = env.prompt("Укажите модель автомобиля", "neon", 50) {
+                                        let model = Model::new(&input);
+                                        if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
+                                            if !ped.is_in_any_vehicle(false) {
+                                                let veh = Vehicle::new(env, model, ped.get_position(), ped.get_heading(), false, false)
+                                                    .expect("Vehicle creation failed");
+                                                ped.put_into_vehicle(&veh, -1);
+                                                env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position", input))
+                                            } else {
+                                                env.log("~r~You're already in a vehicle");
                                             }
+                                        } else {
+                                            env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
                                         }
                                     }
                                 });
                             },
-                            0x46 /*F*/ if !is_up => {
+                            /*0x46 *//*F*//* if !is_up => {
                                 self.tasks.push(move |env| {
                                     let player = Player::local();
                                     let ped = player.get_ped();
@@ -180,7 +192,7 @@ impl Script for ScriptCleanWorld {
                                         }
                                     }
                                 });
-                            }
+                            }*/
                             _ => {}
                         }
                     },
@@ -320,8 +332,8 @@ impl ScriptFingerPointing {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 15] = [
-    Control::Enter,
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 14] = [
+    //Control::Enter,
     Control::Cover,
     Control::EnterCheatCode,
     Control::FrontendSocialClub,

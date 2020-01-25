@@ -29,6 +29,7 @@ use cgmath::Vector3;
 use crate::game::ped::Ped;
 use crate::game::vehicle::Vehicle;
 use crate::events::{NativeEvent, ScriptEvent, EventPool};
+use crate::game::ui::FrontendButtons;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
@@ -186,7 +187,7 @@ impl ScriptContainer {
         loop {
             self.process_input(&mut script);
             script.frame(ScriptEnv::new(self));
-            self.wait(Duration::from_millis(0))
+            self.wait(0)
         }
         self.script = Some(script);
     }
@@ -208,8 +209,8 @@ impl ScriptContainer {
         }
     }
 
-    pub fn wait(&mut self, duration: Duration) {
-        self.wake_at = Instant::now() + duration;
+    pub fn wait(&mut self, millis: u64) {
+        self.wake_at = Instant::now() + Duration::from_millis(millis);
         self.main_fiber.as_mut().expect("missing main fiber").make_current();
     }
 }
@@ -237,8 +238,8 @@ impl<'a> ScriptEnv<'a> {
         ScriptEnv { container }
     }
 
-    pub fn wait(&mut self, duration: Duration) {
-        self.container.wait(duration)
+    pub fn wait(&mut self, millis: u64) {
+        self.container.wait(millis)
     }
 
     pub fn event(&mut self, event: ScriptEvent) {
@@ -250,10 +251,18 @@ impl<'a> ScriptEnv<'a> {
         self.event(ScriptEvent::ConsoleOutput(line.into()));
     }
 
+    pub fn prompt(&mut self, title: &str, placeholder: &str, max_length: u32) -> Option<String> {
+        crate::game::ui::prompt(self, title, placeholder, max_length)
+    }
+
+    pub fn warn(&mut self, title: &str, line1: &str, line2: &str, buttons: FrontendButtons, background: bool) -> FrontendButtons {
+        crate::game::ui::warn(self, title, line1, line2, buttons, background)
+    }
+
     pub fn wait_for_resource(&mut self, resource: &dyn Resource) {
         resource.request();
         while !resource.is_loaded() {
-            self.wait(Duration::from_millis(0));
+            self.wait(0);
         }
     }
 }

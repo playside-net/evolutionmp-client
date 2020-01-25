@@ -1,7 +1,7 @@
 use std::num::Wrapping;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd)]
 pub struct Hash(pub u32);
 
 pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {

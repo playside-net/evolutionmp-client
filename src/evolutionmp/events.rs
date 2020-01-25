@@ -9,6 +9,41 @@ use std::collections::VecDeque;
 use winapi::_core::cell::RefCell;
 use detour::RawDetour;
 use std::ffi::CStr;
+use winapi::_core::mem::ManuallyDrop;
+
+#[repr(C)]
+struct EventVTable {
+    destructor: extern "C" fn(this: *const Event),
+    m_8: extern "C" fn(this: *const Event),
+    equals: extern "C" fn(this: *const Event, other: *const Event) -> bool,
+    get_id: extern "C" fn(this: *const Event) -> u32,
+    m_20: extern "C" fn(this: *const Event) -> u32,
+    m_28: extern "C" fn(this: *const Event) -> u32,
+    get_arguments: extern "C" fn(this: *const Event, buffer: *mut *const (), len: usize) -> bool,
+    m_38: extern "C" fn(this: *const Event) -> bool,
+    m_40: extern "C" fn(this: *const Event, other: *const Event) -> bool
+}
+
+#[repr(C)]
+pub struct Event {
+    _vtable: ManuallyDrop<Box<EventVTable>>
+}
+
+impl Event {
+    pub fn get_id(&self) -> u32 {
+        (self._vtable.get_id)(self as _)
+    }
+
+    pub fn get_arguments(&self, buffer: *mut *const (), len: usize) -> bool {
+        (self._vtable.get_arguments)(self as _, buffer, len)
+    }
+}
+
+impl std::cmp::PartialEq for Event {
+    fn eq(&self, other: &Self) -> bool {
+        (self._vtable.equals)(self as _, other as _)
+    }
+}
 
 pub enum ScriptEvent {
     ConsoleInput(String),
@@ -171,8 +206,38 @@ macro_rules! native_event {
     };
 }
 
+type CallEvent = extern "C" fn(*mut (), *mut Event) -> *mut ();
+static mut CALL_EVENT: *const () = std::ptr::null();
+
+pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut () {
+    if !event.is_null() {
+        let event = &*event;
+        let mut arg_count = 0;
+        let mut args = [std::ptr::null::<()>(); 48];
+        for i in 0..48 {
+            if event.get_arguments(args.as_mut_ptr(), i * std::mem::size_of::<*const ()>()) {
+                arg_count = i;
+                break;
+            }
+        }
+        crate::info!("Called event id {} ({} args)", event.get_id(), arg_count);
+    }
+    let origin: CallEvent = std::mem::transmute(CALL_EVENT);
+    origin(group, event)
+}
+
 pub unsafe fn init(mem: &MemoryRegion) {
     EVENTS.replace(Some(VecDeque::new()));
+
+    let e =  mem.find("81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8")
+        .next().expect("call_event")
+        .offset(-0x36).get::<()>();
+
+    let d = RawDetour::new(e, call_event as _).expect("detour creation failed");
+    d.enable().expect("detour enabling failed");
+
+    CALL_EVENT = d.trampoline() as _;
+    std::mem::forget(d);
 
     native_event!(0xAF35D0D2583051B0, new_vehicle);
     native_event!(0xD49F9B0955C367DE, new_ped);

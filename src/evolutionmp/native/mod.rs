@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ops::Deref;
 use std::ptr::null_mut;
 use crate::native::pool::Handleable;
+use winapi::_core::marker::PhantomData;
 
 pub mod vehicle;
 pub mod pool;
@@ -67,28 +68,41 @@ pub fn get_handler(hash: u64) -> NativeFunction {
     natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash))
 }
 
-#[repr(C)]
-struct ObfuscatedPtr {
+#[repr(C, packed(1))]
+struct PtrXorU64 {
     prev: u64,
     next: u64
 }
 
-impl ObfuscatedPtr {
-    unsafe fn get(&self) -> u64 {
-        let addr = self as *const Self as *const u32;
-        let mask = (addr as u64 as u32 ^ *addr.wrapping_add(2)) as u64;
-        ((mask << 32) | mask) ^ self.prev
+impl PtrXorU64 {
+    fn get(&self) -> u64 {
+        let addr = self as *const Self as u64;
+        let mask = (addr ^ self.next) as u32 as u64;
+        //crate::info!("xoring:  {:016X} ^ {:016X} = {:08X} ; result: {:016X}", addr, self.next, mask, ((mask << 32) | mask) ^ self.prev);
+        (((mask << 32) | mask) ^ self.prev) as _
     }
 }
 
-#[repr(C)]
+#[repr(C, packed(1))]
+struct PtrXorU32 {
+    prev: u32,
+    next: u32
+}
+
+impl PtrXorU32 {
+    fn get(&self) -> u32 {
+        let addr = self as *const Self as u64;
+        addr as u32 ^ self.next ^ self.prev
+    }
+}
+
+#[repr(C, packed(1))]
 struct NativeGroup {
-    next_group: ObfuscatedPtr,
+    next_group: PtrXorU64,
     handlers: [NativeFunction; 7],
-    len_1: u32,
-    len_2: u32,
+    len: PtrXorU32,
     pad: u32,
-    hashes: [ObfuscatedPtr; 7]
+    hashes: [PtrXorU64; 7]
 }
 
 #[repr(C)]
@@ -101,53 +115,59 @@ struct NativeTable {
 impl NativeTable {
     pub fn find(&self, hash: u64) -> Option<NativeFunction> {
         let group = &self.groups[(hash & 0xFF) as usize];
-        unsafe {
-            group.find(hash)
-        }
-    }
-
-    pub unsafe fn dump(&self, target: &mut Vec<u64>) {
-        for g in self.groups.iter() {
-            let l = g.len();
-            for i in 0..l {
-                target.push(g.get_hash(i));
-            }
-        }
+        group.find(hash)
     }
 }
 
 impl NativeGroup {
-    pub unsafe fn find(&self, hash: u64) -> Option<NativeFunction> {
-        let e = self.len();
-
-        for i in 0..e {
-            let h = self.get_hash(i);
-            if hash == h {
-                let handler = self.handlers[i];
-                return Some(handler);
-            }
-        }
-        let next = self.get_next_group();
-        if next.is_null() {
-            None
-        }  else {
-            (*next).find(hash)
-        }
+    pub fn find(&self, hash: u64) -> Option<NativeFunction> {
+        self.iter().find(|(h, _)| *h == hash).map(|(_, handler)| handler)
     }
 
-    pub unsafe fn get_next_group(&self) -> *mut NativeGroup {
-        self.next_group.get() as *mut u64 as *mut _
+    pub fn get_next_group(&self) -> Option<&NativeGroup> {
+        unsafe { std::mem::transmute(self.next_group.get()) }
     }
 
     pub fn len(&self) -> usize {
-        let addr: *const u32 = &self.len_1 as *const _;
-        (addr as u64 as u32 ^ self.len_1 ^ self.len_2) as usize
+        self.len.get() as usize
     }
 
-    pub unsafe fn get_hash(&self, index: usize) -> u64 {
-        let addr = (&self.pad as *const u32).wrapping_add(1 + 4 * index);
-        let mask = (addr as u64 as u32 ^ *addr.wrapping_add(2)) as u64;
-        ((mask << 32) | mask) ^ *(addr as *const u64)
+    pub fn get_hash(&self, index: usize) -> u64 {
+        self.hashes[index].get()
+    }
+
+    pub fn iter(&self) -> NativeGroupIterator {
+        NativeGroupIterator {
+            group: self,
+            index: 0
+        }
+    }
+}
+
+pub struct NativeGroupIterator<'a> {
+    group: &'a NativeGroup,
+    index: usize
+}
+
+impl<'a> Iterator for NativeGroupIterator<'a> {
+    type Item = (u64, NativeFunction);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let index = self.index;
+        if index < self.group.len() {
+            self.index += 1;
+            let hash = self.group.get_hash(index);
+            let handler = self.group.handlers[index];
+            Some((hash, handler))
+        } else {
+            if let Some(group) = self.group.get_next_group() {
+                self.index = 0;
+                self.group = group;
+                self.next()
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -329,7 +349,8 @@ impl NativeCallContext {
 pub type NativeFunction = extern "C" fn(*mut NativeCallContext);
 
 pub struct Natives {
-    mappings: HashMap<u64, NativeFunction>
+    mappings: HashMap<u64, u64>,
+    handlers: HashMap<u64, NativeFunction>
 }
 
 impl Natives {
@@ -339,18 +360,25 @@ impl Natives {
         let len = crate::mappings::MAPPINGS.len();
 
         let mut mappings = HashMap::with_capacity(len);
+        let mut handlers = HashMap::with_capacity(len);
 
         for [old, new] in crate::mappings::MAPPINGS.iter() {
-            let handler = table.find(*new)
-                .expect(&format!("Missing native handler for hash 0x{:016X} (0x{:016X})", old, new));
-            mappings.insert(*old, handler);
+            mappings.insert(*new, *old);
         }
 
-        Natives { mappings }
+        for group in table.groups.iter() {
+            for (hash, handler) in group.iter() {
+                let key = mappings.get(&hash).cloned().unwrap_or(hash);
+                //crate::info!("Registering native 0x{:016X} (0x{:016X}) -> {:p}", key, hash, handler);
+                handlers.insert(key, handler);
+            }
+        }
+
+        Natives { mappings, handlers }
     }
 
-    pub fn get_handler(&self, native: u64) -> Option<NativeFunction> {
-        self.mappings.get(&native).cloned()
+    pub fn get_handler(&self, hash: u64) -> Option<NativeFunction> {
+        self.handlers.get(&hash).cloned()
     }
 }
 

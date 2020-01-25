@@ -236,8 +236,12 @@ impl MemoryRegion {
         }
     }
 
+    pub unsafe fn get_call(&self) -> *const () {
+        self.add(1).read_ptr(4).get()
+    }
+
     pub unsafe fn detour(&self, replacement: *const ()) -> *const () {
-        let old = self.add(1).read_ptr(4).get();
+        let old = self.get_call();
         let detour = RawDetour::new(old, replacement).expect("detour creation failed");
         detour.enable().expect("detour enabling failed");
         let old = detour.trampoline() as *const _;
