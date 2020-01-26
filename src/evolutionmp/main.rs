@@ -63,6 +63,26 @@ fn get_game_state() -> GameState {
     unsafe { GAME_STATE.load(Ordering::SeqCst).read() }
 }
 
+type RunInitState = extern "C" fn();
+static mut RUN_INIT_STATE: *const () = std::ptr::null();
+
+unsafe extern "C" fn run_init_state() {
+    let origin: RunInitState = std::mem::transmute(RUN_INIT_STATE);
+    origin()
+}
+
+type SkipInit = extern "C" fn(u32) -> bool;
+static mut SKIP_INIT: *const () = std::ptr::null();
+
+unsafe extern "C" fn skip_init(stage: u32) -> bool {
+    let origin: SkipInit = std::mem::transmute(SKIP_INIT);
+    info!("skipping init {}", stage);
+    origin(stage)
+}
+
+static mut INIT_STATE: *mut u32 = std::ptr::null_mut();
+static mut DIGITAL_DISTRIBUTION: bool = false;
+
 #[cfg(target_os = "windows")]
 fn attach(instance: HINSTANCE) {
     unsafe {
@@ -77,10 +97,22 @@ fn attach(instance: HINSTANCE) {
             mem.find_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
                 .expect("movie").nop(13); //Disable movie
 
+            mem.find_await("72 1F E8 ? ? ? ? 8B 0D", 50, 1000)
+                .expect("legals").nop(2);
+
             GAME_STATE.store(mem.find_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
                 .expect("game state")
                 .add(2)
                 .read_ptr(5).get_mut(), Ordering::SeqCst);
+
+            let r = mem.find("32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B")
+                .next().expect("run_init_state");
+            RUN_INIT_STATE = r.add(6).detour(run_init_state as _);
+            //SKIP_INIT = r.offset(-9).detour(skip_init as _);
+            let s = mem.find("BA 07 00 00 00 8D 41 FC 83 F8 01")
+                .next().expect("init state");
+            INIT_STATE = s.add(2).read_ptr(4).get_mut();
+            DIGITAL_DISTRIBUTION = s.offset(-26).get::<u8>().read() == 3;
 
             let input = InputHook::new(&mem).expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");

@@ -199,7 +199,8 @@ impl Script for ScriptCleanWorld {
             ScriptEvent::ConsoleInput(input) => {
                 let input = input.clone();
                 self.tasks.push(move |env| {
-                    let player = Player::local();
+                    env.log(game::locale::get_translation(&input));
+                    /*let player = Player::local();
                     let ped = player.get_ped();
                     let model = Model::new(&input);
                     if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
@@ -213,7 +214,7 @@ impl Script for ScriptCleanWorld {
                         }
                     } else {
                         env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
-                    }
+                    }*/
                 });
             }
             _ => {}

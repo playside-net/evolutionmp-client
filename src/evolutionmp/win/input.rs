@@ -116,6 +116,7 @@ pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lp
             let scan_code = ((lparam >> 16) & 0xFF) as u8;
             let vk = MapVirtualKeyExW(scan_code as u32, MAPVK_VSC_TO_VK, layout);
             let mut key_state = [0u8; 256];
+            GetKeyboardState(key_state.as_mut_ptr());
             let mut buf = [0u16; 2];
             let len = ToUnicodeEx(vk, scan_code as u32, key_state.as_mut_ptr(), buf.as_mut_ptr(), 2, 0, layout);
             let chars = WideCStr::from_ptr_with_nul(buf.as_ptr(), len as usize).to_string().expect("chars conversation failed");

@@ -56,11 +56,15 @@ impl Scaleform {
             invoke!((), 0x1CE592FDC749D6F5, self.handle, pos, rot, 2.0, 2.0, 1.0, scale, 2)
         }
     }
+
+    fn mark_unused(&mut self) {
+        invoke!((), 0x1D132D614DD86811, &mut self.handle);
+    }
 }
 
 impl std::ops::Drop for Scaleform {
     fn drop(&mut self) {
-        invoke!((), 0x1D132D614DD86811, &mut self.handle);
+        self.mark_unused()
     }
 }
 
