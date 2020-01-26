@@ -23,6 +23,7 @@ use winapi::ctypes::c_void;
 use std::cell::{Cell, RefCell};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicPtr};
+use std::sync::atomic::Ordering;
 use crate::game::streaming::Resource;
 use crate::game::player::Player;
 use cgmath::Vector3;
@@ -32,8 +33,6 @@ use crate::events::{NativeEvent, ScriptEvent, EventPool};
 use crate::game::ui::FrontendButtons;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
-
-pub(crate) static CONSOLE_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 pub struct Runtime {
     user_input: InputHook,
@@ -89,8 +88,8 @@ static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe:
 
 pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     let mut runtime = Runtime::new(input);
-    info!("Initializing multiplayer");
-    crate::multiplayer::init(&mut runtime);
+    info!("Initializing scripts");
+    crate::scripts::init(&mut runtime);
 
     RUNTIME.replace(Some(runtime));
     HOOKS.replace(Some(HashMap::new()));
@@ -98,6 +97,7 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
     info!("Hooking natives");
 
     hook_native(0xFC8202EFC642E6F2, |context| {
+        crate::game::ui::MOUSE_VISIBLE.store(false, Ordering::SeqCst);
         if let Ok(mut runtime) = RUNTIME.try_borrow_mut() {
             if let Some(runtime) = runtime.as_mut() {
                 runtime.frame();
@@ -110,6 +110,10 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
         let hash = label.joaat();
         crate::info!("Called GET_LABEL_TEXT for {} (0x{:08X})", label, hash.0);
         call_native_trampoline(0x7B5280EBA9840C72, context);
+    });
+    hook_native(0xAAE7CE1D63167423, |context| {
+        crate::game::ui::MOUSE_VISIBLE.store(true, Ordering::SeqCst);
+        call_native_trampoline(0xAAE7CE1D63167423, context)
     });
 
     crate::events::init(mem);
@@ -230,9 +234,9 @@ impl std::ops::Drop for ScriptContainer {
 }
 
 pub trait Script {
-    fn prepare(&mut self, env: ScriptEnv) {}
-    fn frame(&mut self, env: ScriptEnv) {}
-    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool { false }
+    fn prepare(&mut self, env: ScriptEnv);
+    fn frame(&mut self, env: ScriptEnv);
+    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool;
 }
 
 pub struct ScriptEnv<'a> {

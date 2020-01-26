@@ -96,6 +96,10 @@ impl Ped {
         invoke!(f32, 0x2720AAA75001E094, self.handle)
     }
 
+    pub fn get_seat_is_trying_to_enter(&self) -> i32 {
+        invoke!(i32, 0x6F4C85ACD641BCD2, self.handle)
+    }
+
     pub fn get_closest_vehicle<F>(&self, max_distance: f32, filter: F) -> Option<Vehicle>
         where F: Fn(&Vehicle) -> bool {
 
@@ -168,6 +172,14 @@ impl<'a> PedTasks<'a> {
         }
     }
 
+    pub fn is_active(&self, task: u32) -> bool {
+        invoke!(bool, 0xB0760331C7AA4155, self.ped.handle, task)
+    }
+
+    pub fn clear(&self) {
+        invoke!((), 0xE1EF3C1216AFF2CD, self.ped.handle)
+    }
+
     pub fn clear_immediately(&self) {
         invoke!((), 0xAAA34F8A7CB32098, self.ped.handle)
     }
@@ -176,8 +188,12 @@ impl<'a> PedTasks<'a> {
         invoke!((), 0x176CECF6F920D707, self.ped.handle)
     }
 
-    pub fn enter_vehicle(&self, vehicle: Vehicle, timeout: u32, seat: i32, speed: f32, flag: i32) {
+    pub fn enter_vehicle(&self, vehicle: &Vehicle, timeout: u32, seat: i32, speed: f32, flag: u32) {
         invoke!((), 0xC20E50AA46D09CA8, self.ped.handle, vehicle.get_handle(), timeout, seat, speed, flag, 0u32)
+    }
+
+    pub fn leave_vehicle(&self, vehicle: &Vehicle, flag: u32) {
+        invoke!((), 0xD3DBCE61A490BE02, self.ped.handle, vehicle.get_handle(), flag)
     }
 }
 

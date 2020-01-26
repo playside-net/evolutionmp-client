@@ -4,20 +4,14 @@ use cgmath::{Vector2, Vector3};
 use crate::native::pool::Handleable;
 
 pub struct Scaleform {
-    handle: Handle,
-    color: Rgba
+    handle: Handle
 }
 
+crate::impl_handle!(Scaleform);
+
 impl Scaleform {
-    pub fn new(id: &str, color: Rgba) -> Option<Scaleform> {
-        let handle = invoke!(Handle, 0x11FE353CF9733E6F, id);
-        if handle > 0 {
-            Some(Scaleform {
-                handle, color
-            })
-        } else {
-            None
-        }
+    pub fn new(id: &str) -> Option<Scaleform> {
+        invoke!(Option<Scaleform>, 0x11FE353CF9733E6F, id)
     }
 
     pub fn is_valid(&self) -> bool {
@@ -41,12 +35,12 @@ impl Scaleform {
         R::read(self.handle)
     }
 
-    pub fn render(&self, pos: Vector2<f32>, size: Vector2<f32>) {
-        invoke!((), 0x54972ADAF0294A93, self.handle, pos, size, self.color, 0u32)
+    pub fn render(&self, pos: Vector2<f32>, size: Vector2<f32>, color: Rgba) {
+        invoke!((), 0x54972ADAF0294A93, self.handle, pos, size, color, 0u32)
     }
 
-    pub fn render_fullscreen(&self) {
-        invoke!((), 0x54972ADAF0294A93, self.handle, self.color, 0u32)
+    pub fn render_fullscreen(&self, color: Rgba) {
+        invoke!((), 0x54972ADAF0294A93, self.handle, color, 0u32)
     }
 
     pub fn render_volumetric(&self, pos: Vector3<f32>, rot: Vector3<f32>, scale: Vector3<f32>, additive: bool) {
@@ -98,14 +92,4 @@ impl ScaleformResult for bool {
 
 fn end_method_returnable() -> Handle {
     invoke!(Handle, 0xC50AA39A577AF886)
-}
-
-impl Handleable for Scaleform {
-    fn from_handle(handle: u32) -> Option<Self> where Self: Sized {
-        unimplemented!()
-    }
-
-    fn get_handle(&self) -> u32 {
-        unimplemented!()
-    }
 }

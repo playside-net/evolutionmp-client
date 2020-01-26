@@ -1,60 +1,37 @@
-use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, TaskQueue};
-use crate::pattern::MemoryRegion;
-use crate::GameState;
-use crate::{invoke, game, native};
-use crate::game::entity::Entity;
-use crate::game::stats::Stat;
-use crate::game::ped::Ped;
+use crate::game;
+use crate::runtime::{TaskQueue, ScriptEnv, Script};
+use std::time::Instant;
+use cgmath::Vector3;
 use crate::game::player::Player;
-use crate::game::vehicle::Vehicle;
-use crate::game::{streaming, gameplay, dlc, script, clock, Rgb, Rgba};
-use crate::win::input::{KeyboardEvent, InputEvent};
-use crate::info;
-use std::time::{Duration, Instant};
-use game::controls::{Control, Group as ControlGroup};
-use game::ui::{CursorSprite, LoadingPrompt};
-use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
-use cgmath::{Vector3, Vector2, Matrix4, Transform};
-use std::collections::VecDeque;
-use crate::game::streaming::{Model, AnimDict, Resource};
-use crate::game::camera::Camera;
-use winapi::_core::sync::atomic::Ordering;
+use crate::game::entity::Entity;
 use crate::events::ScriptEvent;
-use crate::game::blip::{Blip, BlipName};
-use crate::native::pool::{Pool, Handleable};
-use crate::game::ui::FrontendButtons;
-use crate::multiplayer::console::ScriptConsole;
+use std::collections::VecDeque;
+use crate::win::input::{InputEvent, KeyboardEvent};
+use crate::game::controls::{Control, Group as ControlGroup};
+use crate::game::streaming::Model;
+use crate::game::vehicle::Vehicle;
 
-pub mod console;
-//pub mod network;
-
-pub fn init(runtime: &mut Runtime) {
-    info!("Registering scripts");
-    //network::init(runtime);
-
-    runtime.register_script("console", ScriptConsole::new());
-    runtime.register_script("clean_world", ScriptCleanWorld {
-        tasks: TaskQueue::new(),
-        last_cleanup: Instant::now()
-    });
-    runtime.register_script("finger_pointing", ScriptFingerPointing {
-        active: false,
-        camera: None
-    });
-}
+static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
 
 pub struct ScriptCleanWorld {
     tasks: TaskQueue,
     last_cleanup: Instant
 }
 
-static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
+impl ScriptCleanWorld {
+    pub fn new() -> ScriptCleanWorld {
+        ScriptCleanWorld {
+            tasks: TaskQueue::new(),
+            last_cleanup: Instant::now()
+        }
+    }
+}
 
 impl Script for ScriptCleanWorld {
     fn prepare(&mut self, mut env: ScriptEnv) {
         let pos = Vector3::new(0.0, 0.0, 73.5);
 
-        streaming::load_scene(pos);
+        game::streaming::load_scene(pos);
         game::misc::set_stunt_jumps_can_trigger(false);
 
         let player = Player::local();
@@ -63,13 +40,13 @@ impl Script for ScriptCleanWorld {
         ped.set_position_no_offset(pos, Vector3::new(false, false, false));
         ped.get_tasks().clear_immediately();
 
-        gameplay::set_freemode_map_behavior(true);
+        game::gameplay::set_freemode_map_behavior(true);
         //game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
-        dlc::load_mp_maps();
-        script::shutdown_loading_screen();
+        game::dlc::load_mp_maps();
+        game::script::shutdown_loading_screen();
         game::ui::hide_loading_prompt();
 
-        clock::pause(true);
+        game::clock::pause(true);
 
         self.terminate_script("selector", true);
         self.terminate_script("replay_controller", true);
@@ -88,7 +65,7 @@ impl Script for ScriptCleanWorld {
         self.tasks.process(&mut env);
 
         self.disable_controls();
-        streaming::stop_player_switch();
+        game::streaming::stop_player_switch();
 
         let player = Player::local();
         let ped = player.get_ped();
@@ -119,106 +96,9 @@ impl Script for ScriptCleanWorld {
         if game::misc::is_cutscene_active() {
             game::misc::cancel_cutscene();
         }
-
-        /*if let Some(vehicles) = native::pool::get_vehicles() {
-            let len = vehicles.len();
-            let capacity = vehicles.capacity();
-            game::ui::show_loading_prompt(LoadingPrompt::LoadingLeft3, &format!("Vehicles: {}/{}", len, capacity));
-        }
-        if let Some(veh) = ped.get_using_vehicle() {
-            let color = veh.get_colors();
-
-        } else {
-            //game::ui::hide_loading_prompt();
-        }*/
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
-        match event {
-            ScriptEvent::UserInput(event) => {
-                match event {
-                    InputEvent::Keyboard(KeyboardEvent::Key { key, is_up, .. }) => {
-                        match *key {
-                            VK_NUMPAD0 if !is_up => {
-                                self.tasks.push(move |env| {
-                                    let player = Player::local();
-                                    let ped = player.get_ped();
-
-                                    if let Some(veh) = ped.get_in_vehicle(false) {
-                                        veh.repair();
-                                        //game::audio::play_sound_frontend(-1, "CHECKPOINT_PERFECT", "HUD_MINI_GAME_SOUNDSET", true);
-                                    }
-                                });
-                            },
-                            VK_NUMPAD2 if !is_up => {
-                                self.tasks.push(move |env| {
-                                    let player = Player::local();
-                                    let ped = player.get_ped();
-
-                                    if let Some(input) = env.prompt("Укажите модель автомобиля", "neon", 50) {
-                                        let model = Model::new(&input);
-                                        if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
-                                            if !ped.is_in_any_vehicle(false) {
-                                                let veh = Vehicle::new(env, model, ped.get_position(), ped.get_heading(), false, false)
-                                                    .expect("Vehicle creation failed");
-                                                ped.put_into_vehicle(&veh, -1);
-                                                env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position", input))
-                                            } else {
-                                                env.log("~r~You're already in a vehicle");
-                                            }
-                                        } else {
-                                            env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
-                                        }
-                                    }
-                                });
-                            },
-                            /*0x46 *//*F*//* if !is_up => {
-                                self.tasks.push(move |env| {
-                                    let player = Player::local();
-                                    let ped = player.get_ped();
-                                    if !crate::runtime::CONSOLE_VISIBLE.load(Ordering::SeqCst) && ped.exists() {
-                                        if !ped.is_in_any_vehicle(true) {
-                                            if let Some(vehicle) = ped.get_closest_vehicle(10.0) {
-                                                if vehicle.is_seat_free(-1) {
-                                                    ped.get_tasks().enter_vehicle(vehicle, 5000, -1, 1.0, 1);
-                                                }
-                                            }
-                                        } else if ped.is_in_any_vehicle(false) {
-                                            let vehicle = ped.get_using_vehicle().unwrap();
-
-                                        }
-                                    }
-                                });
-                            }*/
-                            _ => {}
-                        }
-                    },
-                    _ => {}
-                }
-            },
-            ScriptEvent::ConsoleInput(input) => {
-                let input = input.clone();
-                self.tasks.push(move |env| {
-                    env.log(game::locale::get_translation(&input));
-                    /*let player = Player::local();
-                    let ped = player.get_ped();
-                    let model = Model::new(&input);
-                    if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
-                        if !ped.is_in_any_vehicle(false) {
-                            let veh = Vehicle::new(env, model, ped.get_position(), ped.get_heading(), false, false)
-                                .expect("Vehicle creation failed");
-                            ped.put_into_vehicle(&veh, -1);
-                            env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position", input))
-                        } else {
-                            env.log("~r~You're already in a vehicle");
-                        }
-                    } else {
-                        env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
-                    }*/
-                });
-            }
-            _ => {}
-        }
         false
     }
 }
@@ -281,57 +161,7 @@ impl ScriptCleanWorld {
     }
 }
 
-pub struct ScriptFingerPointing {
-    active: bool,
-    camera: Option<Camera>
-}
-
-impl Script for ScriptFingerPointing {
-    fn prepare(&mut self, mut env: ScriptEnv) {
-        self.camera = Some(Camera::new("gameplay", false).expect("Camera creation failed"));
-    }
-
-    fn frame(&mut self, mut env: ScriptEnv) {
-        let player = Player::local().get_ped();
-        let tasks = player.get_tasks().get_network();
-
-        tasks.is_move_active();
-
-        let pitch = (self.get_relative_pitch().min(42.0).max(-70.0) + 70.0) / 112.0;
-        let heading = (game::camera::get_gameplay_relative_heading().min(180.0).max(-180.0) + 180.0) / 360.0;
-
-        tasks.set_move_signal("Pitch", pitch);
-        tasks.set_move_signal("Heading", heading * -1.0 + 1.0);
-        tasks.set_move_signal("isBlocked", false);
-        use crate::invoke;
-        let first_person = invoke!(u32, 0xEE778F8C7E1142E2, invoke!(u32, 0x19CAFA3C87F7C2FF)) == 4;
-        tasks.set_move_signal("isFirstPerson", first_person);
-
-        if game::controls::is_disabled_pressed(ControlGroup::Move, Control::Cover) && !player.is_in_any_vehicle(false) {
-            if !self.active {
-                self.active = true;
-                let dict = AnimDict::new("anim@mp_point");
-                env.wait_for_resource(&dict);
-                player.set_config_flag(36, true);
-                tasks.do_move("task_mp_pointing", 0.5, false, &dict, 24);
-            }
-        } else if self.active {
-            player.get_tasks().get_network().request_move_state_transition("Stop");
-            player.get_tasks().clear_secondary();
-            self.active = false;
-        }
-    }
-}
-
-impl ScriptFingerPointing {
-    fn get_relative_pitch(&self) -> f32 {
-        let camera_rotation = self.camera.as_ref().expect("missing gameplay camera").get_rotation(2);
-        camera_rotation.x - Player::local().get_ped().get_pitch()
-    }
-}
-
 pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
-    //Control::Enter,
     Control::Cover,
     Control::EnterCheatCode,
     Control::FrontendSocialClub,

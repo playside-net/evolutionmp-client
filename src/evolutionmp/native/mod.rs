@@ -377,22 +377,13 @@ impl Natives {
     }
 }
 
-pub fn safe_invoke(hash: u64, handler: NativeFunction, context: &mut NativeCallContext) {
-    unsafe {
-        let mut payload = [null_mut::<u8>(); 2];
-        if core::intrinsics::r#try(std::mem::transmute(handler), context as *mut _ as *mut _, &mut payload as *mut _ as *mut _) != 0 {
-            panic!("Native function invocation failed: 0x{:16X} at {:p} ({:p})", hash, payload[0], payload[1]);
-        }
-    }
-}
-
 #[macro_export]
 macro_rules! invoke {
     ($ret: ty, $hash:literal) => {{
         let hash: u64 = $hash;
         let handler = $crate::native::get_handler(hash);
         let mut context = $crate::native::NativeCallContext::new();
-        $crate::native::safe_invoke(hash, handler, &mut context);
+        handler(&mut context);
         context.get_result::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
@@ -400,7 +391,7 @@ macro_rules! invoke {
         let handler = $crate::native::get_handler(hash);
         let mut context = $crate::native::NativeCallContext::new();
         $(context.push_arg($arg);)*
-        $crate::native::safe_invoke(hash, handler, &mut context);
+        handler(&mut context);
         context.get_result::<$ret>()
     }};
 }

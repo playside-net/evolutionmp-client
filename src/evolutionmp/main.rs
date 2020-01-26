@@ -44,7 +44,7 @@ pub mod process;
 #[cfg(target_os = "windows")]
 pub mod registry;
 #[cfg(target_os = "windows")]
-pub mod multiplayer;
+pub mod scripts;
 
 //pub mod network;
 pub mod hash;
@@ -113,6 +113,7 @@ fn attach(instance: HINSTANCE) {
                 .next().expect("init state");
             INIT_STATE = s.add(2).read_ptr(4).get_mut();
             DIGITAL_DISTRIBUTION = s.offset(-26).get::<u8>().read() == 3;
+            info!("Digital distribution: {}", DIGITAL_DISTRIBUTION);
 
             let input = InputHook::new(&mem).expect("Input hooking failed");
             info!("Input hooked. Waiting for game being loaded...");

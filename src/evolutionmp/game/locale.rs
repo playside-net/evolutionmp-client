@@ -23,13 +23,7 @@ static mut PAUSE_MENU_TRIGGER: *const () = std::ptr::null();
 
 pub unsafe extern "C" fn pause_menu_trigger(trigger: u32, arg2: u32, arg3: u32) {
     let origin: PauseMenuTrigger = std::mem::transmute(PAUSE_MENU_TRIGGER);
-    match trigger {
-        1 | 10 | 5 | 42 => {}, //Ignore useless tabs
-        other => {
-            crate::info!("Pause menu trigger: {}, {}, {}", trigger, arg2, arg3);
-            origin(trigger, arg2, arg3);
-        }
-    }
+    origin(trigger, arg2, arg3)
 }
 
 pub unsafe fn init(mem: &MemoryRegion) {

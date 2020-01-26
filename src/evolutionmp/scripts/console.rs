@@ -12,6 +12,8 @@ use cgmath::Vector2;
 use std::time::Duration;
 use std::ffi::CString;
 use widestring::WideCStr;
+use winapi::_core::sync::atomic::AtomicBool;
+use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub const FONT: Font = Font::ChaletLondon;
 pub const CONSOLE_WIDTH: f32 = BASE_WIDTH;
@@ -25,6 +27,8 @@ pub const OUTPUT_COLOR: Rgba = Rgba::WHITE;
 pub const PREFIX_COLOR: Rgba = Rgba::new(52, 152, 219, 255);
 pub const BACKGROUND_COLOR: Rgba = Rgba::new(0, 0, 0, 127);
 pub const ALT_BACKGROUND_COLOR: Rgba = Rgba::new(52, 73, 94, 127);
+
+static OPEN: AtomicBool = AtomicBool::new(false);
 
 pub struct ScriptConsole {
     cursor_pos: usize,
@@ -42,7 +46,7 @@ impl Script for ScriptConsole {
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
-        if self.is_open() {
+        if is_open() {
             self.lock_controls();
             self.draw();
         } else if self.get_last_closed() > Instant::now() {
@@ -55,7 +59,7 @@ impl Script for ScriptConsole {
             ScriptEvent::UserInput(event) => {
                 match event {
                     InputEvent::Keyboard(event) => {
-                        let open = self.is_open();
+                        let open = is_open();
 
                         match event {
                             KeyboardEvent::Key { key, alt, shift, control, is_up, .. } if *is_up => {
@@ -124,15 +128,27 @@ impl Script for ScriptConsole {
                                         }
                                     },
                                     VK_KEY_C if open && *control => {
-
+                                        let mut context = ClipboardContext::new()
+                                            .expect("clipboard context creation failed");
+                                        context.set_contents(self.get_input().clone())
+                                            .expect("clipboard text update failed");
                                     },
                                     VK_KEY_X if open && *control => {
-
+                                        let mut context = ClipboardContext::new()
+                                            .expect("clipboard context creation failed");
+                                        let mut input = String::new();
+                                        std::mem::swap(self.get_input_mut(), &mut input);
+                                        context.set_contents(input)
+                                            .expect("clipboard text update failed");
                                     },
                                     VK_KEY_V if open && *control => {
-
+                                        let mut context = ClipboardContext::new()
+                                            .expect("clipboard context creation failed");
+                                        let mut input = context.get_contents()
+                                            .expect("clipboard text getting failed");
+                                        std::mem::swap(self.get_input_mut(), &mut input);
                                     },
-                                    VK_KEY_T if !open => {
+                                    VK_KEY_T if !open && !crate::game::ui::is_cursor_active_this_frame() => {
                                         self.set_open(true);
                                     }
                                     _ => {}
@@ -157,12 +173,6 @@ impl Script for ScriptConsole {
             },
             ScriptEvent::NativeEvent(event) => {
                 self.line_history.push(format!("Native event received: {:?}", event));
-                match event {
-                    NativeEvent::NewPed { model, pos, heading, is_network, this_script_check } => {
-                        crate::game::gps::set_waypoint(pos.truncate());
-                    },
-                    _ => {}
-                }
                 return true;
             },
             ScriptEvent::ConsoleOutput(line) => {
@@ -173,6 +183,11 @@ impl Script for ScriptConsole {
         }
         false
     }
+}
+
+pub fn is_open() -> bool {
+    use std::sync::atomic::Ordering;
+    OPEN.load(Ordering::SeqCst)
 }
 
 impl ScriptConsole {
@@ -188,14 +203,9 @@ impl ScriptConsole {
         }
     }
 
-    fn is_open(&self) -> bool {
-        use std::sync::atomic::Ordering;
-        crate::runtime::CONSOLE_VISIBLE.load(Ordering::SeqCst)
-    }
-
     fn set_open(&mut self, open: bool) {
         use std::sync::atomic::Ordering;
-        crate::runtime::CONSOLE_VISIBLE.store(open, Ordering::SeqCst);
+        OPEN.store(open, Ordering::SeqCst);
         if !open {
             self.last_closed = Instant::now() + Duration::from_millis(200);
             self.lock_controls();
