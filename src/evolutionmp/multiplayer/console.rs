@@ -26,18 +26,6 @@ pub const PREFIX_COLOR: Rgba = Rgba::new(52, 152, 219, 255);
 pub const BACKGROUND_COLOR: Rgba = Rgba::new(0, 0, 0, 127);
 pub const ALT_BACKGROUND_COLOR: Rgba = Rgba::new(52, 73, 94, 127);
 
-pub fn init(runtime: &mut Runtime) {
-    runtime.register_script("console", ScriptConsole {
-        cursor_pos: 0,
-        command_pos: 0,
-        current_page: 1,
-        input: String::new(),
-        line_history: Vec::new(),
-        command_history: Vec::new(),
-        last_closed: Instant::now()
-    });
-}
-
 pub struct ScriptConsole {
     cursor_pos: usize,
     command_pos: usize,
@@ -188,6 +176,18 @@ impl Script for ScriptConsole {
 }
 
 impl ScriptConsole {
+    pub fn new() -> ScriptConsole {
+        ScriptConsole {
+            cursor_pos: 0,
+            command_pos: 0,
+            current_page: 1,
+            input: String::new(),
+            line_history: Vec::new(),
+            command_history: Vec::new(),
+            last_closed: Instant::now()
+        }
+    }
+
     fn is_open(&self) -> bool {
         use std::sync::atomic::Ordering;
         crate::runtime::CONSOLE_VISIBLE.load(Ordering::SeqCst)

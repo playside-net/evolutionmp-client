@@ -15,7 +15,22 @@ static mut GET_WARN_RESULT: *const () = std::ptr::null();
 
 pub unsafe fn init(mem: &MemoryRegion) {
     GET_WARN_RESULT = mem.find("33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84")
-        .next().expect("get_warn_result").add(4).get_call()
+        .next().expect("get_warn_result").add(4).get_call();
+
+    let no_slowmo = mem.find("38 51 64 74 19")
+        .next().expect("no_slowmo");
+
+    no_slowmo.add(26).read_ptr(4).write(5, |m| { //No vignette
+        m.write(0xC3); //RET
+        m.add(1).write_bytes(0x90, 4); //NOP
+    });
+
+    no_slowmo.add(8).nop(5); //Vignetting call patch
+
+    no_slowmo.add(34).write(2 ,|m| { //Timescale override patch
+        m.write(0x31); //XOR_32_64
+        m.add(1).write(0xD2);
+    });
 }
 
 pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {

@@ -355,22 +355,16 @@ pub struct Natives {
 
 impl Natives {
     pub unsafe fn new(global_region: &MemoryRegion) -> Natives {
-        let table = global_region.find_await("76 32 48 8B 53 40", 50, 1000)
-            .expect("native table").add(9).read_ptr(4).get_box::<NativeTable>();
-        let len = crate::mappings::MAPPINGS.len();
+        let table = global_region.find("76 32 48 8B 53 40")
+            .next().expect("native table")
+            .add(9).read_ptr(4).get_box::<NativeTable>();
 
-        let mut mappings = HashMap::with_capacity(len);
-        let mut handlers = HashMap::with_capacity(len);
-
-        for [old, new] in crate::mappings::MAPPINGS.iter() {
-            mappings.insert(*new, *old);
-        }
+        let mut mappings = crate::mappings::MAPPINGS.iter().cloned().collect::<HashMap<_, _>>();
+        let mut handlers = HashMap::with_capacity(mappings.len());
 
         for group in table.groups.iter() {
             for (hash, handler) in group.iter() {
-                let key = mappings.get(&hash).cloned().unwrap_or(hash);
-                //crate::info!("Registering native 0x{:016X} (0x{:016X}) -> {:p}", key, hash, handler);
-                handlers.insert(key, handler);
+                handlers.insert(hash, handler);
             }
         }
 
@@ -378,6 +372,7 @@ impl Natives {
     }
 
     pub fn get_handler(&self, hash: u64) -> Option<NativeFunction> {
+        let hash = self.mappings.get(&hash).cloned().unwrap_or(hash);
         self.handlers.get(&hash).cloned()
     }
 }

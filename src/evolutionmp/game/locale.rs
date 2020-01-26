@@ -48,6 +48,8 @@ pub unsafe fn init(mem: &MemoryRegion) {
 
 use std::sync::Mutex;
 use std::collections::HashMap;
+use backtrace::SymbolName;
+use std::path::PathBuf;
 
 lazy_static! {
     static ref TRANSLATION_TABLE: Mutex<HashMap<Hash, CString>> = Mutex::new(HashMap::new());

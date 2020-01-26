@@ -1,7 +1,7 @@
 use super::Handle;
 use crate::invoke;
 use crate::game::entity::Entity;
-use crate::hash::Hashable;
+use crate::hash::{Hashable, Hash};
 use crate::game;
 use crate::game::ped::Ped;
 use crate::game::streaming::Model;
@@ -13,12 +13,13 @@ use std::time::Duration;
 use std::sync::atomic::Ordering;
 use cgmath::Vector3;
 use winapi::_core::mem::ManuallyDrop;
+use crate::game::worldprobe::ProbeEntity;
 
 pub fn get_pool() -> ManuallyDrop<Box<Box<VehiclePool>>> {
     crate::native::pool::get_vehicles().expect("vehicle pool not initialized")
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Vehicle {
     handle: Handle
 }
@@ -148,6 +149,54 @@ impl Vehicle {
             vehicle: self
         }
     }
+
+    pub fn is_model<H>(&self, model: H) -> bool where H: Hashable {
+        invoke!(bool, 0x423E8DE37D934D89, self.handle, model.joaat())
+    }
+
+    pub fn is_any_model<H>(&self, models: &[H]) -> bool where H: Hashable {
+        models.iter().any(|m|self.is_model(m.joaat()))
+    }
+
+    pub fn copy_damage_to(&self, target: &Vehicle) {
+        invoke!((), 0xE44A982368A4AF23, self.handle, target.get_handle())
+    }
+
+    pub fn has_door(&self, door: u32) -> bool {
+        invoke!(bool, 0x645F4B6E8499F632, self.handle, door)
+    }
+
+    pub fn has_roof(&self) -> bool {
+        invoke!(bool, 0x8AC862B0B32C5B80, self.handle)
+    }
+
+    pub fn has_weapon(&self) -> bool {
+        invoke!(bool, 0x25ECB9F8017D98E0, self.handle)
+    }
+
+    pub fn get_last_ped_in_seat(&self, seat: i32) -> Option<Ped> {
+        invoke!(Option<Ped>, 0x83F969AA1EE2A664, self.handle, seat)
+    }
+
+    pub fn as_cargobob(&self) -> Option<VehicleCargobob> {
+        if self.is_any_model(&["cargobob", "cargobob1", "cargobob2", "cargobob3"]) {
+            Some(VehicleCargobob {
+                vehicle: self
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn as_towtruck(&self) -> Option<VehicleTowtruck> {
+        if self.is_any_model(&["towtruck", "towtruck2"]) {
+            Some(VehicleTowtruck {
+                vehicle: self
+            })
+        } else {
+            None
+        }
+    }
 }
 
 pub struct VehicleColors {
@@ -183,5 +232,223 @@ impl<'a> VehicleRadio<'a> {
 
     pub fn set_station(&self, station: &RadioStation) {
         invoke!((), 0x1B9C0099CB942AC6, self.vehicle.handle, station.get_name())
+    }
+}
+
+pub struct VehicleModel {
+    hash: Hash
+}
+
+impl VehicleModel {
+    pub fn from_vehicle(veh: &Vehicle) -> VehicleModel {
+        VehicleModel {
+            hash: veh.get_model()
+        }
+    }
+
+    pub fn get_display_name(&self) -> &str {
+        invoke!(&str, 0xB215AAC32D25D019, self.hash)
+    }
+
+    pub fn get_acceleration(&self) -> f32 {
+        invoke!(f32, 0x8C044C5C84505B6A, self.hash)
+    }
+
+    pub fn get_down_force(&self) -> f32 {
+        invoke!(f32, 0x53409B5163D5B846, self.hash)
+    }
+
+    pub fn get_estimated_max_speed(&self) -> f32 {
+        invoke!(f32, 0xF417C2502FFFED43, self.hash)
+    }
+
+    pub fn get_max_braking(&self) -> f32 {
+        invoke!(f32, 0xDC53FD41B4ED944C, self.hash)
+    }
+
+    pub fn get_max_braking_max_mods(&self) -> f32 {
+        invoke!(f32, 0xBFBA3BA79CFF7EBF, self.hash)
+    }
+
+    pub fn get_max_knots(&self) -> f32 {
+        invoke!(f32, 0xC6AD107DDC9054CC, self.hash)
+    }
+
+    pub fn get_max_traction(&self) -> f32 {
+        invoke!(f32, 0x539DE94D44FDFD0D, self.hash)
+    }
+
+    pub fn get_move_resistance(&self) -> f32 {
+        invoke!(f32, 0x5AA3F878A178C4FC, self.hash)
+    }
+
+    pub fn get_seats(&self) -> u32 {
+        invoke!(u32, 0x2AD93716F184EDA4, self.hash)
+    }
+
+    pub fn is_bicycle(&self) -> bool {
+        invoke!(bool, 0xBF94DD42F63BDED2, self.hash)
+    }
+
+    pub fn is_bike(&self) -> bool {
+        invoke!(bool, 0xB50C0B0CEDC6CE84, self.hash)
+    }
+
+    pub fn is_boat(&self) -> bool {
+        invoke!(bool, 0x45A9187928F4B9E3, self.hash)
+    }
+
+    pub fn is_car(&self) -> bool {
+        invoke!(bool, 0x7F6DB52EEFC96DF8, self.hash)
+    }
+
+    pub fn is_helicopter(&self) -> bool {
+        invoke!(bool, 0xDCE4334788AF94EA, self.hash)
+    }
+
+    pub fn is_jet_ski(&self) -> bool {
+        invoke!(bool, 0x9537097412CF75FE, self.hash)
+    }
+
+    pub fn is_plane(&self) -> bool {
+        invoke!(bool, 0xA0948AB42D7BA0DE, self.hash)
+    }
+
+    pub fn is_quad_bike(&self) -> bool {
+        invoke!(bool, 0x39DAC362EE65FA28, self.hash)
+    }
+
+    pub fn is_train(&self) -> bool {
+        invoke!(bool, 0xAB935175B22E822B, self.hash)
+    }
+
+    pub fn is_amphibious_car(&self) -> bool {
+        invoke!(bool, 0x633F6F44A537EBB6, self.hash)
+    }
+
+    pub fn is_amphibious_quad_bike(&self) -> bool {
+        invoke!(bool, 0xA1A9FC1C76A6730D, self.hash)
+    }
+}
+
+impl Hashable for VehicleModel {
+    fn joaat(&self) -> Hash {
+        self.hash
+    }
+}
+
+pub struct VehicleCargobob<'a> {
+    vehicle: &'a Vehicle
+}
+
+impl<'a> VehicleCargobob<'a> {
+    pub fn attach_entity(&self, entity: &dyn Entity, p2: i32, hook_offset: Vector3<f32>) {
+        invoke!((), 0xA1DD82F3CCF9A01E, self.vehicle.handle, entity.get_handle(), p2, hook_offset)
+    }
+
+    pub fn get_attached_entity(&self) -> Option<ProbeEntity> {
+        invoke!(Option<ProbeEntity>, 0x99093F60746708CA, self.vehicle.handle)
+    }
+
+    pub fn attach_vehicle(&self, vehicle: &Vehicle, p2: i32, hook_offset: Vector3<f32>) {
+        invoke!((), 0x4127F1D84E347769, self.vehicle.handle, vehicle.get_handle(), p2, hook_offset)
+    }
+
+    pub fn get_attached_vehicle(&self) -> Option<Vehicle> {
+        invoke!(Option<Vehicle>, 0x873B82D42AC2B9E5, self.vehicle.handle)
+    }
+
+    pub fn is_vehicle_attached(&self, vehicle: &Vehicle) -> bool {
+        invoke!(bool, 0xD40148F22E81A1D9, self.vehicle.handle, vehicle.get_handle())
+    }
+
+    pub fn create_rope(&self, ty: u32) {
+        invoke!((), 0x7BEB0C7A235F6F3B, self.vehicle.handle, ty)
+    }
+
+    pub fn has_rope(&self) -> bool {
+        invoke!(bool, 0x1821D91AD4B56108, self.vehicle.handle)
+    }
+
+    pub fn remove_rope(&self) {
+        invoke!((), 0x9768CF648F54C804, self.vehicle.handle)
+    }
+
+    pub fn set_rope_type(&self, ty: u32) {
+        invoke!((), 0x0D5F65A8F4EBDAB5, self.vehicle.handle, ty)
+    }
+
+    pub fn has_magnet(&self) -> bool {
+        invoke!(bool, 0x6E08BF5B3722BAC9, self.vehicle.handle)
+    }
+
+    pub fn detach_entity(&self, entity: &dyn Entity) {
+        invoke!((), 0xAF03011701811146, self.vehicle.handle, entity.get_handle())
+    }
+
+    pub fn detach_vehicle(&self, vehicle: &Vehicle) {
+        invoke!((), 0x0E21D3DF1051399D, vehicle.get_handle(), self.vehicle.handle)
+    }
+
+    pub fn get_hook_position(&self) -> Vector3<f32> {
+        invoke!(Vector3<f32>, 0xCBDB9B923CACC92D, self.vehicle.handle)
+    }
+
+    pub fn set_hook_position(&self, pos: Vector3<f32>, ty: u32) {
+        invoke!((), 0x877C1EAEAC531023, self.vehicle.handle, pos, ty)
+    }
+
+    pub fn set_magnet_active(&self, active: bool) {
+        invoke!((), 0x9A665550F8DA349B, self.vehicle.handle, active)
+    }
+
+    pub fn set_magnet_effect_radius(&self, radius: f32) {
+        invoke!((), 0xA17BAD153B51547E, self.vehicle.handle, radius)
+    }
+
+    pub fn set_magnet_falloff(&self, falloff: f32) {
+        invoke!((), 0x685D5561680D088B, self.vehicle.handle, falloff)
+    }
+
+    pub fn set_magnet_pull_rope_length(&self, length: f32) {
+        invoke!((), 0x6D8EAC07506291FB, self.vehicle.handle, length)
+    }
+
+    pub fn set_magnet_pull_strength(&self, strength: f32) {
+        invoke!((), 0xED8286F71A819BAA, self.vehicle.handle, strength)
+    }
+
+    pub fn set_magnet_strength(&self, strength: f32) {
+        invoke!((), 0xBCBFCD9D1DAC19E2, self.vehicle.handle, strength)
+    }
+
+    pub fn set_magnet_reduced_falloff(&self, falloff: f32) {
+        invoke!((), 0x66979ACF5102FD2F, self.vehicle.handle, falloff)
+    }
+}
+
+pub struct VehicleTowtruck<'a> {
+    vehicle: &'a Vehicle
+}
+
+impl<'a> VehicleTowtruck<'a> {
+    pub fn attach_vehicle(&self, vehicle: &Vehicle, near: bool, hook_offset: Vector3<f32>) {
+        invoke!((), 0x29A16F8D621C4508, self.vehicle.handle, vehicle.get_handle(), near, hook_offset)
+    }
+
+    pub fn detach_vehicle(&self, vehicle: &Vehicle) {
+        invoke!((), 0xC2DB6B6708350ED8, self.vehicle.handle, vehicle.get_handle())
+    }
+
+    pub fn get_attached_entity(&self) -> Option<ProbeEntity> {
+        invoke!(Option<ProbeEntity>, 0xEFEA18DCF10F8F75, self.vehicle.handle)
+    }
+
+    pub fn is_vehicle_attached(&self, vehicle: &Vehicle) -> bool {
+        invoke!(bool, 0x146DF9EC4C4B9FD4, self.vehicle.handle, vehicle.get_handle())
+    }
+
+    pub fn set_crane_uplift(&self, uplift: f32) {
+        invoke!((), 0xFE54B92A344583CA, self.vehicle.handle, uplift)
     }
 }

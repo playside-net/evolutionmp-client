@@ -23,16 +23,16 @@ use crate::events::ScriptEvent;
 use crate::game::blip::{Blip, BlipName};
 use crate::native::pool::{Pool, Handleable};
 use crate::game::ui::FrontendButtons;
+use crate::multiplayer::console::ScriptConsole;
 
 pub mod console;
 //pub mod network;
 
 pub fn init(runtime: &mut Runtime) {
-    info!("Initializing console");
-    console::init(runtime);
     info!("Registering scripts");
     //network::init(runtime);
 
+    runtime.register_script("console", ScriptConsole::new());
     runtime.register_script("clean_world", ScriptCleanWorld {
         tasks: TaskQueue::new(),
         last_cleanup: Instant::now()
@@ -80,6 +80,8 @@ impl Script for ScriptCleanWorld {
         for flag in AUDIO_FLAGS.iter() {
             game::audio::set_flag(flag, true);
         }
+        game::audio::set_flag("PlayMenuMusic", false);
+        game::audio::set_flag("ActivateSwitchWheelAudio", false);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
@@ -139,17 +141,12 @@ impl Script for ScriptCleanWorld {
                         match *key {
                             VK_NUMPAD0 if !is_up => {
                                 self.tasks.push(move |env| {
-                                    /*let player = Player::local();
+                                    let player = Player::local();
                                     let ped = player.get_ped();
 
                                     if let Some(veh) = ped.get_in_vehicle(false) {
-                                        //veh.repair();
-                                        let station = game::radio::get_player_station();
-                                        let t = format!("Station: {}", station.get_name());
-                                        game::ui::notification::send_notification(&t, None, None, false);
-                                    }*/
-                                    match env.warn("Выход", "Вы точно уверены в том, что", "хотите выйти?", FrontendButtons::No, true) {
-                                        o => env.log(format!("pressed: {:?}", o))
+                                        veh.repair();
+                                        //game::audio::play_sound_frontend(-1, "CHECKPOINT_PERFECT", "HUD_MINI_GAME_SOUNDSET", true);
                                     }
                                 });
                             },
@@ -332,7 +329,7 @@ impl ScriptFingerPointing {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 14] = [
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
     //Control::Enter,
     Control::Cover,
     Control::EnterCheatCode,
@@ -345,7 +342,11 @@ pub(crate) const CONTROLS_TO_DISABLE: [Control; 14] = [
     Control::DropWeapon,
     Control::DropAmmo,
     Control::SelectCharacterFranklin, Control::SelectCharacterMichael,
-    Control::SelectCharacterTrevor, Control::SelectCharacterMultiplayer
+    Control::SelectCharacterTrevor, Control::SelectCharacterMultiplayer,
+    Control::CinematicSlowMo,
+    Control::VehicleSlowMoDownOnly,
+    Control::VehicleSlowMoUpOnly,
+    Control::VehicleSlowMoUpDown
 ];
 
 pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [

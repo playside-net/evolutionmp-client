@@ -14,7 +14,7 @@ pub fn get_pool() -> ManuallyDrop<Box<GenericPool<Ped>>> {
     crate::native::pool::get_peds().expect("ped pool not initialized")
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Ped {
     handle: Handle
 }
@@ -96,13 +96,15 @@ impl Ped {
         invoke!(f32, 0x2720AAA75001E094, self.handle)
     }
 
-    pub fn get_closest_vehicle(&self, max_distance: f32) -> Option<Vehicle> {
+    pub fn get_closest_vehicle<F>(&self, max_distance: f32, filter: F) -> Option<Vehicle>
+        where F: Fn(&Vehicle) -> bool {
+
         let pos = self.get_position_by_offset(Vector3::new(0.0, 0.0, -1.0));
         let mut result = None;
         let mut last_max_distance = max_distance;
         if let Some(vehicles) = native::pool::get_vehicles() {
             for vehicle in vehicles.iter() {
-                if vehicle.exists() {
+                if vehicle.exists() && filter(&vehicle) {
                     let v_pos = vehicle.get_position_by_offset(Vector3::new(0.0, 0.0, 0.0));
                     let distance = v_pos.distance(pos);
                     if distance < last_max_distance {

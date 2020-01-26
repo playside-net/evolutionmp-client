@@ -7,8 +7,8 @@ pub struct ScriptThread {
 }
 
 impl ScriptThread {
-    pub fn active() -> ScriptThread {
-        invoke!(ScriptThread, 0xC30338E8088E2E21)
+    pub fn active() -> Option<ScriptThread> {
+        invoke!(Option<ScriptThread>, 0xC30338E8088E2E21)
     }
 
     pub fn get_name(&self) -> &str {

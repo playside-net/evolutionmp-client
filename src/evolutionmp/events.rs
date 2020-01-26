@@ -220,7 +220,7 @@ pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut (
                 break;
             }
         }
-        crate::info!("Called event id {} ({} args)", event.get_id(), arg_count);
+        crate::info!("Called event id {} ({} args: {:?})", event.get_id(), arg_count, &args[..arg_count]);
     }
     let origin: CallEvent = std::mem::transmute(CALL_EVENT);
     origin(group, event)

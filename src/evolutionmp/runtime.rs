@@ -1,4 +1,4 @@
-use crate::hash::Hash;
+use crate::hash::{Hash, Hashable};
 use crate::pattern::MemoryRegion;
 use crate::GameState;
 use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
@@ -104,6 +104,12 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
             }
         }
         call_native_trampoline(0xFC8202EFC642E6F2, context)
+    });
+    hook_native(0x7B5280EBA9840C72, |context| {
+        let label = context.get_args().read::<&str>();
+        let hash = label.joaat();
+        crate::info!("Called GET_LABEL_TEXT for {} (0x{:08X})", label, hash.0);
+        call_native_trampoline(0x7B5280EBA9840C72, context);
     });
 
     crate::events::init(mem);

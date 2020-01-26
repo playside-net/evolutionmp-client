@@ -2,6 +2,7 @@
 
 #[macro_use]
 extern crate lazy_static;
+extern crate backtrace;
 
 use crate::pattern::MemoryRegion;
 use crate::game::entity::Entity;
@@ -21,6 +22,8 @@ use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
 use log::{info, debug, error};
 use std::sync::atomic::{AtomicPtr, Ordering};
+use crate::hash::Hashable;
+use winapi::_core::ops::RangeInclusive;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -248,7 +251,7 @@ pub fn setup_logger(prefix: &str, debug: bool) {
         let reason = self::downcast_str(info.payload());
 
         let location = match info.location() {
-            Some(location) => format!(": {}:{}", location.file(), location.line()),
+            Some(location) => format!(": {}:{}:{}", location.file(), location.line(), location.column()),
             None => String::from("")
         };
 

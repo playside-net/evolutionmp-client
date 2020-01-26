@@ -184,15 +184,19 @@ impl MemoryRegion {
         self
     }
 
-    pub unsafe fn nop(&self, size: usize) -> bool {
+    pub unsafe fn write<F>(&self, size: usize, writer: F) -> bool where F: Fn(*mut u8) {
         let mut old_mode: DWORD = 0;
         if self.protect(size, PAGE_EXECUTE_READWRITE, &mut old_mode) {
-            self.base.write_bytes(0x90, size);
+            writer(self.base);
             self.protect(size, old_mode, &mut 0);
             true
         } else {
             false
         }
+    }
+
+    pub unsafe fn nop(&self, size: usize) -> bool {
+        self.write(size, |m| m.write_bytes(0x90, size))
     }
 
     pub unsafe fn replace<P>(&self, pattern: P) where P: Into<Pattern> {
@@ -223,17 +227,6 @@ impl MemoryRegion {
 
     pub unsafe fn get_box<T>(&self) -> ManuallyDrop<Box<T>> {
         ManuallyDrop::new(Box::from_raw(self.base.cast()))
-    }
-
-    pub unsafe fn get_adjusted_ptr(&self) -> usize {
-        let mut addr = self.as_ptr() as usize;
-        if addr >= 0x140000000 && addr <= 0x146000000 {
-            crate::info!("Adjusting ptr at 0x{:016X}", addr);
-            let handle = GetModuleHandleA(null_mut());
-            addr + handle as usize - OFFSET
-        } else {
-            addr
-        }
     }
 
     pub unsafe fn get_call(&self) -> *const () {
