@@ -28,6 +28,11 @@ use crate::scripts::cleanup::ScriptCleanWorld;
 use crate::scripts::pointing::ScriptFingerPointing;
 use std::sync::Mutex;
 use std::rc::Rc;
+use std::error::Error;
+use winapi::_core::str::FromStr;
+use winapi::_core::any::TypeId;
+use winapi::_core::fmt::{Formatter, Display};
+use crate::hash::Hashable;
 
 pub mod console;
 pub mod vehicle;
@@ -46,32 +51,40 @@ pub fn init(runtime: &mut Runtime) {
     runtime.register_script("command", ScriptCommand::new());
 }
 
-pub fn command_vehicle(env: &mut ScriptEnv, args: &[String]) {
-    match args {
-        &[ref input] => {
-            let model = Model::new(input);
-            if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
-                let player = Player::local();
-                let ped = player.get_ped();
-                if !ped.is_in_any_vehicle(false) {
-                    let veh = Vehicle::new(env, model, ped.get_position(), ped.get_heading(), false, false)
-                        .expect("Vehicle creation failed");
-                    ped.put_into_vehicle(&veh, -1);
-                    env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position", input))
-                } else {
-                    env.log("~r~You're already in a vehicle");
-                }
-            } else {
-                env.log(format!("~r~Invalid vehicle model: ~w~{}", input));
-            }
-        },
-        _ => env.log("~r~Usage: /veh <model>")
+pub fn command_teleport(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let pos = Vector3::new(
+        args.read::<f32>()?,
+        args.read::<f32>()?,
+        args.read::<f32>()?
+    );
+    let player = Player::local();
+    let ped = player.get_ped();
+    ped.set_position_keep_vehicle(pos);
+    Ok(())
+}
+
+pub fn command_vehicle(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let model = args.read::<Model>()?;
+    if model.is_valid() && model.is_in_cd_image() && model.is_vehicle() {
+        let player = Player::local();
+        let ped = player.get_ped();
+        if !ped.is_in_any_vehicle(false) {
+            let veh = Vehicle::new(env, &model, ped.get_position(), ped.get_heading(), false, false)
+                .ok_or("Vehicle creation failed")?;
+            ped.put_into_vehicle(&veh, -1);
+            env.log(format!("~y~Spawned vehicle ~w~{}~y~ at your position", model.to_string()));
+            Ok(())
+        } else {
+            Err("You're already in a vehicle")?
+        }
+    } else {
+        Err(format!("Invalid vehicle model: ~w~{}", model.to_string()))?
     }
 }
 
 pub struct ScriptCommand {
     tasks: TaskQueue,
-    commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &[String])>>>
+    commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError>>>>
 }
 
 impl ScriptCommand {
@@ -82,13 +95,17 @@ impl ScriptCommand {
         }
     }
 
-    pub(crate) fn register_command<N, C>(&mut self, name: N, command: C) where N: Into<String>, C: Fn(&mut ScriptEnv, &[String]) + 'static {
+    pub(crate) fn register_command<N, C>(&mut self, name: N, command: C)
+        where N: Into<String>,
+              C: Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError> + 'static {
+
         self.commands.insert(name.into(), Rc::new(Box::new(command)));
     }
 }
 
 impl Script for ScriptCommand {
     fn prepare(&mut self, env: ScriptEnv) {
+        self.register_command("tp", command_teleport);
         self.register_command("veh", command_vehicle);
     }
 
@@ -103,16 +120,115 @@ impl Script for ScriptCommand {
                 let name = parts.remove(0);
                 if let Some(command) = self.commands.get(&name).cloned() {
                     self.tasks.push(move |env| {
-                        (*command)(env, &parts[..]);
+                        let mut args = CommandArgs::new(&parts[..]);
+                        if let Err(error) = (*command)(env, &mut args) {
+                            env.error(format!("{}", error))
+                        }
                     });
                 } else {
                     self.tasks.push(move |env| {
-                        env.log(format!("~r~Unknown command: {}", name));
+                        env.error(format!("Unknown command: {}", name));
                     });
                 }
                 true
             },
             _ => false
         }
+    }
+}
+
+pub enum CommandExecutionError {
+    ArgParseError(CommandArgParseError),
+    WrongUsage(String),
+    Generic(String)
+}
+
+impl<T> From<T> for CommandExecutionError where T: AsRef<str> {
+    fn from(e: T) -> Self {
+        CommandExecutionError::Generic(e.as_ref().to_owned())
+    }
+}
+
+impl From<CommandArgParseError> for CommandExecutionError {
+    fn from(e: CommandArgParseError) -> Self {
+        CommandExecutionError::ArgParseError(e)
+    }
+}
+
+impl std::fmt::Display for CommandExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CommandExecutionError::ArgParseError(e) => {
+                f.pad(&format!("Argument parse error: {}", e))
+            },
+            CommandExecutionError::WrongUsage(usage) => {
+                f.pad(&format!("Usage: {}", usage))
+            },
+            CommandExecutionError::Generic(e) => f.pad(e)
+        }
+    }
+}
+
+pub struct CommandArgs<'a> {
+    args: &'a [String],
+    index: usize
+}
+
+pub enum CommandArgParseError {
+    IndexOutOfBounds(usize, usize),
+    Generic(String)
+}
+
+impl<T> From<T> for CommandArgParseError where T: AsRef<str> {
+    fn from(e: T) -> Self {
+        CommandArgParseError::Generic(e.as_ref().to_owned())
+    }
+}
+
+impl std::fmt::Display for CommandArgParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CommandArgParseError::IndexOutOfBounds(index, len) => {
+                f.pad(&format!("Index is out of bounds: {} (total {})", index, len))
+            },
+            CommandArgParseError::Generic(e) => f.pad(e)
+        }
+    }
+}
+
+impl<'a> CommandArgs<'a> {
+    pub fn new(args: &[String]) -> CommandArgs {
+        CommandArgs { args, index: 0 }
+    }
+
+    pub fn len(&self) -> usize {
+        self.args.len()
+    }
+
+    pub fn read_str(&mut self) -> Result<&String, CommandArgParseError> {
+        self.args.get(self.index).map(|a| {
+            self.index += 1;
+            a
+        }).ok_or(CommandArgParseError::IndexOutOfBounds(self.index, self.args.len()))
+    }
+
+    pub fn read<T>(&mut self) -> Result<T, CommandArgParseError> where T: CommandArg {
+        T::parse(self)
+    }
+}
+
+pub trait CommandArg: Sized {
+    fn parse(args: &mut CommandArgs) -> Result<Self, CommandArgParseError>;
+}
+
+impl<T, E> CommandArg for T where T: FromStr<Err=E>, E: Display {
+    fn parse(args: &mut CommandArgs) -> Result<Self, CommandArgParseError> {
+        Ok(args.read_str()?.parse::<T>().map_err(|e| format!("Error parsing arg from string: {}", e))?)
+    }
+}
+
+impl CommandArg for Model {
+    fn parse(args: &mut CommandArgs) -> Result<Self, CommandArgParseError> {
+        args.read_str().map(|a| Model::new(&a))
     }
 }

@@ -3,7 +3,7 @@ use crate::game::{Rgba, Handle};
 use cgmath::Vector2;
 use crate::runtime::ScriptEnv;
 use crate::game::controls::{Group, Control};
-use crate::pattern::MemoryRegion;
+use crate::pattern::{MemoryRegion, RET, NOP, XOR_32_64};
 use winapi::_core::sync::atomic::AtomicBool;
 
 pub mod notification;
@@ -23,17 +23,11 @@ pub unsafe fn init(mem: &MemoryRegion) {
     let no_slowmo = mem.find("38 51 64 74 19")
         .next().expect("no_slowmo");
 
-    no_slowmo.add(26).read_ptr(4).write(5, |m| { //No vignette
-        m.write(0xC3); //RET
-        m.add(1).write_bytes(0x90, 4); //NOP
-    });
+    no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
 
     no_slowmo.add(8).nop(5); //Vignetting call patch
 
-    no_slowmo.add(34).write(2 ,|m| { //Timescale override patch
-        m.write(0x31); //XOR_32_64
-        m.add(1).write(0xD2);
-    });
+    no_slowmo.add(34).write_bytes(&[XOR_32_64, 0xD2]); //Timescale override patch
 }
 
 pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {

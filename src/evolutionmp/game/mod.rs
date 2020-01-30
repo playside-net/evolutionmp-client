@@ -28,6 +28,7 @@ pub mod gps;
 pub mod graphics;
 pub mod radio;
 pub mod locale;
+pub mod interior;
 
 pub type Handle = u32;
 

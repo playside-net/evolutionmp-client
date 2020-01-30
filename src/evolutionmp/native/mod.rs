@@ -511,6 +511,7 @@ impl NativeStackValue for u64 {}
 impl NativeStackValue for &mut u64 {}
 impl NativeStackValue for () {}
 impl NativeStackValue for Hash {}
+impl NativeStackValue for &mut Hash {}
 
 impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
 impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}

@@ -257,6 +257,10 @@ impl<'a> ScriptEnv<'a> {
         event_pool.push_output(event);
     }
 
+    pub fn error<L>(&mut self, line: L) where L: Into<String> {
+        self.event(ScriptEvent::ConsoleOutput(format!("~r~{}", line.into())));
+    }
+
     pub fn log<L>(&mut self, line: L) where L: Into<String> {
         self.event(ScriptEvent::ConsoleOutput(line.into()));
     }

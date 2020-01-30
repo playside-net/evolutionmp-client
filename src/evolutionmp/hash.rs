@@ -1,8 +1,14 @@
 use std::num::Wrapping;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash, PartialOrd)]
 pub struct Hash(pub u32);
+
+impl std::fmt::Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.pad(&format!("0x{:08X}", self.0))
+    }
+}
 
 pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
     let s = s.as_ref();
@@ -20,6 +26,10 @@ pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
 
 pub trait Hashable {
     fn joaat(&self) -> Hash;
+
+    fn to_string(&self) -> String {
+        format!("{}", self.joaat())
+    }
 }
 
 impl Hashable for Hash {
@@ -31,5 +41,9 @@ impl Hashable for Hash {
 impl<S> Hashable for S where S: AsRef<str> {
     fn joaat(&self) -> Hash {
         crate::hash::joaat(self)
+    }
+
+    fn to_string(&self) -> String {
+        self.as_ref().to_owned()
     }
 }

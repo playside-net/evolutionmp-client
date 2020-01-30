@@ -9,10 +9,9 @@ use std::mem::ManuallyDrop;
 use detour::RawDetour;
 use winapi::_core::ptr::replace;
 
-#[cfg(target_pointer_width = "64")]
-const OFFSET: usize = 0x140000000;
-#[cfg(not(target_pointer_width = "64"))]
-const OFFSET: usize = 0x400000;
+pub const RET: u8 = 0xC3;
+pub const NOP: u8 = 0x90;
+pub const XOR_32_64: u8 = 0x31;
 
 #[derive(Debug, Clone)]
 pub struct Pattern {
@@ -184,6 +183,14 @@ impl MemoryRegion {
         self
     }
 
+    pub unsafe fn write_bytes(&self, bytes: &[u8]) -> bool {
+        self.write(bytes.len(), |w| {
+            for (i, b) in bytes.iter().enumerate() {
+                w.add(i).write(*b)
+            }
+        })
+    }
+
     pub unsafe fn write<F>(&self, size: usize, writer: F) -> bool where F: Fn(*mut u8) {
         let mut old_mode: DWORD = 0;
         if self.protect(size, PAGE_EXECUTE_READWRITE, &mut old_mode) {
@@ -196,7 +203,7 @@ impl MemoryRegion {
     }
 
     pub unsafe fn nop(&self, size: usize) -> bool {
-        self.write(size, |m| m.write_bytes(0x90, size))
+        self.write(size, |m| m.write_bytes(NOP, size))
     }
 
     pub unsafe fn replace<P>(&self, pattern: P) where P: Into<Pattern> {

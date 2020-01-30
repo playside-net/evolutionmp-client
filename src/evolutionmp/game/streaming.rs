@@ -17,7 +17,8 @@ pub trait Resource {
 
 #[derive(Clone)]
 pub struct Model {
-    hash: Hash
+    hash: Hash,
+    name: String
 }
 
 pub fn request_collision_at(pos: Vector3<f32>) {
@@ -53,9 +54,10 @@ pub fn stop_player_switch() {
 }
 
 impl Model {
-    pub fn new<H>(hash: H) -> Model where H: Hashable {
+    pub fn new(hash: &dyn Hashable) -> Model {
         Model {
-            hash: hash.joaat()
+            hash: hash.joaat(),
+            name: hash.to_string()
         }
     }
 
@@ -103,6 +105,10 @@ impl Drop for Model {
 impl Hashable for Model {
     fn joaat(&self) -> Hash {
         self.hash
+    }
+
+    fn to_string(&self) -> String {
+        self.name.clone()
     }
 }
 

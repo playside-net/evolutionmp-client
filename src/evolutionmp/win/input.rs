@@ -71,6 +71,7 @@ fn push_event(event: InputEvent) {
 pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_KEYDOWN | WM_KEYUP | WM_SYSKEYDOWN | WM_SYSKEYUP => {
+            let is_up = msg == WM_SYSKEYUP || msg == WM_KEYUP;
             let event = KeyboardEvent::Key {
                 key: wparam as i32,
                 repeats: (lparam & 0xFFFF) as u16,
@@ -80,12 +81,12 @@ pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lp
                 shift: (GetAsyncKeyState(VK_SHIFT) as usize & 0x8000) != 0,
                 control: (GetAsyncKeyState(VK_CONTROL) as usize & 0x8000) != 0,
                 was_down_before: ((lparam >> 30) & 1) == 1,
-                is_up: msg == WM_SYSKEYUP || msg == WM_KEYUP
+                is_up
             };
 
             push_event(InputEvent::Keyboard(event));
 
-            if wparam as i32 == VK_DELETE {
+            if wparam as i32 == VK_DELETE && !is_up {
                 push_event(InputEvent::Keyboard(KeyboardEvent::Char('\u{007F}')));
             }
         },

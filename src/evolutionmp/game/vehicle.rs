@@ -77,7 +77,7 @@ pub fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3
 }
 
 impl Vehicle {
-    pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: Hashable {
+    pub fn new(env: &mut ScriptEnv, model: &dyn Hashable, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> {
         let model = Model::new(model);
         if model.is_in_cd_image() && model.is_valid() && model.is_vehicle() {
             env.wait_for_resource(&model);
@@ -176,6 +176,10 @@ impl Vehicle {
 
     pub fn get_last_ped_in_seat(&self, seat: i32) -> Option<Ped> {
         invoke!(Option<Ped>, 0x83F969AA1EE2A664, self.handle, seat)
+    }
+
+    pub fn set_interior_light(&self, enabled: bool) {
+        invoke!((), 0xBC2042F090AF6AD3, self.handle, enabled)
     }
 
     pub fn as_cargobob(&self) -> Option<VehicleCargobob> {
