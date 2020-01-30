@@ -4,7 +4,12 @@ use cgmath::Vector2;
 use crate::runtime::ScriptEnv;
 use crate::game::controls::{Group, Control};
 use crate::pattern::{MemoryRegion, RET, NOP, XOR_32_64};
-use winapi::_core::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
+use std::ops::Range;
+use crate::win::input::{InputEvent, KeyboardEvent};
+use clipboard::{ClipboardContext, ClipboardProvider};
+use std::os::raw::c_int;
 
 pub mod notification;
 
@@ -365,4 +370,298 @@ pub enum FrontendButtons {
     CancelSelectLoadingSpinner = 134217745,
     CancelOkLoadingSpinner = 134217746,
     CancelYesLoadingSpinner = 134217748
+}
+
+pub struct TextInput {
+    selection: Range<usize>,
+    input: String,
+    command_pos: usize,
+    command_history: Vec<String>,
+    last_selection_changed: Instant,
+    width: f32,
+    height: f32,
+    font: Font
+}
+
+impl TextInput {
+    pub fn new(input: String, width: f32, height: f32, font: Font) -> TextInput {
+        TextInput {
+            selection: 0..0,
+            input,
+            command_pos: 0,
+            command_history: vec![],
+            last_selection_changed: Instant::now(),
+            width,
+            height,
+            font
+        }
+    }
+
+    pub fn input(&mut self, event: &InputEvent) -> Option<String> {
+        use winapi::um::winuser::{VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_RETURN};
+        match event {
+            InputEvent::Keyboard(event) => {
+                match event {
+                    KeyboardEvent::Key { key, alt, shift, control, is_up, .. } if *is_up => {
+                        const VK_KEY_C: c_int = 0x43;
+                        const VK_KEY_X: c_int = 0x58;
+                        const VK_KEY_V: c_int = 0x56;
+
+                        match *key {
+                            VK_LEFT => {
+                                if *control {con
+                                    if *shift {
+                                        self.selection.end = 0;
+                                    } else {
+                                        self.selection = 0..0;
+                                    }
+                                } else if *shift {
+                                    if self.selection.end > 0 {
+                                        self.selection.end -= 1;
+                                    }
+                                } else {
+                                    let to = self.selection.start.min(self.selection.end);
+                                    if to > 0 {
+                                        self.selection = (to - 1)..(to - 1);
+                                    } else {
+                                        self.selection = to..to;
+                                    }
+                                }
+                                self.last_selection_changed = Instant::now();
+                            },
+                            VK_RIGHT => {
+                                if *control {
+                                    let len = self.get_input().chars().count();
+                                    if *shift {
+                                        self.selection.end = len;
+                                    } else {
+                                        self.selection = len..len;
+                                    }
+                                } else if *shift {
+                                    if self.selection.end < self.get_input().chars().count() {
+                                        self.selection.end += 1;
+                                    }
+                                } else {
+                                    let len = self.get_input().chars().count();
+                                    let to = self.selection.start.max(self.selection.end);
+                                    if to < len {
+                                        self.selection = (to + 1)..(to + 1);
+                                    } else {
+                                        self.selection = to..to;
+                                    }
+                                }
+                                self.last_selection_changed = Instant::now();
+                            },
+                            VK_HOME => {
+                                if *shift {
+                                    self.selection.end = 0;
+                                } else {
+                                    self.selection = 0..0;
+                                }
+                                self.last_selection_changed = Instant::now();
+                            },
+                            VK_END => {
+                                let len = self.get_input().chars().count();
+                                if *shift {
+                                    self.selection.end = len;
+                                } else {
+                                    self.selection = len..len;
+                                }
+                                self.last_selection_changed = Instant::now();
+                            },
+                            VK_UP => {
+                                if self.command_pos < self.command_history.len() {
+                                    self.command_pos += 1;
+                                    let len = self.get_input().chars().count();
+                                    self.selection = len..len;
+                                    self.last_selection_changed = Instant::now();
+                                }
+                            },
+                            VK_DOWN => {
+                                if self.command_pos > 0 {
+                                    self.command_pos -= 1;
+                                    let len = self.get_input().chars().count();
+                                    self.selection = len..len;
+                                    self.last_selection_changed = Instant::now();
+                                }
+                            },
+                            VK_RETURN => {
+                                if self.command_pos == 0 {
+                                    if !self.input.is_empty() {
+                                        let mut input = String::new();
+                                        std::mem::swap(&mut self.input, &mut input);
+                                        self.selection = 0..0;
+                                        self.command_history.push(input.clone());
+                                        return Some(input);
+                                    }
+                                } else {
+                                    let input = self.command_history[self.command_pos - 1].clone();
+                                    self.input = String::new();
+                                    self.selection = 0..0;
+                                    self.command_pos = 0;
+                                    return Some(input);
+                                }
+                            },
+                            VK_KEY_C if *control => {
+                                let start = self.selection.start;
+                                let end = self.selection.end;
+                                let selected = self.get_chars(start, end);
+                                if !selected.is_empty() {
+                                    let mut context = ClipboardContext::new()
+                                        .expect("clipboard context creation failed");
+                                    context.set_contents(selected)
+                                        .expect("clipboard text update failed");
+                                }
+                            },
+                            VK_KEY_X if *control => {
+                                let start = self.selection.start;
+                                let end = self.selection.end;
+                                let selected = self.get_chars(start, end);
+                                if !selected.is_empty() {
+                                    let mut context = ClipboardContext::new()
+                                        .expect("clipboard context creation failed");
+                                    context.set_contents(selected)
+                                        .expect("clipboard text update failed");
+                                    self.replace_chars(start, end, "")
+                                }
+                            },
+                            VK_KEY_V if *control => {
+                                let start = self.selection.start;
+                                let end = self.selection.end;
+                                let mut context = ClipboardContext::new()
+                                    .expect("clipboard context creation failed");
+                                let mut input = context.get_contents()
+                                    .expect("clipboard text getting failed");
+                                self.replace_chars(start, end, &input);
+                            },
+                            _ => {}
+                        }
+                    },
+                    KeyboardEvent::Char(c) => {
+                        match c {
+                            &'\u{0008}' => self.erase_left(),
+                            &'\u{007F}' => self.erase_right(),
+                            c if !c.is_control() => self.enter_char(*c),
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+        None
+    }
+
+    pub fn draw(&self, start_x: f32, start_y: f32) {
+        const INPUT_COLOR: Rgba = Rgba::WHITE;
+        const INPUT_COLOR_BUSY: Rgba = Rgba::DARK_GRAY;
+        const PREFIX_COLOR: Rgba = Rgba::new(52, 152, 219, 255);
+        const ALT_BACKGROUND_COLOR: Rgba = Rgba::new(52, 73, 94, 127);
+        const SELECTION_COLOR: Rgba = Rgba::new(0, 0, 255, 127);
+        const CURSOR_COLOR: Rgba = Rgba::new(255, 255, 255, 127);
+
+        let now = Instant::now();
+        let scale = Vector2::new(0.35, 0.35);
+
+        // Draw blinking cursor
+        let start = self.selection.start;
+        let end = self.selection.end;
+
+        // Draw input field
+        draw_rect([start_x, start_y], [self.width, self.height], ALT_BACKGROUND_COLOR);
+        draw_rect([start_x, start_y + self.height], [80.0, self.height], ALT_BACKGROUND_COLOR);
+        // Draw input prefix
+        draw_text(">", [start_x, start_y], PREFIX_COLOR, self.font, scale);
+        // Draw input text
+        draw_text(self.get_input(), [start_x + 25.0, start_y], INPUT_COLOR, self.font, scale);
+        // Draw page information
+        if start == end {
+            if now.duration_since(self.last_selection_changed).subsec_millis() < 500 {
+                let prefix = self.get_input().chars().take(start).collect::<String>();
+                let x = get_text_width(&prefix, self.font, scale) * self.width;
+                let x = if prefix.is_empty() { x - 0.5 } else { x - 4.0 };
+                draw_rect([25.0 + start_x + x, start_y + 2.0], [1.5, self.height - 4.0], CURSOR_COLOR);
+            }
+        } else {
+            let from = start.min(end);
+            let to = start.max(end);
+            let prefix = self.get_input().chars().take(from).collect::<String>();
+            let x = get_text_width(&prefix, self.font, scale) * self.width;
+            let selected = self.get_input().chars().skip(from).take(to - from).collect::<String>();
+            let width = get_text_width(&selected, self.font, scale) * self.width;
+            let x = if prefix.is_empty() { x - 0.5 } else { x - 4.0 };
+            draw_rect([25.0 + start_x + x, start_y + 2.0], [width, self.height - 4.0], SELECTION_COLOR);
+        }
+    }
+
+    fn erase_left(&mut self) {
+        let start = self.selection.start;
+        let end = self.selection.end;
+        if start == end && start > 0 {
+            self.replace_chars(start - 1, start, "");
+        } else {
+            self.replace_chars(start, end, "");
+        }
+    }
+
+    fn erase_right(&mut self) {
+        let start = self.selection.start;
+        let end = self.selection.end;
+        let len = self.get_input().chars().count();
+        if start == end && end < len {
+            self.replace_chars(end, end + 1, "");
+        } else {
+            self.replace_chars(start, end, "");
+        }
+    }
+
+    fn enter_char(&mut self, c: char) {
+        let start = self.selection.start;
+        let end = self.selection.end;
+        self.replace_chars(start, end, &format!("{}", c));
+        let pos = start.min(end) + 1;
+        self.selection = pos..pos;
+    }
+
+    fn get_chars(&self, start: usize, end: usize) -> String {
+        let from = start.min(end);
+        let to = start.max(end);
+        self.get_input().chars().skip(from).take(to - from).collect::<String>()
+    }
+
+    fn replace_chars(&mut self, start: usize, end: usize, replacement: &str) {
+        let bytes_len = self.get_input().len();
+        let len = self.get_input().chars().count();
+        let from = start.min(end);
+        let to = start.max(end);
+        let old_input = self.get_input().chars().collect::<Vec<_>>();
+        let mut new_input = String::with_capacity(bytes_len - (to - from) + replacement.len());
+        for i in 0..from {
+            new_input.push(old_input[i])
+        }
+        new_input.push_str(replacement);
+        for i in to..len {
+            new_input.push(old_input[i])
+        }
+        std::mem::replace(self.get_input_mut(), new_input);
+        self.selection = from..from;
+        self.last_selection_changed = Instant::now();
+    }
+
+    pub fn get_input(&self) -> &String {
+        if self.command_pos == 0 {
+            &self.input
+        } else {
+            &self.command_history[self.command_pos - 1]
+        }
+    }
+
+    pub fn get_input_mut(&mut self) -> &mut String {
+        if self.command_pos == 0 {
+            &mut self.input
+        } else {
+            &mut self.command_history[self.command_pos - 1]
+        }
+    }
 }
