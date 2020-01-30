@@ -375,8 +375,8 @@ pub enum FrontendButtons {
 pub struct TextInput {
     selection: Range<usize>,
     input: String,
-    command_pos: usize,
-    command_history: Vec<String>,
+    history_pos: usize,
+    history: Vec<String>,
     last_selection_changed: Instant,
     width: f32,
     height: f32,
@@ -388,8 +388,8 @@ impl TextInput {
         TextInput {
             selection: 0..0,
             input,
-            command_pos: 0,
-            command_history: vec![],
+            history_pos: 0,
+            history: vec![],
             last_selection_changed: Instant::now(),
             width,
             height,
@@ -403,13 +403,14 @@ impl TextInput {
             InputEvent::Keyboard(event) => {
                 match event {
                     KeyboardEvent::Key { key, alt, shift, control, is_up, .. } if *is_up => {
+                        const VK_KEY_A: c_int = 0x41;
                         const VK_KEY_C: c_int = 0x43;
                         const VK_KEY_X: c_int = 0x58;
                         const VK_KEY_V: c_int = 0x56;
 
                         match *key {
                             VK_LEFT => {
-                                if *control {con
+                                if *control {
                                     if *shift {
                                         self.selection.end = 0;
                                     } else {
@@ -431,18 +432,18 @@ impl TextInput {
                             },
                             VK_RIGHT => {
                                 if *control {
-                                    let len = self.get_input().chars().count();
+                                    let len = self.len();
                                     if *shift {
                                         self.selection.end = len;
                                     } else {
                                         self.selection = len..len;
                                     }
                                 } else if *shift {
-                                    if self.selection.end < self.get_input().chars().count() {
+                                    if self.selection.end < self.len() {
                                         self.selection.end += 1;
                                     }
                                 } else {
-                                    let len = self.get_input().chars().count();
+                                    let len = self.len();
                                     let to = self.selection.start.max(self.selection.end);
                                     if to < len {
                                         self.selection = (to + 1)..(to + 1);
@@ -461,7 +462,7 @@ impl TextInput {
                                 self.last_selection_changed = Instant::now();
                             },
                             VK_END => {
-                                let len = self.get_input().chars().count();
+                                let len = self.len();
                                 if *shift {
                                     self.selection.end = len;
                                 } else {
@@ -470,37 +471,40 @@ impl TextInput {
                                 self.last_selection_changed = Instant::now();
                             },
                             VK_UP => {
-                                if self.command_pos < self.command_history.len() {
-                                    self.command_pos += 1;
-                                    let len = self.get_input().chars().count();
+                                if self.history_pos < self.history.len() {
+                                    self.history_pos += 1;
+                                    let len = self.len();
                                     self.selection = len..len;
                                     self.last_selection_changed = Instant::now();
                                 }
                             },
                             VK_DOWN => {
-                                if self.command_pos > 0 {
-                                    self.command_pos -= 1;
-                                    let len = self.get_input().chars().count();
+                                if self.history_pos > 0 {
+                                    self.history_pos -= 1;
+                                    let len = self.len();
                                     self.selection = len..len;
                                     self.last_selection_changed = Instant::now();
                                 }
                             },
                             VK_RETURN => {
-                                if self.command_pos == 0 {
+                                if self.history_pos == 0 {
                                     if !self.input.is_empty() {
                                         let mut input = String::new();
                                         std::mem::swap(&mut self.input, &mut input);
                                         self.selection = 0..0;
-                                        self.command_history.push(input.clone());
+                                        self.history.push(input.clone());
                                         return Some(input);
                                     }
                                 } else {
-                                    let input = self.command_history[self.command_pos - 1].clone();
-                                    self.input = String::new();
-                                    self.selection = 0..0;
-                                    self.command_pos = 0;
+                                    let input = self.history[self.history_pos - 1].clone();
+                                    self.reset();
                                     return Some(input);
                                 }
+                            },
+                            VK_KEY_A if *control => {
+                                let len = self.len();
+                                self.selection = 0..len;
+                                self.last_selection_changed = Instant::now();
                             },
                             VK_KEY_C if *control => {
                                 let start = self.selection.start;
@@ -533,6 +537,9 @@ impl TextInput {
                                 let mut input = context.get_contents()
                                     .expect("clipboard text getting failed");
                                 self.replace_chars(start, end, &input);
+                                let pos = start.min(end) + input.chars().count();
+                                self.selection = pos..pos;
+                                self.last_selection_changed = Instant::now();
                             },
                             _ => {}
                         }
@@ -608,7 +615,7 @@ impl TextInput {
     fn erase_right(&mut self) {
         let start = self.selection.start;
         let end = self.selection.end;
-        let len = self.get_input().chars().count();
+        let len = self.len();
         if start == end && end < len {
             self.replace_chars(end, end + 1, "");
         } else {
@@ -632,7 +639,7 @@ impl TextInput {
 
     fn replace_chars(&mut self, start: usize, end: usize, replacement: &str) {
         let bytes_len = self.get_input().len();
-        let len = self.get_input().chars().count();
+        let len = self.len();
         let from = start.min(end);
         let to = start.max(end);
         let old_input = self.get_input().chars().collect::<Vec<_>>();
@@ -649,19 +656,30 @@ impl TextInput {
         self.last_selection_changed = Instant::now();
     }
 
+    pub fn reset(&mut self) {
+        self.selection = 0..0;
+        self.last_selection_changed = Instant::now();;
+        self.input = String::new();
+        self.history_pos = 0;
+    }
+
+    pub fn len(&self) -> usize {
+        self.get_input().chars().count()
+    }
+
     pub fn get_input(&self) -> &String {
-        if self.command_pos == 0 {
+        if self.history_pos == 0 {
             &self.input
         } else {
-            &self.command_history[self.command_pos - 1]
+            &self.history[self.history_pos - 1]
         }
     }
 
     pub fn get_input_mut(&mut self) -> &mut String {
-        if self.command_pos == 0 {
+        if self.history_pos == 0 {
             &mut self.input
         } else {
-            &mut self.command_history[self.command_pos - 1]
+            &mut self.history[self.history_pos - 1]
         }
     }
 }
