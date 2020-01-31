@@ -626,7 +626,8 @@ impl TextInput {
     fn enter_char(&mut self, c: char) {
         let start = self.selection.start;
         let end = self.selection.end;
-        self.replace_chars(start, end, &format!("{}", c));
+        let replacement = if c == '~' { format!("{}", c) } else { String::from("\\~") };
+        self.replace_chars(start, end, &replacement);
         let pos = start.min(end) + 1;
         self.selection = pos..pos;
     }

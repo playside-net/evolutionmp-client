@@ -52,11 +52,7 @@ pub fn init(runtime: &mut Runtime) {
 }
 
 pub fn command_teleport(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
-    let pos = Vector3::new(
-        args.read::<f32>()?,
-        args.read::<f32>()?,
-        args.read::<f32>()?
-    );
+    let pos = args.read_pos()?;
     let player = Player::local();
     let ped = player.get_ped();
     ped.set_position_keep_vehicle(pos);
@@ -213,22 +209,41 @@ impl<'a> CommandArgs<'a> {
     }
 
     pub fn read<T>(&mut self) -> Result<T, CommandArgParseError> where T: CommandArg {
-        T::parse(self)
+        T::parse(self.read_str()?)
+    }
+
+    pub fn read_coord(&mut self, origin: f32) -> Result<f32, CommandArgParseError> {
+        let coord = self.read_str()?;
+        if coord.starts_with("~") {
+            <f32 as CommandArg>::parse(&coord[1..]).map(|c| c + origin)
+        } else {
+            <f32 as CommandArg>::parse(&coord)
+        }
+    }
+
+    pub fn read_pos(&mut self) -> Result<Vector3<f32>, CommandArgParseError> {
+        let player = Player::local();
+        let ped = player.get_ped();
+        let origin = ped.get_position();
+        let x = self.read_coord(origin.x)?;
+        let y = self.read_coord(origin.y)?;
+        let z = self.read_coord(origin.z)?;
+        Ok(Vector3::new(x, y, z))
     }
 }
 
 pub trait CommandArg: Sized {
-    fn parse(args: &mut CommandArgs) -> Result<Self, CommandArgParseError>;
+    fn parse(arg: &str) -> Result<Self, CommandArgParseError>;
 }
 
 impl<T, E> CommandArg for T where T: FromStr<Err=E>, E: Display {
-    fn parse(args: &mut CommandArgs) -> Result<Self, CommandArgParseError> {
-        Ok(args.read_str()?.parse::<T>().map_err(|e| format!("Error parsing arg from string: {}", e))?)
+    fn parse(arg: &str) -> Result<Self, CommandArgParseError> {
+        Ok(arg.parse::<T>().map_err(|e| format!("Error parsing arg from string: {}", e))?)
     }
 }
 
 impl CommandArg for Model {
-    fn parse(args: &mut CommandArgs) -> Result<Self, CommandArgParseError> {
-        args.read_str().map(|a| Model::new(&a))
+    fn parse(arg: &str) -> Result<Self, CommandArgParseError> {
+        Ok(Model::new(&arg))
     }
 }

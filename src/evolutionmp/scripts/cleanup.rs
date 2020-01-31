@@ -35,7 +35,7 @@ impl Script for ScriptCleanWorld {
         game::misc::set_stunt_jumps_can_trigger(false);
 
         let player = Player::local();
-        player.set_model(&mut env, &"mp_m_freemode_01");
+        player.set_model(&mut env, "mp_m_freemode_01");
         let ped = player.get_ped();
         ped.set_position_no_offset(pos, Vector3::new(false, false, false));
         ped.get_tasks().clear_immediately();
