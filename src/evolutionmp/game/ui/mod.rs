@@ -581,12 +581,12 @@ impl TextInput {
         // Draw input prefix
         draw_text(">", [start_x, start_y], PREFIX_COLOR, self.font, scale);
         // Draw input text
-        draw_text(self.get_input(), [start_x + 25.0, start_y], INPUT_COLOR, self.font, scale);
+        draw_text(self.get_input().replace("~", "\\~"), [start_x + 25.0, start_y], INPUT_COLOR, self.font, scale);
         // Draw page information
         if start == end {
             if now.duration_since(self.last_selection_changed).subsec_millis() < 500 {
                 let prefix = self.get_input().chars().take(start).collect::<String>();
-                let x = get_text_width(&prefix, self.font, scale) * self.width;
+                let x = get_text_width(prefix.replace("~", "\\~"), self.font, scale) * self.width;
                 let x = if prefix.is_empty() { x - 0.5 } else { x - 4.0 };
                 draw_rect([25.0 + start_x + x, start_y + 2.0], [1.5, self.height - 4.0], CURSOR_COLOR);
             }
@@ -594,9 +594,9 @@ impl TextInput {
             let from = start.min(end);
             let to = start.max(end);
             let prefix = self.get_input().chars().take(from).collect::<String>();
-            let x = get_text_width(&prefix, self.font, scale) * self.width;
+            let x = get_text_width(prefix.replace("~", "\\~"), self.font, scale) * self.width;
             let selected = self.get_input().chars().skip(from).take(to - from).collect::<String>();
-            let width = get_text_width(&selected, self.font, scale) * self.width;
+            let width = get_text_width(selected.replace("~", "\\~"), self.font, scale) * self.width;
             let x = if prefix.is_empty() { x - 0.5 } else { x - 4.0 };
             draw_rect([25.0 + start_x + x, start_y + 2.0], [width, self.height - 4.0], SELECTION_COLOR);
         }
@@ -626,8 +626,7 @@ impl TextInput {
     fn enter_char(&mut self, c: char) {
         let start = self.selection.start;
         let end = self.selection.end;
-        let replacement = if c == '~' { format!("{}", c) } else { String::from("\\~") };
-        self.replace_chars(start, end, &replacement);
+        self.replace_chars(start, end, &format!("{}", c));
         let pos = start.min(end) + 1;
         self.selection = pos..pos;
     }
@@ -666,6 +665,10 @@ impl TextInput {
 
     pub fn len(&self) -> usize {
         self.get_input().chars().count()
+    }
+
+    pub fn get_display_input(&self) -> String {
+        self.get_input().replace("~", "\\~")
     }
 
     pub fn get_input(&self) -> &String {
