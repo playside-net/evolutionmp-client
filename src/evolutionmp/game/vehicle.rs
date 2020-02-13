@@ -77,10 +77,10 @@ pub fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3
 }
 
 impl Vehicle {
-    pub fn new(env: &mut ScriptEnv, model: &dyn Hashable, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> {
-        let model = Model::new(model);
+    pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: AsRef<Model> {
+        let model = model.as_ref();
         if model.is_in_cd_image() && model.is_valid() && model.is_vehicle() {
-            env.wait_for_resource(&model);
+            env.wait_for_resource(model);
             invoke!(Option<Vehicle>, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check)
         } else {
             None
@@ -172,6 +172,18 @@ impl Vehicle {
 
     pub fn has_weapon(&self) -> bool {
         invoke!(bool, 0x25ECB9F8017D98E0, self.handle)
+    }
+
+    pub fn has_kers_boost(&self) -> bool {
+        invoke!(bool, 0x50634E348C8D44EF, self.handle)
+    }
+
+    pub fn has_rocket_boost(&self) -> bool {
+        invoke!(bool, 0x36D782F68B309BDA, self.handle)
+    }
+
+    pub fn has_jumping_ability(&self) -> bool {
+        invoke!(bool, 0x9078C0C5EF8C19E9, self.handle)
     }
 
     pub fn get_last_ped_in_seat(&self, seat: i32) -> Option<Ped> {

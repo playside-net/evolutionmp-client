@@ -40,7 +40,7 @@ pub fn set_cops(enabled: bool) {
 }
 
 impl Ped {
-    pub fn new(ty: u32, model: &dyn Hashable, pos: Vector3<f32>, heading: f32, network: bool, this_script_check: bool) -> Option<Ped> {
+    pub fn new<H>(ty: u32, model: H, pos: Vector3<f32>, heading: f32, network: bool, this_script_check: bool) -> Option<Ped> where H: Hashable {
         invoke!(Option<Ped>, 0xD49F9B0955C367DE, ty, model.joaat(), pos, heading, network, this_script_check)
     }
 

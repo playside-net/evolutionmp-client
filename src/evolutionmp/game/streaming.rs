@@ -2,12 +2,12 @@ use crate::invoke;
 use crate::native;
 use crate::hash::{Hash, Hashable};
 use crate::runtime::ScriptEnv;
-use std::time::Duration;
-use cgmath::Vector3;
 use crate::native::{NativeStackValue, NativeStackReader, NativeStackWriter};
 use crate::game::Handle;
 use crate::game::ped::Ped;
 use crate::native::pool::Handleable;
+use std::time::Duration;
+use cgmath::Vector3;
 
 pub trait Resource {
     fn is_loaded(&self) -> bool;
@@ -19,6 +19,18 @@ pub trait Resource {
 pub struct Model {
     hash: Hash,
     name: String
+}
+
+impl AsRef<dyn Hashable> for Model {
+    fn as_ref(&self) -> &(dyn Hashable + 'static) {
+        self
+    }
+}
+
+impl AsRef<Model> for Model {
+    fn as_ref(&self) -> &Model {
+        self
+    }
 }
 
 pub fn request_collision_at(pos: Vector3<f32>) {
@@ -54,7 +66,7 @@ pub fn stop_player_switch() {
 }
 
 impl Model {
-    pub fn new(hash: &dyn Hashable) -> Model {
+    pub fn from<H>(hash: H) -> Self where H: Hashable {
         Model {
             hash: hash.joaat(),
             name: hash.to_string()
@@ -75,6 +87,10 @@ impl Model {
 
     pub fn is_vehicle(&self) -> bool {
         invoke!(bool, 0x19AAC8F07BFEC53E, self.hash)
+    }
+
+    pub fn is_ped(&self) -> bool {
+        invoke!(bool, 0x75816577FEA6DAD5, self.hash)
     }
 
     pub fn request_collision(&self) {

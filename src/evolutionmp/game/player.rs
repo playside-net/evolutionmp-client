@@ -50,7 +50,7 @@ impl Player {
     }
 
     pub fn set_model<H>(&self, env: &mut ScriptEnv, model: H) -> bool where H: Hashable {
-        let model = Model::new(&model);
+        let model = Model::from(model);
         if model.is_in_cd_image() && model.is_valid() {
             env.wait_for_resource(&model);
             invoke!((), 0x00A1CADD00108836, self.handle, model.joaat());

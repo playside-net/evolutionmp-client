@@ -96,6 +96,13 @@ impl Script for ScriptCleanWorld {
         if game::misc::is_cutscene_active() {
             game::misc::cancel_cutscene();
         }
+
+        let has_special_ability = if let Some(vehicle) = ped.get_in_vehicle(false) {
+            vehicle.has_jumping_ability() || vehicle.has_kers_boost() || vehicle.has_rocket_boost()
+        } else {
+            false
+        };
+        game::ui::set_ability_bar_visible(has_special_ability);
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
@@ -118,11 +125,9 @@ impl ScriptCleanWorld {
         game::vehicle::delete_all_trains();
         game::vehicle::set_parked_count(-1);
         game::vehicle::set_low_priority_generators_active(false);
-        game::vehicle::remove_vehicles_from_generators_in_area(
-            Vector3::new(-9999.0, -9999.0, -9999.0),
-            Vector3::new(9999.0, 9999.0, 9999.0),
-            false
-        );
+        let one = Vector3::new(1.0, 1.0, 1.0);
+        let range = 9999.0;
+        game::vehicle::remove_vehicles_from_generators_in_area(-one * range, one * range, false);
 
         game::ped::set_non_scenario_cops(false);
         game::ped::set_cops(false);

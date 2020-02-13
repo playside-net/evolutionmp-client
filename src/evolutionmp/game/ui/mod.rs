@@ -245,6 +245,14 @@ pub fn set_hud_element_visible_this_frame(element: HudElement, visible: bool) {
     }
 }
 
+pub fn set_ability_bar_visible(visible: bool) {
+    invoke!((), 0x1DFEDD15019315A9, visible)
+}
+
+pub fn set_director_mode(enabled: bool) {
+    invoke!((), 0x808519373FD336A3, enabled)
+}
+
 fn set_text_font(font: Font) {
     invoke!((), 0x66E0276CC5F6B9DA, font as u32)
 }

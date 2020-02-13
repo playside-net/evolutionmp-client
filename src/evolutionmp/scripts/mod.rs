@@ -32,7 +32,7 @@ use std::error::Error;
 use winapi::_core::str::FromStr;
 use winapi::_core::any::TypeId;
 use winapi::_core::fmt::{Formatter, Display};
-use crate::hash::Hashable;
+use crate::hash::{Hashable, Hash};
 
 pub mod console;
 pub mod vehicle;
@@ -78,6 +78,18 @@ pub fn command_vehicle(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<()
     }
 }
 
+pub fn command_model(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let model = args.read::<Model>()?;
+    if model.is_valid() && model.is_in_cd_image() && model.is_ped() {
+        let player = Player::local();
+        player.set_model(env, &model);
+        env.log(format!("~y~Set player model to ~w~{}~", model.to_string()));
+        Ok(())
+    } else {
+        Err("Invalid ped model")?
+    }
+}
+
 pub struct ScriptCommand {
     tasks: TaskQueue,
     commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError>>>>
@@ -103,6 +115,7 @@ impl Script for ScriptCommand {
     fn prepare(&mut self, env: ScriptEnv) {
         self.register_command("tp", command_teleport);
         self.register_command("veh", command_vehicle);
+        self.register_command("model", command_model);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
@@ -244,6 +257,10 @@ impl<T, E> CommandArg for T where T: FromStr<Err=E>, E: Display {
 
 impl CommandArg for Model {
     fn parse(arg: &str) -> Result<Self, CommandArgParseError> {
-        Ok(Model::new(&arg))
+        Ok(if let Ok(hash) = arg.parse::<u32>() {
+            Model::from(Hash(hash))
+        } else {
+            Model::from(&arg)
+        })
     }
 }

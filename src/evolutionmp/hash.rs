@@ -10,6 +10,12 @@ impl std::fmt::Display for Hash {
     }
 }
 
+impl AsRef<dyn Hashable> for Hash {
+    fn as_ref(&self) -> &(dyn Hashable + 'static) {
+        self
+    }
+}
+
 pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
     let s = s.as_ref();
     let mut hash = Wrapping(0u32);
@@ -36,14 +42,28 @@ impl Hashable for Hash {
     fn joaat(&self) -> Hash {
         *self
     }
+
+    fn to_string(&self) -> String {
+        format!("0x{:08X}", self.0)
+    }
 }
 
-impl<S> Hashable for S where S: AsRef<str> {
+impl Hashable for &str {
     fn joaat(&self) -> Hash {
         crate::hash::joaat(self)
     }
 
     fn to_string(&self) -> String {
-        self.as_ref().to_owned()
+        String::from(*self)
+    }
+}
+
+impl<'a, H> Hashable for &'a H where H: Hashable {
+    fn joaat(&self) -> Hash {
+        (*self).joaat()
+    }
+
+    fn to_string(&self) -> String {
+        (*self).to_string()
     }
 }
