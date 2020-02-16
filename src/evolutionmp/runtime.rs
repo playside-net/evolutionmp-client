@@ -14,7 +14,7 @@ use std::collections::{VecDeque, HashMap};
 use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 use std::path::Path;
-use detour::{static_detour, GenericDetour, RawDetour};
+use detour::{GenericDetour, RawDetour};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::shared::minwindef::{LPVOID, DWORD, TRUE};
 use winapi::um::winuser::VK_RETURN;

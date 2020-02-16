@@ -24,7 +24,7 @@ impl ScriptFingerPointing {
 
 impl Script for ScriptFingerPointing {
     fn prepare(&mut self, mut env: ScriptEnv) {
-        self.camera = Some(Camera::new("gameplay", false).expect("Camera creation failed"));
+        self.camera = Some(Camera::gameplay());
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {

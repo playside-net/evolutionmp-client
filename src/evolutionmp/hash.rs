@@ -1,7 +1,9 @@
 use std::num::Wrapping;
 
+use serde_derive::{Serialize, Deserialize};
+
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash, PartialOrd, Serialize, Deserialize)]
 pub struct Hash(pub u32);
 
 impl std::fmt::Display for Hash {

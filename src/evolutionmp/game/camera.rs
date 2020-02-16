@@ -12,7 +12,15 @@ pub fn get_gameplay_relative_heading() -> f32 {
     invoke!(f32, 0x743607648ADD4587)
 }
 
+pub fn get_gameplay_relative_pitch() -> f32 {
+    invoke!(f32, 0x3A6867B4845BEDA2)
+}
+
 impl Camera {
+    pub fn gameplay() -> Camera {
+        Self::new("gameplay", false).expect("gameplay camera missing")
+    }
+
     pub fn new<H>(name: H, unknown: bool) -> Option<Camera> where H: Hashable {
         invoke!(Option<Camera>, 0x5E3CF89C6BCCA67D, name.joaat(), unknown)
     }

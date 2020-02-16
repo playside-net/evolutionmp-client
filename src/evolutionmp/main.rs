@@ -46,7 +46,7 @@ pub mod registry;
 #[cfg(target_os = "windows")]
 pub mod scripts;
 
-//pub mod network;
+pub mod network;
 pub mod hash;
 
 #[repr(C)]
@@ -90,7 +90,7 @@ fn attach(instance: HINSTANCE) {
             std::thread::sleep(Duration::from_millis(100));
 
             info!("Injection successful");
-            
+
             let mem = MemoryRegion::image();
 
             //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check

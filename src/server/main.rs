@@ -1,216 +1,164 @@
-use std::collections::{HashMap, VecDeque};
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
-use std::time::{Instant, Duration};
-use std::sync::{Arc, Mutex};
-use evolutionmp::setup_logger;
-use evolutionmp::network::{Message, MessageReceiver, MessageSender};
-use tokio::net::TcpListener;
-use tokio::prelude::Async;
-use futures::Future;
-use futures::sync::mpsc::{channel, Receiver, Sender};
-use log::{info, error, warn};
-use std::task::{Context, Poll};
-use std::pin::Pin;
-use tokio::prelude::future::FutureResult;
-use tokio::sync::mpsc::{Receiver, Sender};
+use laminar::{ErrorKind, Packet, Socket, SocketEvent, DeliveryGuarantee, OrderingGuarantee};
+use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
+use evolutionmp::network::{PORT, Message, PlayerData};
+use std::collections::HashMap;
+use uuid::Uuid;
+use evolutionmp::hash::Hashable;
 
-pub(crate) struct TaskExecutor {
-    pending_tasks: VecDeque<Receiver<(SocketAddr, TaskResult)>>
+pub fn main() -> Result<(), ErrorKind> {
+    Server::start()
 }
 
-impl TaskExecutor {
-    pub fn new() -> TaskExecutor {
-        TaskExecutor {
-            pending_tasks: VecDeque::new()
+pub struct Session {
+    address: SocketAddr,
+    socialclub: String,
+    pid: u32
+}
+
+pub struct Server {
+    sender: Box<dyn Fn(Packet) -> Result<(), Packet>>,
+    connections: HashMap<SocketAddr, Session>
+}
+
+impl Server {
+    pub fn start() -> Result<(), ErrorKind> {
+        let mut socket = Socket::bind(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, PORT)))?;
+        let sender = socket.get_packet_sender();
+        let receiver = socket.get_event_receiver();
+
+        println!("Listening on: localhost:{}", PORT);
+
+        let _thread = std::thread::spawn(move || socket.start_polling());
+
+        let mut server = Server {
+            sender: Box::new(move |packet| sender.send(packet).map_err(|e|e.into_inner())),
+            connections: HashMap::new()
+        };
+
+        loop {
+            if let Ok(event) = receiver.recv() {
+                match event {
+                    SocketEvent::Connect(address) => server.on_connect(address),
+                    SocketEvent::Packet(packet) => {
+                        let address = packet.addr();
+                        match bincode::deserialize(packet.payload()) {
+                            Ok(message) => {
+                                server.on_message(address, message)
+                            },
+                            Err(e) => {
+                                eprintln!("Received broken message from {:?}: {:?}", address, e);
+                            }
+                        }
+                    }
+                    SocketEvent::Timeout(address) => server.on_timeout(address),
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn on_connect(&mut self, address: SocketAddr) {
+        //println!("Incoming connection from {:?}", address); //TODO Seem to be called when timed out
+    }
+
+    fn on_timeout(&mut self, address: SocketAddr) {
+        if let Some(session) = self.connections.remove(&address) {
+            println!("{} ({:?}) timed out", session.socialclub, address)
+        } else {
+            println!("{:?} timed out", address);
         }
     }
 
-    pub fn submit(&mut self, task: Task) {
-        let (s, r) = channel::<(SocketAddr, TaskResult)>();
-
-        tokio::executor::spawn(task.and_then(move |result| {
-            match s.send(result) {
-                Err(_) => error!("Failed to return task result"),
-                _ => {}
-            }
-            Ok(())
-        }));
-
-        futures::task::current().notify();
-
-        self.pending_tasks.push_back(r);
-    }
-}
-
-#[tokio::main]
-pub async fn main() {
-    let debug = std::env::args().any(|a|a == "--debug");
-    setup_logger("server", debug);
-
-    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), evolutionmp::network::PORT);
-    let listener = TcpListener::bind(&address).await?;
-
-    info!(target: evolutionmp::LOG_ROOT, "Listening on :{}", address.port());
-
-    let server = Server {
-        active_connections: HashMap::new(),
-        task_executor: TaskExecutor::new(),
-        listener
-    };
-    tokio::run(server);
-}
-
-pub enum ConnectionStage {
-    LoggingIn {
-        socialclub: String,
-        pid: u32
-    }
-}
-
-pub(crate) struct Connection {
-    receiver: Receiver<Message>,
-    sender: Sender<Message>,
-    start_time: Instant,
-    last_active: Instant
-}
-
-pub enum Task {
-
-}
-
-impl std::future::Future for Task {
-    type Output = TaskResult;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        unimplemented!()
-    }
-}
-
-pub enum TaskResult {
-    SendMessage {
-        message: Message
-    }
-}
-
-impl Connection {
-    fn process_task_result(&mut self, result: TaskResult) {
-        match result {
-            TaskResult::SendMessage { message } => {
-                self.send(message);
+    fn on_message(&mut self, address: SocketAddr, message: Message) {
+        match message {
+            Message::Handshake { socialclub, pid } => {
+                let session = Session { address, socialclub, pid };
+                self.create_player(session);
+            },
+            other => {
+                if let Some(session) = self.connections.get(&address) {
+                    match other {
+                        Message::Chat { message } => {
+                            println!("[{}]: {}", session.socialclub, message);
+                        },
+                        Message::Disconnect { reason } => {},
+                        _ => {}
+                    }
+                }
             }
         }
     }
 
-    fn update_stage(&mut self, stage: ConnectionStage) {
-        self.stage = stage;
-        match &self.stage {
-            ConnectionStage::LoggingIn { .. } => {
+    fn on_chat(&mut self, address: SocketAddr, message: String) {
 
+    }
+
+    fn create_player(&mut self, session: Session) {
+        println!("{:?} logged in as {} (pid {})", session.address, session.socialclub, session.pid);
+        let id = Uuid::new_v4();
+        let message = Message::CreatePlayer {
+            id,
+            model: "mp_m_freemode_01".joaat(),
+            data: PlayerData {}
+        };
+        println!("Created ped for player {} ({})", session.socialclub, id);
+        for conn in self.connections.values() {
+            if conn.address != session.address {
+                self.send_reliable_sequenced(conn.address, &message, Some(0));
+            }
+        }
+        if let Some(old) = self.connections.insert(session.address, session) {
+
+        }
+    }
+
+    fn send_raw(&self, address: &SocketAddr, packet: Packet) {
+        match (self.sender)(packet) {
+            Err(_) => {
+                eprintln!("Failed to send packet to {:?}", address);
             },
             _ => {}
         }
     }
 
-    fn send(&mut self, message: Message) {
-        self.sender.try_send(message).expect("Failed to send message");
-    }
-}
-
-struct Server {
-    active_connections: HashMap<SocketAddr, Connection>,
-    task_executor: TaskExecutor,
-    listener: TcpListener
-}
-
-impl Server {
-    async fn tick(&mut self) {
-        loop {
-            while let Ok(Async::Ready(task)) = self.task_executor.await {
-                let (peer, result) = task.expect("Task channel closed");
-                if let Some(connection) = self.active_connections.get_mut(&peer) {
-                    connection.process_task_result(result);
-                }
-            }
-
-            let mut disconnected_peers = Vec::new();
-            let mut tasks = Vec::new();
-
-            for (peer, connection) in &mut self.active_connections {
-                while let Ok(Async::Ready(Some(message))) = connection.receiver.poll() {
-                    if let Message::Disconnect = message {
-                        disconnected_peers.push(peer.clone());
-                    } else {
-                        if let Some(task) = process_message(peer, connection, message) {
-                            tasks.push(task);
-                        }
-                    }
-                }
-            }
-
-            for task in tasks {
-                self.task_executor.submit(task);
-            }
-
-            for peer in disconnected_peers {
-                self.active_connections.remove(&peer);
-                info!(target: evolutionmp::LOG_ROOT, "{} lost connection: Disconnected", peer);
-            }
-
-            while let (stream, peer) = self.listener.poll_accept().map_err(|_|()).await {
-                stream.set_keepalive(Some(Duration::from_secs(15)))
-                    .expect("Failed to set keep alive interval");
-                stream.set_recv_buffer_size(evolutionmp::network::MAX_PACKET_SIZE)
-                    .expect("Failed to set recv buffer size");
-                stream.set_send_buffer_size(evolutionmp::network::MAX_PACKET_SIZE)
-                    .expect("Failed to set send buffer size");
-                stream.set_nodelay(false)
-                    .expect("Failed to set nodelay");
-
-                let stream = Arc::new(Mutex::new(stream));
-                info!("Incoming connection from {}", peer);
-
-                if self.active_connections.contains_key(&peer) {
-                    warn!("Already connected");
-                } else {
-                    let start_time = Instant::now();
-
-                    let (mut inbound_s, inbound_r) = channel::<Message>(5);
-                    let (outbound_s, outbound_r) = channel::<Message>(5);
-
-                    let connection = Connection {
-                        receiver: inbound_r,
-                        sender: outbound_s,
-                        last_active: start_time.clone(),
-                        start_time
-                    };
-                    self.active_connections.insert(peer, connection);
-
-                    tokio::spawn(MessageReceiver::new(stream.clone(), move |m| {
-                        match inbound_s.try_send(m) {
-                            Err(e) => {
-                                if !e.is_disconnected() {
-                                    error!("Error receiving message: {:?}", e);
-                                }
-                            },
-                            _ => {}
-                        }
-                    }).join(MessageSender::new(stream, outbound_r)).map(|_|()));
-
-                    futures::task::current().notify();
-                }
-            }
+    fn try_serialize(&self, message: &Message) -> Option<Vec<u8>> {
+        match bincode::serialize(message) {
+            Ok(payload) => Some(payload),
+            Err(e) => {
+                eprintln!("Failed to serialize message: {:?}", e);
+                None
+            },
         }
     }
-}
 
-fn process_message(peer: &SocketAddr, connection: &mut Connection, message: Message) -> Option<Task> {
-    match message {
-        Message::Connect { socialclub, pid } => {
-            connection.info = Some(ConnectionStage::LoggingIn {
-                socialclub, pid
-            });
-        },
-        other => unimplemented!("No handler for message {:?}", other)
+    pub fn send_reliable_ordered(&self, address: SocketAddr, message: &Message, stream_id: Option<u8>) {
+        if let Some(payload) = self.try_serialize(message) {
+            self.send_raw(&address, Packet::reliable_ordered(address, payload, stream_id))
+        }
     }
-    None
+
+    pub fn send_reliable_sequenced(&self, address: SocketAddr, message: &Message, stream_id: Option<u8>) {
+        if let Some(payload) = self.try_serialize(message) {
+            self.send_raw(&address, Packet::reliable_sequenced(address, payload, stream_id))
+        }
+    }
+
+    pub fn send_reliable_unordered(&self, address: SocketAddr, message: &Message) {
+        if let Some(payload) = self.try_serialize(message) {
+            self.send_raw(&address, Packet::reliable_unordered(address, payload))
+        }
+    }
+
+    pub fn send_unreliable(&self, address: SocketAddr, message: &Message) {
+        if let Some(payload) = self.try_serialize(message) {
+            self.send_raw(&address, Packet::unreliable(address, payload))
+        }
+    }
+
+    pub fn send_unreliable_sequenced(&self, address: SocketAddr, message: &Message, stream_id: Option<u8>) {
+        if let Some(payload) = self.try_serialize(message) {
+            self.send_raw(&address, Packet::unreliable_sequenced(address, payload, stream_id))
+        }
+    }
 }

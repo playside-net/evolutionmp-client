@@ -6,7 +6,7 @@ use crate::game;
 use crate::game::ped::Ped;
 use crate::game::streaming::Model;
 use crate::runtime::ScriptEnv;
-use crate::native::vehicle::GEARS_OFFSET;
+use crate::native::vehicle::{GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
 use crate::game::radio::RadioStation;
 use std::time::Duration;
@@ -102,10 +102,60 @@ impl Vehicle {
         invoke!((), 0x4F1D4BE3A7F24601, self.handle, primary, secondary)
     }
 
-    pub fn get_gears_offset(&self) -> i32 {
-        unsafe {
-            self.get_address().offset(GEARS_OFFSET.load(Ordering::SeqCst) as isize).cast::<i32>().read()
-        }
+    pub fn get_gear(&self) -> i32 {
+        GEAR.get(self)
+    }
+
+    pub fn set_gear(&self, gear: i32) {
+        GEAR.set(self, gear)
+    }
+
+    pub fn get_high_gear(&self) -> i32 {
+        HIGH_GEAR.get(self)
+    }
+
+    pub fn set_high_gear(&self, high_gear: i32) {
+        HIGH_GEAR.set(self, high_gear)
+    }
+
+    pub fn get_current_rpm(&self) -> f32 {
+        CURRENT_RPM.get(self)
+    }
+
+    pub fn set_current_rpm(&self, rpm: f32) {
+        CURRENT_RPM.set(self, rpm)
+    }
+
+    pub fn get_wheel_speed(&self) -> f32 {
+        WHEEL_SPEED.get(self)
+    }
+
+    pub fn set_wheel_speed(&self, speed: f32) {
+        WHEEL_SPEED.set(self, speed)
+    }
+
+    pub fn get_acceleration(&self) -> f32 {
+        ACCELERATION.get(self)
+    }
+
+    pub fn set_acceleration(&self, acceleration: f32) {
+        ACCELERATION.set(self, acceleration)
+    }
+
+    pub fn get_steering_scale(&self) -> f32 {
+        STEERING_SCALE.get(self)
+    }
+
+    pub fn set_steering_scale(&self, scale: f32) {
+        STEERING_SCALE.set(self, scale)
+    }
+
+    pub fn get_steering_angle(&self) -> f32 {
+        STEERING_ANGLE.get(self)
+    }
+
+    pub fn set_steering_angle(&self, angle: f32) {
+        STEERING_ANGLE.set(self, angle)
     }
 
     pub fn get_passenger(&self, seat: i32) -> Option<Ped> {
@@ -114,6 +164,22 @@ impl Vehicle {
 
     pub fn get_max_passengers(&self) -> u32 {
         invoke!(u32, 0xA7C4F2C6E744A550, self.handle)
+    }
+
+    pub fn set_taxi_lights(&self, lights: bool) {
+        invoke!((), 0x598803E85E8448D9, self.handle, lights)
+    }
+
+    pub fn get_class(&self) -> VehicleClass {
+        invoke!(VehicleClass, 0x29439776AAA00A62, self.handle)
+    }
+
+    pub fn set_mod(&self, id: u32, value: u32, custom_tires: bool) {
+        invoke!((), 0x6AF0636DDEDCB6DD, self.handle, id, value, custom_tires)
+    }
+
+    pub fn set_livery(&self, livery: u32) {
+        invoke!((), 0x60BF608F1B8CD1B6, self.handle, livery)
     }
 
     pub fn is_seat_free(&self, seat: i32) -> bool {
@@ -156,6 +222,10 @@ impl Vehicle {
 
     pub fn is_any_model<H>(&self, models: &[H]) -> bool where H: Hashable {
         models.iter().any(|m|self.is_model(m.joaat()))
+    }
+
+    pub fn is_engine_on(&self) -> bool {
+        invoke!(bool, 0xAE31E7DF9B5B132E, self.handle)
     }
 
     pub fn copy_damage_to(&self, target: &Vehicle) {
@@ -211,6 +281,86 @@ impl Vehicle {
             })
         } else {
             None
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub enum VehicleClass {
+    Compact,
+    Sedan,
+    SUV,
+    Coupe,
+    Muscle,
+    SportClassic,
+    Sport,
+    Super,
+    Motorcycle,
+    OffRoad,
+    Industrial,
+    Utility,
+    Van,
+    Cycle,
+    Boat,
+    Helicopter,
+    Plane,
+    Service,
+    Emergency,
+    Military,
+    Commercial,
+    Train
+}
+
+impl Handleable for VehicleClass {
+    fn from_handle(handle: u32) -> Option<Self> where Self: Sized {
+        if handle > 21 {
+            None
+        } else {
+            Some(unsafe { std::mem::transmute(handle) })
+        }
+    }
+
+    fn get_handle(&self) -> u32 {
+        *self as u32
+    }
+}
+
+impl VehicleClass {
+    pub fn from<H>(hash: H) -> Option<VehicleClass> where H: Hashable {
+        invoke!(Option<Self>, 0xDEDF1C8BD47C2200, hash.joaat())
+    }
+
+    pub fn get_estimated_max_speed(&self) -> f32 {
+        invoke!(f32, 0x00C09F246ABEDD82, self.get_handle())
+    }
+
+    pub fn get_max_acceleration(&self) -> f32 {
+        invoke!(f32, 0x2F83E7E45D9EA7AE, self.get_handle())
+    }
+
+    pub fn get_max_agility(&self) -> f32 {
+        invoke!(f32, 0x4F930AD022D6DE3B, self.get_handle())
+    }
+
+    pub fn get_max_braking(&self) -> f32 {
+        invoke!(f32, 0x4BF54C16EC8FEC03, self.get_handle())
+    }
+
+    pub fn get_max_traction(&self) -> f32 {
+        invoke!(f32, 0xDBC86D85C5059461, self.get_handle())
+    }
+
+    pub fn has_custom_horns(&self) -> bool {
+        match self {
+            VehicleClass::Emergency
+            | VehicleClass::Service
+            | VehicleClass::Helicopter
+            | VehicleClass::Plane
+            | VehicleClass::Commercial
+            | VehicleClass::Boat
+            | VehicleClass::Train => false,
+            _ => true
         }
     }
 }

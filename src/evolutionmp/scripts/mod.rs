@@ -1,17 +1,14 @@
-use std::time::{Duration, Instant};
 use game::controls::{Control, Group as ControlGroup};
 use game::ui::{CursorSprite, LoadingPrompt};
 use winapi::um::winuser::{VK_NUMPAD5, VK_NUMPAD2, VK_NUMPAD0, VK_RIGHT, VK_LEFT, VK_BACK, ReleaseCapture};
-use cgmath::{Vector3, Vector2, Matrix4, Transform};
-use std::collections::{VecDeque, HashMap};
-use std::sync::atomic::Ordering;
+use cgmath::{Vector3, Vector2, Matrix4, Transform, Zero, Euler, Quaternion, Matrix3, Array};
 use crate::runtime::{Script, ScriptEnv, ScriptContainer, Runtime, TaskQueue};
 use crate::pattern::MemoryRegion;
 use crate::GameState;
 use crate::{invoke, game, native};
 use crate::game::entity::Entity;
 use crate::game::stats::Stat;
-use crate::game::ped::Ped;
+use crate::game::ped::{Ped, PedBone};
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
 use crate::game::{streaming, gameplay, dlc, script, clock, Rgb, Rgba};
@@ -26,19 +23,23 @@ use crate::scripts::console::ScriptConsole;
 use crate::scripts::vehicle::ScriptVehicle;
 use crate::scripts::cleanup::ScriptCleanWorld;
 use crate::scripts::pointing::ScriptFingerPointing;
+use crate::hash::{Hashable, Hash};
+use crate::scripts::network::ScriptNetwork;
 use std::sync::Mutex;
 use std::rc::Rc;
 use std::error::Error;
-use winapi::_core::str::FromStr;
-use winapi::_core::any::TypeId;
-use winapi::_core::fmt::{Formatter, Display};
-use crate::hash::{Hashable, Hash};
+use std::str::FromStr;
+use std::any::TypeId;
+use std::fmt::{Formatter, Display};
+use std::time::{Duration, Instant};
+use std::collections::{VecDeque, HashMap};
+use std::sync::atomic::Ordering;
 
 pub mod console;
 pub mod vehicle;
 pub mod cleanup;
 pub mod pointing;
-//pub mod network;
+pub mod network;
 
 pub fn init(runtime: &mut Runtime) {
     crate::info!("Registering scripts");
@@ -49,6 +50,7 @@ pub fn init(runtime: &mut Runtime) {
     runtime.register_script("vehicle", ScriptVehicle::new());
     runtime.register_script("finger_pointing", ScriptFingerPointing::new());
     runtime.register_script("command", ScriptCommand::new());
+    network::init(runtime);
 }
 
 pub fn command_teleport(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
@@ -90,6 +92,27 @@ pub fn command_model(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), 
     }
 }
 
+pub fn command_zone(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let player = Player::local();
+    let ped = player.get_ped();
+    let zone = game::gps::get_zone_name(ped.get_position());
+    let zone = game::locale::get_translation(zone);
+    env.log(format!("~y~Your zone is ~w~{}~", zone));
+    Ok(())
+}
+
+pub fn command_water(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let distance = args.read::<f32>()?;
+    let player = Player::local();
+    let ped = player.get_ped();
+    let head = ped.get_bone(PedBone::SkelHead).unwrap();
+    let start = head.get_position();
+    let end = ped.get_position_by_offset(Vector3::new(0.0, distance, -distance / 2.0));
+    let probe = game::water::probe(start, end);
+    env.log(format!("~y~Probe result: {:?}", probe));
+    Ok(())
+}
+
 pub struct ScriptCommand {
     tasks: TaskQueue,
     commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError>>>>
@@ -116,10 +139,24 @@ impl Script for ScriptCommand {
         self.register_command("tp", command_teleport);
         self.register_command("veh", command_vehicle);
         self.register_command("model", command_model);
+        self.register_command("zone", command_zone);
+        self.register_command("water", command_water);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
         self.tasks.process(&mut env);
+        let distance = 10.0;
+        let player = Player::local();
+        let ped = player.get_ped();
+        let head = ped.get_bone(PedBone::SkelHead).unwrap();
+        let start = head.get_position();
+        let end = ped.get_position_by_offset(Vector3::new(0.0, distance, -distance / 2.0));
+        let probe = game::water::probe(start, end);
+        if let Some(pos) = probe {
+            //let n = result.surface_normal;
+            //game::graphics::draw_line(result.end, result.end + n / 10.0, Rgba::BLACK);
+            game::graphics::draw_marker(0, pos, Vector3::zero(), Vector3::zero(), Vector3::from_value(1.0), Rgba::WHITE, true, false, false, None, false);
+        }
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
@@ -139,7 +176,7 @@ impl Script for ScriptCommand {
                         env.error(format!("Unknown command: {}", name));
                     });
                 }
-                true
+                false
             },
             _ => false
         }

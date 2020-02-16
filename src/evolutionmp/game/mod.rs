@@ -1,6 +1,8 @@
 use crate::pattern::MemoryRegion;
 use crate::native::NativeStackValue;
 
+use serde_derive::{Serialize, Deserialize};
+
 pub mod audio;
 pub mod entity;
 pub mod player;
@@ -29,10 +31,11 @@ pub mod graphics;
 pub mod radio;
 pub mod locale;
 pub mod interior;
+pub mod water;
 
 pub type Handle = u32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Rgba {
     pub r: u8,
     pub g: u8,
@@ -50,7 +53,7 @@ impl Rgba {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Rgb {
     pub r: u8,
     pub g: u8,

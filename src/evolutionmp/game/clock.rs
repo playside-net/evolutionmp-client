@@ -39,6 +39,7 @@ pub fn get_local_time() -> Time {
     }
 }
 
+#[derive(Debug)]
 pub struct Time {
     pub year: u32,
     pub month: u32,

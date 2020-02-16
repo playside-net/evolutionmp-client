@@ -2,28 +2,36 @@ use crate::invoke;
 use crate::game::entity::Entity;
 use crate::game::Handle;
 use crate::native::pool::Handleable;
-use cgmath::Vector3;
+use crate::hash::Hash;
+use cgmath::{Vector3, Array};
+use crate::native::NativeVector3;
 
 pub struct Probe {
     handle: Handle
 }
 
 impl Probe {
-    pub fn new_ray(start: Vector3<f32>, end: Vector3<f32>, flags: u32, entity: &dyn Entity, p8: u32) -> Probe {
+    pub fn new_ray(start: Vector3<f32>, end: Vector3<f32>, flags: i32, entity: &dyn Entity, p8: u32) -> Probe {
         invoke!(Probe, 0x377906D8A31E5586, start, end, flags, entity.get_handle(), p8)
     }
 
-    pub fn get_result(&self) -> ProbeResult {
+    pub fn get_result(&self, include_material: bool) -> ProbeResult {
         let mut hit = false;
-        let mut end = Vector3::new(0.0, 0.0, 0.0);
-        let mut surface_normal = Vector3::new(0.0, 0.0, 0.0);
+        let mut end = NativeVector3::zero();
+        let mut surface_normal = NativeVector3::zero();
         let mut entity = 0 as Handle;
-        let code = invoke!(u32, 0x3D87450E15D98694, self.handle, &mut hit, &mut end, &mut surface_normal, &mut entity);
+        let mut material = Hash(0);
+        let code = if include_material {
+            invoke!(u32, 0x65287525D951F6BE, self.handle, &mut hit, &mut end, &mut surface_normal, &mut material, &mut entity)
+        } else {
+            invoke!(u32, 0x3D87450E15D98694, self.handle, &mut hit, &mut end, &mut surface_normal, &mut entity)
+        };
         ProbeResult {
             hit,
-            end,
-            surface_normal,
+            end: end.into(),
+            surface_normal: surface_normal.into(),
             entity: if entity == 0 { None } else { Some(ProbeEntity { handle: entity }) },
+            material: if include_material { Some(material) } else { None },
             code
         }
     }
@@ -31,14 +39,17 @@ impl Probe {
 
 crate::impl_handle!(Probe);
 
+#[derive(Debug)]
 pub struct ProbeResult {
     pub hit: bool,
     pub end: Vector3<f32>,
     pub surface_normal: Vector3<f32>,
     pub entity: Option<ProbeEntity>,
+    pub material: Option<Hash>,
     pub code: u32
 }
 
+#[derive(Debug)]
 pub struct ProbeEntity {
     handle: Handle
 }

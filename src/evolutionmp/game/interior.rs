@@ -3,6 +3,7 @@ use crate::game::Handle;
 use crate::hash::{Hashable, Hash};
 use crate::game::entity::Entity;
 use cgmath::Vector3;
+use crate::native::NativeVector3;
 
 pub struct Interior {
     handle: Handle
@@ -80,10 +81,10 @@ impl Interior {
     }
 
     pub fn get_info(&self) -> InteriorInfo {
-        let mut pos = Vector3::new(0.0, 0.0, 0.0);
+        let mut pos = NativeVector3::zero();
         let mut hash = Hash(0);
         invoke!((), 0x252BDC06B73FA6EA, self.handle, &mut pos, &mut hash);
-        InteriorInfo { pos, hash }
+        InteriorInfo { pos: pos.into(), hash }
     }
 
     pub fn get_offset_from(&self, pos: Vector3<f32>) -> Vector3<f32> {

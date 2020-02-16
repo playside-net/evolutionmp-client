@@ -5,6 +5,7 @@
       <w>comprime</w>
       <w>cutscene</w>
       <w>deref</w>
+      <w>eyesack</w>
       <w>freemode</w>
       <w>freezed</w>
       <w>gameplay</w>
@@ -15,8 +16,10 @@
       <w>kers</w>
       <w>leaderboard</w>
       <w>longjmp</w>
+      <w>masseter</w>
       <w>minimap</w>
       <w>multiplayer</w>
+      <w>nasolabial</w>
       <w>outro</w>
       <w>peds</w>
       <w>pricedown</w>
@@ -25,8 +28,10 @@
       <w>reticle</w>
       <w>rockstar</w>
       <w>scaleform</w>
+      <w>scaler</w>
       <w>selfie</w>
       <w>setjmp</w>
+      <w>skel</w>
       <w>slowmo</w>
       <w>snapmatic</w>
       <w>socialclub</w>

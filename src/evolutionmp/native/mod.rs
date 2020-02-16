@@ -2,7 +2,7 @@ use crate::pattern::MemoryRegion;
 use crate::game::{Rgba, Rgb, Handle};
 use std::collections::HashMap;
 use std::ffi::{CString, CStr};
-use cgmath::{Vector3, Vector2};
+use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
 use byteorder::WriteBytesExt;
@@ -12,6 +12,8 @@ use std::ops::Deref;
 use std::ptr::null_mut;
 use crate::native::pool::Handleable;
 use winapi::_core::marker::PhantomData;
+use winapi::_core::sync::atomic::AtomicI32;
+use crate::game::entity::Entity;
 
 pub mod vehicle;
 pub mod pool;
@@ -380,18 +382,20 @@ impl Natives {
 #[macro_export]
 macro_rules! invoke {
     ($ret: ty, $hash:literal) => {{
-        let hash: u64 = $hash;
-        let handler = $crate::native::get_handler(hash);
+        lazy_static! {
+            static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
+        }
         let mut context = $crate::native::NativeCallContext::new();
-        handler(&mut context);
+        HANDLER(&mut context);
         context.get_result::<$ret>()
     }};
     ($ret: ty, $hash:literal, $($arg: expr),*) => {{
-        let hash: u64 = $hash;
-        let handler = $crate::native::get_handler(hash);
+        lazy_static! {
+            static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
+        }
         let mut context = $crate::native::NativeCallContext::new();
         $(context.push_arg($arg);)*
-        handler(&mut context);
+        HANDLER(&mut context);
         context.get_result::<$ret>()
     }};
 }
@@ -417,6 +421,22 @@ impl NativeStackValue for String {
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         self.as_str().write_to_stack(stack);
         std::mem::forget(self);
+    }
+}
+
+impl NativeStackValue for Quaternion<f32> {
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        let x = stack.read();
+        let y = stack.read();
+        let z = stack.read();
+        Euler::<Deg<f32>>::new(x, y, z).into()
+    }
+
+    fn write_to_stack(self, stack: &mut NativeStackWriter) {
+        let euler = Euler::from(self);
+        stack.write(Deg::from(euler.x));
+        stack.write(Deg::from(euler.y));
+        stack.write(Deg::from(euler.z));
     }
 }
 
@@ -505,6 +525,8 @@ impl NativeStackValue for u32 {}
 impl NativeStackValue for &mut u32 {}
 impl NativeStackValue for f32 {}
 impl NativeStackValue for &mut f32 {}
+impl NativeStackValue for Deg<f32> {}
+impl NativeStackValue for &mut Deg<f32> {}
 impl NativeStackValue for bool {}
 impl NativeStackValue for &mut bool {}
 impl NativeStackValue for u64 {}
@@ -513,5 +535,73 @@ impl NativeStackValue for () {}
 impl NativeStackValue for Hash {}
 impl NativeStackValue for &mut Hash {}
 
-impl<T> NativeStackValue for &mut Vector3<T> where T: NativeStackValue + Copy + Clone {}
-impl<T> NativeStackValue for &mut Vector2<T> where T: NativeStackValue + Copy + Clone {}
+pub struct NativeEntityField<T> where T: Sized {
+    offset: AtomicI32,
+    _ty: PhantomData<T>
+}
+
+impl<T> NativeEntityField<T> where T: Sized {
+    pub const fn new() -> NativeEntityField<T> {
+        NativeEntityField {
+            offset: AtomicI32::new(0),
+            _ty: PhantomData
+        }
+    }
+
+    pub(crate) fn set_offset(&self, offset: i32) {
+        self.offset.store(offset, Ordering::SeqCst)
+    }
+
+    pub(crate) fn get_offset(&self) -> isize {
+        let offset = self.offset.load(Ordering::SeqCst) as isize;
+        assert_ne!(offset, 0, "field uninitialized");
+        offset
+    }
+
+    pub(crate) fn get_ptr(&self, entity: &dyn Entity) -> *mut T {
+        let offset = self.get_offset();
+        unsafe {
+            entity.get_address().offset(offset).cast::<T>()
+        }
+    }
+
+    pub fn set(&self, entity: &dyn Entity, value: T) {
+        unsafe {
+            self.get_ptr(entity).write(value)
+        }
+    }
+
+    pub fn get(&self, entity: &dyn Entity) -> T {
+        unsafe {
+            self.get_ptr(entity).read()
+        }
+    }
+}
+
+#[repr(C, packed(1))]
+pub struct NativeVector3 {
+    pub x: f32,
+    _x_pad: u32,
+    pub y: f32,
+    _y_pad: u32,
+    pub z: f32,
+    _z_pad: u32
+}
+
+impl NativeVector3 {
+    pub fn zero() -> NativeVector3 {
+        NativeVector3 {
+            x: 0.0, _x_pad: 0,
+            y: 0.0, _y_pad: 0,
+            z: 0.0, _z_pad: 0
+        }
+    }
+}
+
+impl From<NativeVector3> for Vector3<f32> {
+    fn from(native: NativeVector3) -> Self {
+        Vector3::new(native.x, native.y, native.z)
+    }
+}
+
+impl NativeStackValue for &mut NativeVector3 {}

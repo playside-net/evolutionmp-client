@@ -2,7 +2,7 @@ use crate::hash::Hash;
 use super::Handle;
 use crate::invoke;
 use crate::native::pool::{self, Handleable};
-use cgmath::Vector3;
+use cgmath::{Vector3, Euler, Deg, Quaternion};
 
 pub trait Entity: Handleable {
     fn exists(&self) -> bool {
@@ -26,12 +26,20 @@ pub trait Entity: Handleable {
         invoke!((), 0x239A3351AC1DA385, self.get_handle(), pos, axis)
     }
 
-    fn get_rotation(&self, order: u32) -> Vector3<f32> {
-        invoke!(Vector3<f32>, 0xAFBD61CC738D9EB9, self.get_handle(), order)
+    fn set_load_collision(&self, load: bool) {
+        invoke!((), 0x0DC7CABAB1E9B67E, self.get_handle(), load)
+    }
+
+    fn get_rotation(&self, order: u32) -> Quaternion<f32> {
+        invoke!(Quaternion<f32>, 0xAFBD61CC738D9EB9, self.get_handle(), order)
     }
 
     fn get_rotation_velocity(&self) -> Vector3<f32> {
         invoke!(Vector3<f32>, 0x213B91045D09B983, self.get_handle())
+    }
+
+    fn get_velocity(&self) -> Vector3<f32> {
+        invoke!(Vector3<f32>, 0x4805D2B1D8CF94A9, self.get_handle())
     }
 
     fn get_heading(&self) -> f32 {
@@ -68,6 +76,10 @@ pub trait Entity: Handleable {
 
     fn set_collision(&self, collision: bool, physics: bool) {
         invoke!((), 0x1A9205C1B9EE827F, self.get_handle(), collision, physics)
+    }
+
+    fn set_rotation(&self, rotation: Quaternion<f32>, order: u32) {
+        invoke!((), 0x8524A8B0171D5E07, self.get_handle(), rotation, order, true)
     }
 
     fn get_position_by_offset(&self, offset: Vector3<f32>) -> Vector3<f32> {
@@ -110,5 +122,24 @@ pub trait Entity: Handleable {
 
     fn set_max_health(&self, health: u32) {
         invoke!((), 0x166E7CF68597D8B5, self.get_handle(), health)
+    }
+}
+
+pub struct Bone<'a, E> where E: Entity {
+    pub entity: &'a E,
+    pub index: i32
+}
+
+impl<'a, E> Bone<'a, E> where E: Entity {
+    pub fn get_entity(&self) -> &'a E {
+        self.entity
+    }
+
+    pub fn get_position(&self) -> Vector3<f32> {
+        invoke!(Vector3<f32>, 0x44A8FCB8ED227738, self.entity.get_handle(), self.index)
+    }
+
+    pub fn get_rotation(&self) -> Quaternion<f32> {
+        invoke!(Quaternion<f32>, 0xCE6294A232D03786, self.entity.get_handle(), self.index)
     }
 }
