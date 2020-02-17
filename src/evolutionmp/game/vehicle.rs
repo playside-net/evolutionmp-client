@@ -1,19 +1,19 @@
 use super::Handle;
-use crate::invoke;
+use crate::{invoke, impl_handle};
 use crate::game::entity::Entity;
-use crate::hash::{Hashable, Hash};
 use crate::game;
 use crate::game::ped::Ped;
 use crate::game::streaming::Model;
+use crate::game::radio::RadioStation;
+use crate::game::worldprobe::ProbeEntity;
+use crate::hash::{Hashable, Hash};
 use crate::runtime::ScriptEnv;
 use crate::native::vehicle::{GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
-use crate::game::radio::RadioStation;
 use std::time::Duration;
 use std::sync::atomic::Ordering;
+use std::mem::ManuallyDrop;
 use cgmath::Vector3;
-use winapi::_core::mem::ManuallyDrop;
-use crate::game::worldprobe::ProbeEntity;
 
 pub fn get_pool() -> ManuallyDrop<Box<Box<VehiclePool>>> {
     crate::native::pool::get_vehicles().expect("vehicle pool not initialized")
@@ -77,10 +77,10 @@ pub fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3
 }
 
 impl Vehicle {
-    pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: AsRef<Model> {
-        let model = model.as_ref();
+    pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: Hashable {
+        let model = Model::from(model);
         if model.is_in_cd_image() && model.is_valid() && model.is_vehicle() {
-            env.wait_for_resource(model);
+            env.wait_for_resource(&model);
             invoke!(Option<Vehicle>, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check)
         } else {
             None
@@ -174,7 +174,7 @@ impl Vehicle {
         invoke!(VehicleClass, 0x29439776AAA00A62, self.handle)
     }
 
-    pub fn set_mod(&self, id: u32, value: u32, custom_tires: bool) {
+    pub fn set_mod(&self, id: u32, value: i32, custom_tires: bool) {
         invoke!((), 0x6AF0636DDEDCB6DD, self.handle, id, value, custom_tires)
     }
 
@@ -377,7 +377,7 @@ impl Entity for Vehicle {
     }
 }
 
-crate::impl_handle!(Vehicle);
+impl_handle!(Vehicle);
 
 pub struct VehicleRadio<'a> {
     vehicle: &'a Vehicle

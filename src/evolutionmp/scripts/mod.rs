@@ -34,12 +34,14 @@ use std::fmt::{Formatter, Display};
 use std::time::{Duration, Instant};
 use std::collections::{VecDeque, HashMap};
 use std::sync::atomic::Ordering;
+use crate::scripts::fishing::ScriptFishing;
 
 pub mod console;
 pub mod vehicle;
 pub mod cleanup;
 pub mod pointing;
 pub mod network;
+pub mod fishing;
 
 pub fn init(runtime: &mut Runtime) {
     crate::info!("Registering scripts");
@@ -50,6 +52,7 @@ pub fn init(runtime: &mut Runtime) {
     runtime.register_script("vehicle", ScriptVehicle::new());
     runtime.register_script("finger_pointing", ScriptFingerPointing::new());
     runtime.register_script("command", ScriptCommand::new());
+    runtime.register_script("fishing", ScriptFishing::new());
     network::init(runtime);
 }
 
@@ -101,16 +104,30 @@ pub fn command_zone(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), C
     Ok(())
 }
 
-pub fn command_water(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
-    let distance = args.read::<f32>()?;
+pub fn command_repair(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
     let player = Player::local();
     let ped = player.get_ped();
-    let head = ped.get_bone(PedBone::SkelHead).unwrap();
-    let start = head.get_position();
-    let end = ped.get_position_by_offset(Vector3::new(0.0, distance, -distance / 2.0));
-    let probe = game::water::probe(start, end);
-    env.log(format!("~y~Probe result: {:?}", probe));
-    Ok(())
+    if let Some(veh) = ped.get_in_vehicle(false) {
+        veh.repair();
+        env.log("~g~Repaired!");
+        Ok(())
+    } else {
+        Err("You're not in a vehicle")?
+    }
+}
+
+pub fn command_mod(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let player = Player::local();
+    let ped = player.get_ped();
+    if let Some(veh) = ped.get_in_vehicle(false) {
+        let id = args.read::<u32>()?;
+        let value = args.read::<i32>()?;
+        veh.set_mod(id, value, false);
+        env.log("~g~Modified!");
+        Ok(())
+    } else {
+        Err("You're not in a vehicle")?
+    }
 }
 
 pub struct ScriptCommand {
@@ -140,23 +157,12 @@ impl Script for ScriptCommand {
         self.register_command("veh", command_vehicle);
         self.register_command("model", command_model);
         self.register_command("zone", command_zone);
-        self.register_command("water", command_water);
+        self.register_command("repair", command_repair);
+        self.register_command("mod", command_mod);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
         self.tasks.process(&mut env);
-        let distance = 10.0;
-        let player = Player::local();
-        let ped = player.get_ped();
-        let head = ped.get_bone(PedBone::SkelHead).unwrap();
-        let start = head.get_position();
-        let end = ped.get_position_by_offset(Vector3::new(0.0, distance, -distance / 2.0));
-        let probe = game::water::probe(start, end);
-        if let Some(pos) = probe {
-            //let n = result.surface_normal;
-            //game::graphics::draw_line(result.end, result.end + n / 10.0, Rgba::BLACK);
-            game::graphics::draw_marker(0, pos, Vector3::zero(), Vector3::zero(), Vector3::from_value(1.0), Rgba::WHITE, true, false, false, None, false);
-        }
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {

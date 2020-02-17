@@ -32,6 +32,7 @@ pub mod radio;
 pub mod locale;
 pub mod interior;
 pub mod water;
+pub mod prop;
 
 pub type Handle = u32;
 

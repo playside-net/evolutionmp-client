@@ -1,4 +1,4 @@
-use crate::invoke;
+use crate::{invoke, invoke_option};
 use crate::game::Handle;
 use crate::native::pool::Handleable;
 use crate::native::NativeVector3;
@@ -10,20 +10,12 @@ pub fn set_height(pos: Vector2<f32>, radius: f32, height: f32) {
 
 pub fn get_height(pos: Vector3<f32>) -> Option<f32> {
     let mut result = 0.0;
-    if invoke!(bool, 0xF6829842C06AE524, pos, &mut result) {
-        Some(result)
-    } else {
-        None
-    }
+    invoke_option!(result, 0xF6829842C06AE524, pos, &mut result)
 }
 
 pub fn get_height_without_waves(pos: Vector3<f32>) -> Option<f32> {
     let mut result = 0.0;
-    if invoke!(bool, 0x8EE6B53CE13A9794, pos, &mut result) {
-        Some(result)
-    } else {
-        None
-    }
+    invoke_option!(result, 0x8EE6B53CE13A9794, pos, &mut result)
 }
 
 pub fn get_waves_intensity() -> f32 {
@@ -40,20 +32,12 @@ pub fn set_waves_intensity(intensity: f32) {
 
 pub fn probe(start: Vector3<f32>, end: Vector3<f32>) -> Option<Vector3<f32>> {
     let mut result = NativeVector3::zero();
-    if invoke!(bool, 0xFFA5D878809819DB, start, end, &mut result) {
-        Some(result.into())
-    } else {
-        None
-    }
+    invoke_option!(result.into(), 0xFFA5D878809819DB, start, end, &mut result)
 }
 
-pub fn probe_height(pos: Vector3<f32>, flags: u64) -> Option<f32> {
+pub fn probe_height(pos: Vector3<f32>, flags: i32) -> Option<f32> {
     let mut result = 0.0;
-    if invoke!(bool, 0x2B3451FA1E3142E2, pos, flags, &mut result) {
-        Some(result)
-    } else {
-        None
-    }
+    invoke_option!(result, 0x2B3451FA1E3142E2, pos, flags, &mut result)
 }
 
 pub struct Rise {

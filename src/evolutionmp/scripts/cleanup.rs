@@ -52,6 +52,10 @@ impl Script for ScriptCleanWorld {
         self.terminate_script("replay_controller", true);
         self.terminate_all_scripts(true);
 
+        for (id, thread) in game::script::get_all_threads().iter().enumerate() {
+            crate::info!("thread #{}: {}", id, thread.get_name());
+        }
+
         self.cleanup();
 
         for flag in AUDIO_FLAGS.iter() {
@@ -185,7 +189,7 @@ pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
     Control::VehicleSlowMoUpDown
 ];
 
-pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [
+pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 762] = [
     "abigail1",
     "abigail2",
     "achievement_controller",
@@ -949,5 +953,6 @@ pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [
     "weapon_audio_widget",
     "wp_partyboombox",
     "xml_menus",
-    "yoga"
+    "yoga",
+    "valentinerpreward2"
 ];

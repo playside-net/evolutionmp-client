@@ -381,7 +381,7 @@ impl Natives {
 
 #[macro_export]
 macro_rules! invoke {
-    ($ret: ty, $hash:literal) => {{
+    ($ret: ty, $hash: literal) => {{
         lazy_static! {
             static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
         }
@@ -389,7 +389,7 @@ macro_rules! invoke {
         HANDLER(&mut context);
         context.get_result::<$ret>()
     }};
-    ($ret: ty, $hash:literal, $($arg: expr),*) => {{
+    ($ret: ty, $hash: literal, $($arg: expr),*) => {{
         lazy_static! {
             static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
         }
@@ -398,6 +398,17 @@ macro_rules! invoke {
         HANDLER(&mut context);
         context.get_result::<$ret>()
     }};
+}
+
+#[macro_export]
+macro_rules! invoke_option {
+    ($ret: expr, $hash: literal, $($arg: expr),*) => {
+        if invoke!(bool, $hash, $($arg),*)  {
+            Some($ret)
+        } else {
+            None
+        }
+    };
 }
 
 impl NativeStackValue for &str {

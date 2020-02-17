@@ -3,6 +3,7 @@ use super::Handle;
 use crate::invoke;
 use crate::native::pool::{self, Handleable};
 use cgmath::{Vector3, Euler, Deg, Quaternion};
+use crate::game::streaming::{Resource, AnimDict};
 
 pub trait Entity: Handleable {
     fn exists(&self) -> bool {
@@ -123,6 +124,14 @@ pub trait Entity: Handleable {
     fn set_max_health(&self, health: u32) {
         invoke!((), 0x166E7CF68597D8B5, self.get_handle(), health)
     }
+
+    fn is_animation_playing(&self, dict: &AnimDict, name: &str, flag: u32) -> bool {
+        invoke!(bool, 0x1F0B79228E461EC9, self.get_handle(), dict.get_name(), name, flag)
+    }
+
+    fn is_in_water(&self) -> bool {
+        invoke!(bool, 0xCFB0A0D8EDD145A3, self.get_handle())
+    }
 }
 
 pub struct Bone<'a, E> where E: Entity {
@@ -133,6 +142,10 @@ pub struct Bone<'a, E> where E: Entity {
 impl<'a, E> Bone<'a, E> where E: Entity {
     pub fn get_entity(&self) -> &'a E {
         self.entity
+    }
+
+    pub fn attach(&self, entity: &dyn Entity, pos: Vector3<f32>, rotation: Vector3<f32>) {
+        invoke!((), 0x6B9BBD38AB0796DF, entity.get_handle(), self.entity.get_handle(), self.index, pos, rotation, false, false, false, false, 2, true)
     }
 
     pub fn get_position(&self) -> Vector3<f32> {

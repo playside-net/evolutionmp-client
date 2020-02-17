@@ -47,6 +47,17 @@ pub fn show_subtitle(text: &str, duration: i32, immediately: bool) {
     invoke!((), 0x9D77056A530643F6, duration, immediately);
 }
 
+pub fn show_help(text: &str, looping: bool, beep: bool, duration: Option<u32>) {
+    invoke!((), 0x8509B634FBE7DA11, "STRING");
+    push_string(text);
+    invoke!((), 0x238FFE5C7B0498A6, 0, looping, beep, duration.map_or(-1, |d|d as i32))
+}
+
+#[deprecated(note="Not working. Use show_help instead")]
+pub fn show_help_this_frame(text: &str) {
+    invoke!((), 0x960C9FF8F616E41C, 0)
+}
+
 pub fn draw_rect<P, S, C>(pos: P, size: S, color: C)
     where P: Into<Vector2<f32>>, S: Into<Vector2<f32>>, C: Into<Rgba>
 {
@@ -410,7 +421,7 @@ impl TextInput {
         match event {
             InputEvent::Keyboard(event) => {
                 match event {
-                    KeyboardEvent::Key { key, alt, shift, control, is_up, .. } if *is_up => {
+                    KeyboardEvent::Key { key, alt, shift, control, is_up, .. } if !*is_up => {
                         const VK_KEY_A: c_int = 0x41;
                         const VK_KEY_C: c_int = 0x43;
                         const VK_KEY_X: c_int = 0x58;

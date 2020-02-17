@@ -204,6 +204,12 @@ impl<'a> PedTasks<'a> {
     pub fn leave_vehicle(&self, vehicle: &Vehicle, flag: u32) {
         invoke!((), 0xD3DBCE61A490BE02, self.ped.handle, vehicle.get_handle(), flag)
     }
+
+    pub fn play_animation(&self, dict: &AnimDict, name: &str, blend_in_speed: f32, blend_out_speed: f32,
+                          duration: i32, flag: i32, playback_rate: f32) {
+
+        invoke!((), 0xEA47FE3719165B94, self.ped.handle, dict.get_name(), name, blend_in_speed, blend_out_speed, duration, flag, playback_rate, 0, 0, 0)
+    }
 }
 
 pub struct PedNetworkTasks<'a> {

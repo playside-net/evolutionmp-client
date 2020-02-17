@@ -1,6 +1,6 @@
-use crate::invoke;
-use cgmath::{Vector3, Vector2};
+use crate::{invoke, invoke_option};
 use crate::native::NativeVector3;
+use cgmath::{Vector3, Vector2};
 
 pub fn set_active(active: bool) {
     invoke!((), 0x3BD3F52BA9B1E4E8, active)
@@ -87,21 +87,13 @@ pub fn set_waypoint(pos: Vector2<f32>) {
 
 pub fn get_ground_elevation(pos: Vector3<f32>, unknown: bool) -> Option<f32> {
     let mut elevation = 0.0;
-    if invoke!(bool, 0xC906A7DAB05C8D2B, pos, &mut elevation, unknown) {
-        Some(elevation)
-    } else {
-        None
-    }
+    invoke_option!(elevation, 0xC906A7DAB05C8D2B, pos, &mut elevation, unknown)
 }
 
 pub fn get_ground_elevation_and_normal(pos: Vector3<f32>) -> Option<(f32, Vector3<f32>)> {
     let mut elevation = 0.0;
     let mut normal = NativeVector3::zero();
-    if invoke!(bool, 0x8BDC7BFC57A81E76, pos, &mut elevation, &mut normal) {
-        Some((elevation, normal.into()))
-    } else {
-        None
-    }
+    invoke_option!((elevation, normal.into()), 0x8BDC7BFC57A81E76, pos, &mut elevation, &mut normal)
 }
 
 pub fn get_zone_name<'a>(pos: Vector3<f32>) -> &'a str {

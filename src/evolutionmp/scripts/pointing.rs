@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
+use super::{ScriptEnv, Script};
 use crate::game;
 use crate::game::player::Player;
 use crate::game::streaming::AnimDict;
 use crate::game::camera::Camera;
-use crate::events::ScriptEvent;
-use super::{ScriptEnv, Script};
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
+use crate::events::ScriptEvent;
 
 pub struct ScriptFingerPointing {
     active: bool,

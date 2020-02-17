@@ -30,8 +30,8 @@ pub fn terminate_all(name: &str) {
     invoke!((), 0x9DC711BC69C548DF, name)
 }
 
-pub fn thread_iterator_next() -> Handle {
-    invoke!(Handle, 0x30B4FA1C82DD4B9F)
+pub fn thread_iterator_next() -> Option<ScriptThread> {
+    invoke!(Option<ScriptThread>, 0x30B4FA1C82DD4B9F)
 }
 
 pub fn thread_iterator_reset() {
@@ -52,4 +52,13 @@ pub fn mark_unused(script: &str) {
 
 pub fn force_cleanup(script: &str, flags: u32) {
     invoke!((), 0x4C68DDDDF0097317, script, flags)
+}
+
+pub fn get_all_threads() -> Vec<ScriptThread> {
+    let mut threads = Vec::new();
+    thread_iterator_reset();
+    while let Some(thread) = thread_iterator_next() {
+        threads.push(thread);
+    }
+    threads
 }
