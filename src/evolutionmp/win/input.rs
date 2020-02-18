@@ -152,23 +152,20 @@ pub struct InputHook {
 }
 
 impl InputHook {
-    pub unsafe fn new(mem: &MemoryRegion) -> Option<InputHook> {
+    pub unsafe fn new(mem: &MemoryRegion) -> InputHook {
         let (sender, receiver) = channel::<InputEvent>();
         EVENT_POOL.replace(EventPool { sender });
-        let mut handle: HWND = std::ptr::null_mut();
-        let window = CString::new("grcWindow").unwrap();
-        while handle.is_null() {
-            handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        let proc = std::mem::transmute(SetWindowLongPtrW(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
-        WND_PROC = proc;
-        if proc.is_none() {
-            None
-        } else {
-            Some(InputHook {
-                receiver
-            })
+        std::thread::spawn(move || {
+            let mut handle: HWND = std::ptr::null_mut();
+            let window = CString::new("grcWindow").unwrap();
+            while handle.is_null() {
+                handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            WND_PROC = std::mem::transmute(SetWindowLongPtrW(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
+        });
+        InputHook {
+            receiver
         }
     }
 

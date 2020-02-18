@@ -115,7 +115,7 @@ fn attach(instance: HINSTANCE) {
             DIGITAL_DISTRIBUTION = s.offset(-26).get::<u8>().read() == 3;
             info!("Digital distribution: {}", DIGITAL_DISTRIBUTION);
 
-            let input = InputHook::new(&mem).expect("Input hooking failed");
+            let input = InputHook::new(&mem);
             info!("Input hooked. Waiting for game being loaded...");
 
             while !get_game_state().is_loaded() {

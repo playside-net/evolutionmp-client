@@ -4,7 +4,7 @@ use crate::game;
 use crate::game::player::Player;
 use crate::game::ped::{PedBone, Ped};
 use crate::game::entity::Entity;
-use crate::game::Rgba;
+use crate::game::{Rgba, Rgb};
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::events::ScriptEvent;
 use cgmath::{Vector3, Zero, Array};
@@ -12,6 +12,8 @@ use std::time::Instant;
 use winapi::_core::time::Duration;
 use crate::game::streaming::AnimDict;
 use crate::game::prop::Prop;
+use crate::native::pool::Pool;
+use crate::hash::Hashable;
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
@@ -26,6 +28,18 @@ impl Script for ScriptFishing {
         let distance = 10.0;
         let player = Player::local();
         let ped = player.get_ped();
+
+        if let Some(pave) = game::pathfind::get_nearest_pavement(ped.get_position(), true, 0) {
+
+        }
+
+        for prop in game::prop::get_pool().iter() {
+            if prop.get_model() == "prop_traffic_01a".joaat() {
+                prop.set_dynamic(false);
+                //game::graphics::draw_marker(0, prop.get_position(), Vector3::zero(), Vector3::zero(), Vector3::from_value(1.5), Rgba::WHITE, false, false, false, None, false);
+            }
+        }
+
         let head = ped.get_bone(PedBone::SkelHead).unwrap();
         let start = head.get_position();
         let end = ped.get_position_by_offset(Vector3::new(0.0, distance, -distance / 2.0));

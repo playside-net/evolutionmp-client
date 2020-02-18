@@ -5,6 +5,12 @@ use crate::game::entity::Entity;
 use crate::hash::Hashable;
 use crate::game::streaming::Model;
 use cgmath::Vector3;
+use std::mem::ManuallyDrop;
+use crate::native::pool::GenericPool;
+
+pub fn get_pool() -> ManuallyDrop<Box<GenericPool<Prop>>> {
+    crate::native::pool::get_props().expect("prop pool not initialized")
+}
 
 pub struct Prop {
     handle: Handle

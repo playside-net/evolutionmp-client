@@ -3,12 +3,12 @@ use crate::game::Handle;
 use crate::game::vehicle::Vehicle;
 use crate::game::ped::Ped;
 use crate::game::entity::Entity;
-use crate::game::object::Object;
 use crate::game::pickup::Pickup;
 use crate::game::checkpoint::Checkpoint;
+use crate::native::ThreadSafe;
+use crate::game::prop::Prop;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
-use crate::native::ThreadSafe;
 use std::cell::Cell;
 
 pub static PARTICLE_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
@@ -20,7 +20,7 @@ pub type RefPool<T> = *mut Option<ManuallyDrop<Box<T>>>;
 
 static mut PED_POOL: RefPool<GenericPool<Ped>> = std::ptr::null_mut();
 static mut GLOBAL_POOL: RefPool<GlobalPool> = std::ptr::null_mut();
-static mut OBJECT_POOL: RefPool<GenericPool<Object>> = std::ptr::null_mut();
+static mut PROP_POOL: RefPool<GenericPool<Prop>> = std::ptr::null_mut();
 static mut PICKUP_POOL: RefPool<GenericPool<Pickup>> = std::ptr::null_mut();
 static mut VEHICLE_POOL: RefPool<Box<VehiclePool>> = std::ptr::null_mut();
 static mut CHECKPOINT_POOL: RefPool<GenericPool<Checkpoint>> = std::ptr::null_mut();
@@ -43,7 +43,7 @@ pub(crate) unsafe fn init(mem: &MemoryRegion) {
     PED_POOL = mem.find("48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10")
         .next().expect("ped pool")
         .add(3).read_ptr(4).get_mut();
-    OBJECT_POOL = mem.find("48 8B 05 ? ? ? ? 8B 78 10 85 FF")
+    PROP_POOL = mem.find("48 8B 05 ? ? ? ? 8B 78 10 85 FF")
         .next().expect("object pool")
         .add(3).read_ptr(4).get_mut();
     GLOBAL_POOL = mem.find("4C 8B 0D ? ? ? ? 44 8B C1 49 8B 41 08")
@@ -176,8 +176,8 @@ pub fn get_global() -> Option<ManuallyDrop<Box<GlobalPool>>> {
     unsafe { GLOBAL_POOL.read() }
 }
 
-pub fn get_objects() -> Option<ManuallyDrop<Box<GenericPool<Object>>>> {
-    unsafe { OBJECT_POOL.read() }
+pub fn get_props() -> Option<ManuallyDrop<Box<GenericPool<Prop>>>> {
+    unsafe { PROP_POOL.read() }
 }
 
 pub fn get_pickups() -> Option<ManuallyDrop<Box<GenericPool<Pickup>>>> {

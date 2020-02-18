@@ -20,7 +20,6 @@ pub mod clock;
 pub mod camera;
 pub mod worldprobe;
 pub mod checkpoint;
-pub mod object;
 pub mod pickup;
 pub mod blip;
 pub mod decision_event;
@@ -33,6 +32,7 @@ pub mod locale;
 pub mod interior;
 pub mod water;
 pub mod prop;
+pub mod pathfind;
 
 pub type Handle = u32;
 

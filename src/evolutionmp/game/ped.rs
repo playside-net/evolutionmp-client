@@ -106,15 +106,13 @@ impl Ped {
         let pos = self.get_position_by_offset(Vector3::new(0.0, 0.0, -1.0));
         let mut result = None;
         let mut last_max_distance = max_distance;
-        if let Some(vehicles) = native::pool::get_vehicles() {
-            for vehicle in vehicles.iter() {
-                if vehicle.exists() && filter(&vehicle) {
-                    let v_pos = vehicle.get_position_by_offset(Vector3::new(0.0, 0.0, 0.0));
-                    let distance = v_pos.distance(pos);
-                    if distance < last_max_distance {
-                        last_max_distance = distance;
-                        result = Some(vehicle);
-                    }
+        for vehicle in super::vehicle::get_pool().iter() {
+            if vehicle.exists() && filter(&vehicle) {
+                let v_pos = vehicle.get_position_by_offset(Vector3::new(0.0, 0.0, 0.0));
+                let distance = v_pos.distance(pos);
+                if distance < last_max_distance {
+                    last_max_distance = distance;
+                    result = Some(vehicle);
                 }
             }
         }
