@@ -14,19 +14,16 @@ impl Registry {
     pub fn read() -> Option<Registry> {
         let user_key = RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
         let rockstar_key = user_key.open_subkey("SOFTWARE\\Wow6432Node\\Rockstar Games").ok()?;
-        if let Some(gta_key) = rockstar_key.open_subkey("GTAV").ok() {
-            Some(Registry {
-                is_steam: true,
-                install_folder: PathBuf::from(&gta_key.get_value::<String, &str>("InstallFolderSteam").ok()?[4..]),
-                game_type: "".to_string(),
-                game_version: "".to_string(),
-                language: "".to_string(),
-                patch_version: "".to_string()
-            })
-        } else if let Some(gta_key) = rockstar_key.open_subkey("Grand Theft Auto V").ok() {
+        if let Some(gta_key) = rockstar_key.open_subkey("Grand Theft Auto V").ok() {
+            let install_folder = if let Some(gta_key) = rockstar_key.open_subkey("GTAV").ok() {
+                let path = gta_key.get_value::<String, &str>("InstallFolderSteam").ok()?;
+                PathBuf::from(&path[..path.len()-5])
+            } else {
+                PathBuf::from(gta_key.get_value::<String, &str>("InstallFolder").ok()?)
+            };
             Some(Registry {
                 is_steam: false,
-                install_folder: PathBuf::from(gta_key.get_value::<String, &str>("InstallFolder").ok()?),
+                install_folder,
                 game_type: gta_key.get_value("Game Type").ok()?,
                 game_version: gta_key.get_value("Game Version").ok()?,
                 language: gta_key.get_value("Language").ok()?,

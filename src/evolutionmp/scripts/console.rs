@@ -6,7 +6,7 @@ use crate::win::input::{InputEvent, KeyboardEvent};
 use crate::events::{ScriptEvent, NativeEvent};
 use std::time::{Instant, SystemTime};
 use std::collections::VecDeque;
-use cgmath::Vector2;
+use cgmath::{Vector2, Array};
 use std::time::Duration;
 use std::ffi::CString;
 use widestring::WideCStr;
@@ -64,7 +64,7 @@ impl Script for ScriptConsole {
                                         set_open(false);
                                         return false;
                                     },
-                                    VK_KEY_T if !open && !crate::game::ui::is_cursor_active_this_frame() => {
+                                    VK_KEY_T if !open => {
                                         self.tasks.push(|env| set_open(true));
                                         return false;
                                     },
@@ -138,7 +138,7 @@ impl ScriptConsole {
     fn draw(&self) {
         use crate::game::ui::{draw_rect, draw_text, get_text_width};
 
-        let scale = Vector2::new(0.35, 0.35);
+        let scale = Vector2::from_value(0.35);
         // Draw background
         draw_rect([0.0, 0.0], [CONSOLE_WIDTH, CONSOLE_HEIGHT], BACKGROUND_COLOR);
         let total_pages = ((self.line_history.len() + (LINES_PER_PAGE - 1)) / LINES_PER_PAGE).max(1);

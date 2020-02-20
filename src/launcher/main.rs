@@ -17,21 +17,14 @@ fn main() {
 
     if registry.is_retail_key() {
         println!("Found retail version of GTA5");
-
-        if !install_dir.join(gta_exe).exists() {
-            panic!("{} not found!", gta_exe);
-        }
-
-        start(registry, &install_dir.join(gta_launcher_exe), gta_exe);
     } else if registry.is_steam_key() {
         println!("Found steam version of GTA5");
-
-        if !install_dir.join(gta_exe).exists() {
-            panic!("{} not found!", gta_exe);
-        }
-
-        start(registry, &install_dir.join(gta_launcher_exe), gta_exe);
     }
+    if !install_dir.join(gta_exe).exists() {
+        panic!("{} not found!", gta_exe);
+    }
+
+    start(registry, &install_dir.join(gta_launcher_exe), gta_exe);
 }
 
 fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Path> {

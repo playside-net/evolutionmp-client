@@ -130,6 +130,13 @@ pub fn command_mod(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), Co
     }
 }
 
+pub fn command_time(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let hour = args.read::<u32>()?;
+    let minute = args.read::<u32>()?;
+    game::clock::set_time(hour, minute, 0);
+    Ok(())
+}
+
 pub struct ScriptCommand {
     tasks: TaskQueue,
     commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError>>>>
@@ -159,6 +166,7 @@ impl Script for ScriptCommand {
         self.register_command("zone", command_zone);
         self.register_command("repair", command_repair);
         self.register_command("mod", command_mod);
+        self.register_command("time", command_time);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {

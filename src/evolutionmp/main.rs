@@ -94,13 +94,13 @@ fn attach(instance: HINSTANCE) {
             let mem = MemoryRegion::image();
 
             //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-            mem.find_await("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76", 50, 1000)
+            mem.find("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76").next()
                 .expect("movie").nop(13); //Disable movie
 
-            mem.find_await("72 1F E8 ? ? ? ? 8B 0D", 50, 1000)
+            mem.find("72 1F E8 ? ? ? ? 8B 0D").next()
                 .expect("legals").nop(2);
 
-            GAME_STATE.store(mem.find_await("83 3D ? ? ? ? ? 8A D9 74 0A", 50, 1000)
+            GAME_STATE.store(mem.find("83 3D ? ? ? ? ? 8A D9 74 0A").next()
                 .expect("game state")
                 .add(2)
                 .read_ptr(5).get_mut(), Ordering::SeqCst);

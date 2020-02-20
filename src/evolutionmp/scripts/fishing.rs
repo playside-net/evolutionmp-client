@@ -7,13 +7,14 @@ use crate::game::entity::Entity;
 use crate::game::{Rgba, Rgb};
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::events::ScriptEvent;
-use cgmath::{Vector3, Zero, Array};
+use cgmath::{Vector3, Zero, Array, Vector2, MetricSpace};
 use std::time::Instant;
 use winapi::_core::time::Duration;
 use crate::game::streaming::AnimDict;
 use crate::game::prop::Prop;
 use crate::native::pool::Pool;
 use crate::hash::Hashable;
+use crate::game::ui::Font;
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
@@ -34,15 +35,38 @@ impl Script for ScriptFishing {
         }
 
         for prop in game::prop::get_pool().iter() {
-            if prop.get_model() == "prop_traffic_01a".joaat() {
-                prop.set_dynamic(false);
+            //if prop.get_model() == "prop_traffic_01a".joaat() {
+                //prop.set_dynamic(false);
+                //prop.set_light_color(false, Rgb::new(255, 0, 0));
+            //}
+            if prop.get_position().distance(ped.get_position()) < 25.0 {
+                let model = prop.get_model();
+                let raw = unsafe { std::mem::transmute(model.0) };
+                let raw_name = format!("{}", model);
+                let model = crate::native::OBJECT_HASHES.get(&raw).cloned().unwrap_or_else(|| raw_name.as_str());
+                let scale = Vector2::from_value(0.35);
+                let color = Rgba::WHITE;
+                game::ui::at_origin(prop.get_position() + Vector3::unit_z() * 0.5, || {
+                    game::ui::draw_text(format!("Model: {}", model), Vector2::zero(), color, Font::ChaletLondon, scale);
+                });
                 //game::graphics::draw_marker(0, prop.get_position(), Vector3::zero(), Vector3::zero(), Vector3::from_value(1.5), Rgba::WHITE, false, false, false, None, false);
             }
         }
 
+
         let head = ped.get_bone(PedBone::SkelHead).unwrap();
         let start = head.get_position();
         let end = ped.get_position_by_offset(Vector3::new(0.0, distance, -distance / 2.0));
+
+        let ray = game::worldprobe::Probe::new_ray(start, end.truncate().extend(start.z), 1, &ped, 7).get_result(true);
+        if ray.hit {
+            game::graphics::draw_line(start, ray.end, Rgba::WHITE);
+            let pos = Vector2::new(2.0, 2.0);
+            let scale = Vector2::from_value(0.35);
+            let color = Rgba::WHITE;
+            game::ui::draw_text(format!("Material: {:?}; Entity: {:?}", ray.material, ray.entity), pos, color, Font::ChaletLondon, scale)
+        }
+
         let probe = game::water::probe(start, end);
         if let Some(pos) = probe {
             if let Some(catch_time) = self.catch_time {

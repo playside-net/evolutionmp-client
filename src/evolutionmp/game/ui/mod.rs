@@ -1,6 +1,6 @@
 use crate::{invoke, native};
 use crate::game::{Rgba, Handle};
-use cgmath::Vector2;
+use cgmath::{Vector2, Vector3};
 use crate::runtime::ScriptEnv;
 use crate::game::controls::{Group, Control};
 use crate::pattern::{MemoryRegion, RET, NOP, XOR_32_64};
@@ -18,8 +18,6 @@ pub const BASE_HEIGHT: f32 = 720.0;
 
 type GetWarnResult = extern "C" fn(bool, u32) -> FrontendButtons;
 static mut GET_WARN_RESULT: *const () = std::ptr::null();
-
-pub(crate) static MOUSE_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 pub unsafe fn init(mem: &MemoryRegion) {
     GET_WARN_RESULT = mem.find("33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84")
@@ -181,6 +179,12 @@ pub enum HudElement {
     ReplayTimer
 }
 
+pub fn at_origin<F>(origin: Vector3<f32>, task: F) where F: FnOnce() {
+    invoke!((), 0xAA0008F3BBB8F416, origin, 0);
+    task();
+    invoke!((), 0xFF0B610F6BE0D7AF);
+}
+
 pub fn set_credits_active(active: bool) {
     invoke!((), 0xB938B7E6D3C0620C, active);
 }
@@ -217,11 +221,6 @@ pub fn get_cursor_sprite() -> CursorSprite {
 
 pub fn set_cursor_active_this_frame() {
     invoke!((), 0xAAE7CE1D63167423)
-}
-
-pub fn is_cursor_active_this_frame() -> bool {
-    use std::sync::atomic::Ordering;
-    MOUSE_VISIBLE.load(Ordering::SeqCst)
 }
 
 pub fn set_cursor_position(pos: Vector2<f32>) {

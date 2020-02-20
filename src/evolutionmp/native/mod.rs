@@ -17,6 +17,7 @@ use crate::game::entity::Entity;
 
 pub mod vehicle;
 pub mod pool;
+pub mod object_hashes;
 
 pub struct ThreadSafe<T> {
     t: T
@@ -44,6 +45,9 @@ pub static SET_VECTOR_RESULTS: ThreadSafe<Cell<Option<NativeFunction>>> = Thread
 pub static EXPANDED_RADAR: AtomicPtr<bool> = AtomicPtr::new(null_mut());
 pub static REVEAL_FULL_MAP: AtomicPtr<bool> = AtomicPtr::new(null_mut());
 pub static CURSOR_SPRITE: AtomicPtr<CursorSprite> = AtomicPtr::new(null_mut());
+lazy_static! {
+    pub static ref OBJECT_HASHES: HashMap<i32, &'static str> = object_hashes::HASHES.iter().cloned().collect::<_>();
+}
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     let natives = Natives::new(mem);
