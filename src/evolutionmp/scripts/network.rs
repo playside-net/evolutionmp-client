@@ -13,7 +13,7 @@ use std::collections::{VecDeque, HashMap};
 use std::thread::JoinHandle;
 use uuid::Uuid;
 use laminar::{Packet, Socket, ErrorKind, DeliveryGuarantee, OrderingGuarantee, SocketEvent};
-use cgmath::Vector3;
+use cgmath::{Vector3, Array};
 use crate::game::player::Player;
 use crate::game::streaming::Model;
 
@@ -40,7 +40,8 @@ pub struct ScriptNetwork {
     thread: JoinHandle<()>,
     session_id: Option<Uuid>,
     players: HashMap<Uuid, SyncedPlayer>,
-    vehicles: HashMap<Uuid, SyncedVehicle>
+    vehicles: HashMap<Uuid, SyncedVehicle>,
+    fake: Option<Vehicle>
 }
 
 impl Script for ScriptNetwork {
@@ -78,6 +79,33 @@ impl Script for ScriptNetwork {
 
         self.vehicles.retain(|id, veh| veh.handle.exists());
 
+        let player = Player::local();
+        let ped  = player.get_ped();
+        if let Some(orig) = ped.get_in_vehicle(false) {
+            if let Some(fake) = self.fake.as_ref() {
+                fake.set_position_no_offset(orig.get_position_by_offset(Vector3::new(0.0, 5.0, 0.0)), Vector3::from_value(false));
+                fake.set_rotation(orig.get_rotation(2), 2);
+                fake.set_velocity(orig.get_velocity());
+                fake.set_engine_on(orig.is_engine_on(), true, true);
+                fake.set_gears(orig.get_gears());
+                fake.set_current_rpm(orig.get_current_rpm());
+                fake.set_clutch(orig.get_clutch());
+                fake.set_turbo(orig.get_turbo());
+                fake.set_brake_power(orig.get_brake_power());
+                fake.set_acceleration(orig.get_acceleration());
+                fake.set_steering_angle(orig.get_steering_angle());
+                fake.set_steering_scale(orig.get_steering_scale());
+                //fake.set_heading(orig.get_heading());
+                orig.copy_damage_to(fake);
+            } else {
+                self.fake = Vehicle::new(&mut env, orig.get_model(),
+                                         orig.get_position_by_offset(Vector3::new(0.0, 5.0, 0.0)),
+                                         orig.get_heading(), false, false);
+            }
+        } else if let Some(mut fake) = self.fake.take() {
+            fake.delete();
+        }
+
         if let Some(session_id) = self.session_id {
             self.update_vehicles(&session_id);
             self.update_players(&session_id);
@@ -107,7 +135,8 @@ impl ScriptNetwork {
             thread: std::thread::spawn(move || socket.start_polling()),
             session_id: None,
             players: HashMap::new(),
-            vehicles: HashMap::new()
+            vehicles: HashMap::new(),
+            fake: None
         }
     }
 
@@ -189,36 +218,25 @@ impl ScriptNetwork {
     }
 
     fn sync_driven_vehicle(&self, id: Uuid, veh: &Vehicle, session_id: Uuid) {
-        let position = veh.get_position();
-        let rotation = veh.get_rotation(2);
-        let velocity = veh.get_velocity();
-        let engine_on = veh.is_engine_on();
-        let gear = veh.get_gear();
-        let rpm = veh.get_current_rpm();
-        //TODO: Clutch, turbo, brake
-        let acceleration = veh.get_acceleration();
-        let steering_angle = veh.get_steering_angle();
-        let steering_scale = veh.get_steering_scale();
-        let wheel_speed = veh.get_wheel_speed();
         let colors = veh.get_colors();
         let data = VehicleData {
-            position,
-            rotation,
-            velocity,
-            heading: 0.0,
+            position: veh.get_position(),
+            rotation: veh.get_rotation(2),
+            velocity: veh.get_velocity(),
+            heading: veh.get_heading(),
             forward_speed: 0.0,
-            engine_on,
-            //engine_health: 0.0,
-            gear: 0,
-            rpm,
-            //clutch: 0.0,
-            //turbo: 0.0,
-            acceleration,
-            //brake: 0.0,
-            wheel_speed,
-            steering_angle,
-            steering_scale,
-            //forward_wheel_angle: 0.0,
+            engine_on: veh.is_engine_on(),
+            engine_health: veh.get_engine_health(),
+            gears: veh.get_gears(),
+            rpm: veh.get_current_rpm(),
+            clutch: veh.get_clutch(),
+            turbo: veh.get_turbo(),
+            throttle: veh.get_throttle(),
+            acceleration: veh.get_acceleration(),
+            brake: veh.get_brake_power(),
+            wheel_speed: veh.get_wheel_speed(),
+            steering_angle: veh.get_steering_angle(),
+            steering_scale: veh.get_steering_scale(),
             colors: [
                 VehicleColor::Standard { color: colors.primary as u8, ty: 0 },
                 VehicleColor::Standard { color: colors.secondary as u8, ty: 0 }

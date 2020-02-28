@@ -10,6 +10,7 @@ use crate::game::prop::Prop;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::cell::Cell;
+use crate::game::camera::Camera;
 
 pub static PARTICLE_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
 pub static ENTITY_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
@@ -99,6 +100,7 @@ pub trait Pool<T: Handleable> {
     fn iter(&self) -> PoolIterator<T> where Self: Sized {
         PoolIterator {
             pool: self,
+            poisoned: false,
             index: 0
         }
     }
@@ -168,6 +170,32 @@ impl<T> Pool<T> for GenericPool<T> where T: Handleable {
     }
 }
 
+#[repr(C)]
+pub struct CameraPool {
+    start_address: u64,
+    byte_array: *mut u8,
+    capacity: u32,
+    len: u32
+}
+
+impl Pool<Camera> for CameraPool {
+    fn is_valid(&self, index: u32) -> bool {
+        unsafe { self.byte_array.add(index as usize).read() == (index & 0xFF) as u8 }
+    }
+
+    fn get_address(&self, index: u32) -> *mut u8 {
+        (self.start_address + index as u64 * self.len as u64) as _
+    }
+
+    fn len(&self) -> u32 {
+        self.len
+    }
+
+    fn capacity(&self) -> u32 {
+        self.capacity
+    }
+}
+
 pub fn get_peds() -> Option<ManuallyDrop<Box<GenericPool<Ped>>>> {
     unsafe { PED_POOL.read() }
 }
@@ -194,6 +222,7 @@ pub fn get_checkpoints() -> Option<ManuallyDrop<Box<GenericPool<Checkpoint>>>> {
 
 pub struct PoolIterator<'a, T: Handleable> {
     pool: &'a dyn Pool<T>,
+    poisoned: bool,
     index: u32
 }
 
@@ -201,19 +230,20 @@ impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(global) = get_global() {
-            if global.is_full() {
-                return None;
-            }
-        } else {
-            return None;
-        }
-        let capacity = self.pool.capacity();
-        while self.index < capacity {
-            let index = self.index;
-            self.index += 1;
-            if let Some(result) = self.pool.get(index) {
-                return Some(result);
+        if !self.poisoned {
+            if let Some(global) = get_global() {
+                if !global.is_full() {
+                    let capacity = self.pool.capacity();
+                    while self.index < capacity {
+                        let index = self.index;
+                        self.index += 1;
+                        if let Some(result) = self.pool.get(index) {
+                            return Some(result);
+                        }
+                    }
+                } else {
+                    self.poisoned = true;
+                }
             }
         }
         None
@@ -230,7 +260,7 @@ macro_rules! impl_handle {
     ($ty:ident) => {
         impl crate::native::pool::Handleable for $ty {
             fn from_handle(handle: crate::game::Handle) -> Option<Self> where Self: Sized {
-                if handle == 0 {
+                if handle == 0 || handle == std::u32::MAX {
                     None
                 } else {
                     Some($ty { handle })

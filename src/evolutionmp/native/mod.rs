@@ -74,6 +74,12 @@ pub fn get_handler(hash: u64) -> NativeFunction {
     natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash))
 }
 
+pub fn get_all_native_handlers() -> HashMap<u64, *const ()> {
+    let natives = NATIVES.try_borrow().expect("Natives already borrowed");
+    let natives = natives.as_ref().expect("Natives aren't initialized yet");
+    natives.handlers.iter().map(|(k, v)| (*k, *v as *const ())).collect()
+}
+
 #[repr(C, packed(1))]
 struct PtrXorU64 {
     prev: u64,
@@ -550,15 +556,23 @@ impl NativeStackValue for () {}
 impl NativeStackValue for Hash {}
 impl NativeStackValue for &mut Hash {}
 
-pub struct NativeEntityField<T> where T: Sized {
+pub struct NativeField<T> where T: Sized {
     offset: AtomicI32,
     _ty: PhantomData<T>
 }
 
-impl<T> NativeEntityField<T> where T: Sized {
-    pub const fn new() -> NativeEntityField<T> {
-        NativeEntityField {
-            offset: AtomicI32::new(0),
+pub trait Addressable {
+    fn get_address(&self) -> *mut u8;
+}
+
+impl<T> NativeField<T> where T: Sized {
+    pub const fn unset() -> NativeField<T> {
+        Self::predefined(0)
+    }
+
+    pub const fn predefined(offset: i32) -> NativeField<T> {
+        NativeField {
+            offset: AtomicI32::new(offset),
             _ty: PhantomData
         }
     }
@@ -573,22 +587,22 @@ impl<T> NativeEntityField<T> where T: Sized {
         offset
     }
 
-    pub(crate) fn get_ptr(&self, entity: &dyn Entity) -> *mut T {
+    pub(crate) fn get_ptr(&self, target: &dyn Addressable) -> *mut T {
         let offset = self.get_offset();
         unsafe {
-            entity.get_address().offset(offset).cast::<T>()
+            target.get_address().offset(offset).cast::<T>()
         }
     }
 
-    pub fn set(&self, entity: &dyn Entity, value: T) {
+    pub fn set(&self, target: &dyn Addressable, value: T) {
         unsafe {
-            self.get_ptr(entity).write(value)
+            self.get_ptr(target).write(value)
         }
     }
 
-    pub fn get(&self, entity: &dyn Entity) -> T {
+    pub fn get(&self, target: &dyn Addressable) -> T {
         unsafe {
-            self.get_ptr(entity).read()
+            self.get_ptr(target).read()
         }
     }
 }

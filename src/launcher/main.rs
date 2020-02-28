@@ -15,16 +15,17 @@ fn main() {
     let registry = Registry::read().expect("Unable to find GTA5 registry entry!");
     let install_dir = registry.get_install_path();
 
-    if registry.is_retail_key() {
-        println!("Found retail version of GTA5");
-    } else if registry.is_steam_key() {
-        println!("Found steam version of GTA5");
-    }
     if !install_dir.join(gta_exe).exists() {
         panic!("{} not found!", gta_exe);
     }
 
-    start(registry, &install_dir.join(gta_launcher_exe), gta_exe);
+    if registry.is_retail_key() {
+        println!("Found retail version of GTA5");
+        start(registry, &install_dir.join(gta_launcher_exe), gta_exe);
+    } else if registry.is_steam_key() {
+        println!("Found steam version of GTA5");
+        start(registry, "steam://rungameid/271590", gta_exe);
+    }
 }
 
 fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Path> {
@@ -34,9 +35,9 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
         .spawn().expect(&format!("Error starting {:?}", launch_path.as_ref()));
 
     while !is_process_alive(gta_exe) {
-        if registry.is_retail_key() {
-            std::thread::sleep(Duration::from_millis(100));
-        }
+        /*if registry.is_retail_key() {
+        }*/
+        std::thread::sleep(Duration::from_millis(100));
     }
 
     let client_dll = launcher_dir().join("evolutionmp.dll");
@@ -50,8 +51,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
             Ok(exit_code) => {
                 match exit_code {
                     0 | 1 => {
-                        let error_code = unsafe { GetLastError() } as i32;
-                        let error = std::io::Error::from_raw_os_error(error_code);
+                        let error = std::io::Error::last_os_error();
                         eprintln!("Module injection failed: {}", error);
                         return;
                     }

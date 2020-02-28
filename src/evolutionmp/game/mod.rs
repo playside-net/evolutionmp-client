@@ -33,6 +33,8 @@ pub mod interior;
 pub mod water;
 pub mod prop;
 pub mod pathfind;
+pub mod door;
+pub mod data;
 
 pub type Handle = u32;
 

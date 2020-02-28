@@ -229,15 +229,10 @@ pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut (
 pub unsafe fn init(mem: &MemoryRegion) {
     EVENTS.replace(Some(VecDeque::new()));
 
-    let e =  mem.find("81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8")
+    CALL_EVENT = mem.find("81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8")
         .next().expect("call_event")
-        .offset(-0x36).get::<()>();
-
-    let d = RawDetour::new(e, call_event as _).expect("detour creation failed");
-    d.enable().expect("detour enabling failed");
-
-    CALL_EVENT = d.trampoline() as _;
-    std::mem::forget(d);
+        .offset(-0x36)
+        .detour(call_event as _);
 
     native_event!(0xAF35D0D2583051B0, new_vehicle);
     native_event!(0xD49F9B0955C367DE, new_ped);

@@ -8,12 +8,12 @@ use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
 use crate::runtime::ScriptEnv;
-use crate::native::vehicle::{GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE};
+use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
 use std::time::Duration;
 use std::sync::atomic::Ordering;
 use std::mem::ManuallyDrop;
-use cgmath::Vector3;
+use cgmath::{Vector3, Rad};
 
 pub fn get_pool() -> ManuallyDrop<Box<Box<VehiclePool>>> {
     crate::native::pool::get_vehicles().expect("vehicle pool not initialized")
@@ -102,12 +102,12 @@ impl Vehicle {
         invoke!((), 0x4F1D4BE3A7F24601, self.handle, primary, secondary)
     }
 
-    pub fn get_gear(&self) -> i32 {
-        GEAR.get(self)
+    pub fn get_current_gear(&self) -> i32 {
+        CURRENT_GEAR.get(self)
     }
 
-    pub fn set_gear(&self, gear: i32) {
-        GEAR.set(self, gear)
+    pub fn set_current_gear(&self, gear: i32) {
+        CURRENT_GEAR.set(self, gear)
     }
 
     pub fn get_high_gear(&self) -> i32 {
@@ -150,12 +150,60 @@ impl Vehicle {
         STEERING_SCALE.set(self, scale)
     }
 
-    pub fn get_steering_angle(&self) -> f32 {
-        STEERING_ANGLE.get(self)
+    pub fn get_steering_angle(&self) -> Rad<f32> {
+        Rad(STEERING_ANGLE.get(self))
     }
 
-    pub fn set_steering_angle(&self, angle: f32) {
-        STEERING_ANGLE.set(self, angle)
+    pub fn set_steering_angle(&self, angle: Rad<f32>) {
+        STEERING_ANGLE.set(self, angle.0)
+    }
+
+    pub fn get_gears(&self) -> i32 {
+        GEARS.get(self)
+    }
+
+    pub fn set_gears(&self, gears: i32) {
+        GEARS.set(self, gears)
+    }
+
+    pub fn get_clutch(&self) -> f32 {
+        CLUTCH.get(self)
+    }
+
+    pub fn set_clutch(&self, clutch: f32) {
+        CLUTCH.set(self, clutch)
+    }
+
+    pub fn get_turbo(&self) -> f32 {
+        TURBO.get(self)
+    }
+
+    pub fn set_turbo(&self, turbo: f32) {
+        TURBO.set(self, turbo)
+    }
+
+    pub fn get_throttle(&self) -> f32 {
+        THROTTLE.get(self)
+    }
+
+    pub fn set_throttle(&self, throttle: f32) {
+        THROTTLE.set(self, throttle)
+    }
+
+    pub fn get_throttle_power(&self) -> f32 {
+        THROTTLE_POWER.get(self)
+    }
+
+    pub fn set_throttle_power(&self, power: f32) {
+        THROTTLE_POWER.set(self, power)
+    }
+
+    pub fn get_brake_power(&self) -> f32 {
+        BRAKE_POWER.get(self)
+    }
+
+    pub fn set_brake_power(&self, brake_power: f32) {
+        BRAKE_POWER.set(self, brake_power)
     }
 
     pub fn get_passenger(&self, seat: i32) -> Option<Ped> {
@@ -226,6 +274,14 @@ impl Vehicle {
 
     pub fn is_engine_on(&self) -> bool {
         invoke!(bool, 0xAE31E7DF9B5B132E, self.handle)
+    }
+
+    pub fn set_engine_on(&self, on: bool, instant: bool, disable_auto_start: bool) {
+        invoke!((), 0x2497C4717C8B881E, self.handle, on, instant, disable_auto_start)
+    }
+
+    pub fn get_engine_health(&self) -> f32 {
+        invoke!(f32, 0xC45D23BAF168AAB8, self.handle)
     }
 
     pub fn copy_damage_to(&self, target: &Vehicle) {

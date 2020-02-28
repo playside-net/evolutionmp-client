@@ -1,5 +1,5 @@
 use serde_derive::{Serialize, Deserialize};
-use cgmath::{Vector3, Deg, Euler, Quaternion};
+use cgmath::{Vector3, Deg, Euler, Quaternion, Rad, Matrix3};
 use uuid::Uuid;
 use crate::game::streaming::Model;
 use crate::hash::Hash;
@@ -47,20 +47,21 @@ pub enum Message {
 #[derive(Serialize, Deserialize)]
 pub struct VehicleData {
     pub position: Vector3<f32>,
-    pub rotation: Quaternion<f32>,
+    pub rotation: Vector3<f32>,
     pub velocity: Vector3<f32>,
     pub heading: f32,
     pub forward_speed: f32,
     pub engine_on: bool,
-    //pub engine_health: f32,
-    pub gear: u16,
+    pub engine_health: f32,
+    pub gears: i32,
     pub rpm: f32,
-    //pub clutch: f32,
-    //pub turbo: f32,
+    pub clutch: f32,
+    pub turbo: f32,
+    pub throttle: f32,
     pub acceleration: f32,
-    //pub brake: f32,
+    pub brake: f32,
     pub wheel_speed: f32,
-    pub steering_angle: f32,
+    pub steering_angle: Rad<f32>,
     pub steering_scale: f32,
     //pub forward_wheel_angle: f32,
     pub colors: [VehicleColor; 2],

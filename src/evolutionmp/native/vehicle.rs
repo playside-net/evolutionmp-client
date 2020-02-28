@@ -1,27 +1,50 @@
 use crate::invoke;
+use crate::native::{NativeField, NativeFunction};
 use crate::pattern::MemoryRegion;
-use std::sync::atomic::{AtomicI32, Ordering};
 use crate::game::entity::Entity;
-use winapi::_core::marker::PhantomData;
-use crate::native::NativeEntityField;
 use crate::game::vehicle::Vehicle;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::collections::HashMap;
+use std::marker::PhantomData;
 
-type VehicleField<T> = NativeEntityField<T>;
+type VehicleField<T> = NativeField<T>;
 
-pub(crate) static GEAR: VehicleField<i32> = VehicleField::new();
-pub(crate) static HIGH_GEAR: VehicleField<i32> = VehicleField::new();
-pub(crate) static FUEL_LEVEL: VehicleField<f32> = VehicleField::new();
-pub(crate) static WHEEL_SPEED: VehicleField<f32> = VehicleField::new();
-pub(crate) static CURRENT_RPM: VehicleField<f32> = VehicleField::new();
-pub(crate) static ACCELERATION: VehicleField<f32> = VehicleField::new();
-pub(crate) static STEERING_SCALE: VehicleField<f32> = VehicleField::new();
-pub(crate) static STEERING_ANGLE: VehicleField<f32> = VehicleField::new();
+pub(crate) static CURRENT_GEAR: VehicleField<i32> = VehicleField::unset();
+pub(crate) static HIGH_GEAR: VehicleField<i32> = VehicleField::unset();
+pub(crate) static FUEL_LEVEL: VehicleField<f32> = VehicleField::unset();
+pub(crate) static WHEEL_SPEED: VehicleField<f32> = VehicleField::unset();
+pub(crate) static CURRENT_RPM: VehicleField<f32> = VehicleField::unset();
+pub(crate) static ACCELERATION: VehicleField<f32> = VehicleField::unset();
+pub(crate) static STEERING_SCALE: VehicleField<f32> = VehicleField::unset();
+pub(crate) static STEERING_ANGLE: VehicleField<f32> = VehicleField::unset();
+pub(crate) static ENGINE_TEMPERATURE: VehicleField<f32> = VehicleField::predefined(0xA4C);
+pub(crate) static ENGINE_POWER: VehicleField<f32> = VehicleField::predefined(0xAC0);
+pub(crate) static OIL_LEVEL: VehicleField<f32> = VehicleField::predefined(0x838);
+pub(crate) static OIL_VOLUME: VehicleField<f32> = VehicleField::predefined(0x0104);
+pub(crate) static PETROL_TANK_VOLUME: VehicleField<f32> = VehicleField::predefined(0x0100);
+pub(crate) static GEARS: VehicleField<i32> = VehicleField::predefined(0x870);
+pub(crate) static NEXT_GEAR: VehicleField<i32> = VehicleField::predefined(0x870);
+pub(crate) static TURBO: VehicleField<f32> = VehicleField::predefined(0x8D8);
+pub(crate) static CLUTCH: VehicleField<f32> = VehicleField::predefined(0x8C0);
+pub(crate) static THROTTLE: VehicleField<f32> = VehicleField::predefined(0x8C4);
+pub(crate) static BRAKE_POWER: VehicleField<f32> = VehicleField::predefined(0x9A0);
+pub(crate) static THROTTLE_POWER: VehicleField<f32> = VehicleField::predefined(0x99C);
+pub(crate) static HELICOPTER_BLADES_SPEED: VehicleField<f32> = VehicleField::predefined(0x1AA8);
+
+fn find_nearest_native(natives: &HashMap<u64, *const ()>, address: *const ()) -> Option<(u64, *const ())> {
+    natives.iter().min_by(|(_, f1), (_, f2)| {
+        let o1 = (**f1 as isize - address as isize).abs();
+        let o2 = (**f2 as isize - address as isize).abs();
+        o1.cmp(&o2)
+    }).map(|(k, v)| (*k, *v))
+}
 
 pub unsafe fn init(mem: &MemoryRegion) {
     let address = mem.find("48 8D 8F ? ? ? ? 4C 8B C3 F3 0F 11 7C 24")
         .next().expect("gear offset")
         .add(3);
-    GEAR.set_offset(*address.get::<i32>() + 2);
+
+    CURRENT_GEAR.set_offset(*address.get::<i32>() + 2);
     HIGH_GEAR.set_offset(*address.get::<i32>() + 6);
 
     let address = mem.find("74 ? 0F 57 C9 0F 2F 8B ? ? ? ? 73 ? F3 0F 10 83 ? ? ? ?")

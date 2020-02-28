@@ -111,7 +111,7 @@ pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
         call_native_trampoline(0x7B5280EBA9840C72, context);
     });
 
-    crate::events::init(mem);
+    //crate::events::init(mem);
 }
 
 fn get_trampoline(hash: u64) -> NativeFunction {

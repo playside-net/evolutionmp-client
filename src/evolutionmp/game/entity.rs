@@ -2,16 +2,13 @@ use crate::hash::Hash;
 use super::Handle;
 use crate::invoke;
 use crate::native::pool::{self, Handleable};
-use cgmath::{Vector3, Euler, Deg, Quaternion};
+use crate::native::{NativeField, Addressable};
 use crate::game::streaming::{Resource, AnimDict};
+use cgmath::{Vector3, Euler, Deg, Quaternion, Matrix3};
 
 pub trait Entity: Handleable {
     fn exists(&self) -> bool {
         invoke!(bool, 0x7239B21A38F536BA, self.get_handle())
-    }
-
-    fn get_address(&self) -> *mut u8 {
-        (pool::ENTITY_ADDRESS.get().unwrap())(self.get_handle())
     }
 
     fn is_dead(&self) -> bool {
@@ -23,16 +20,24 @@ pub trait Entity: Handleable {
         invoke!(Vector3<f32>, 0x3FEF770D40960D5A, self.get_handle(), alive)
     }
 
-    fn set_position_no_offset(&self, pos: Vector3<f32>, axis: Vector3<bool>) {
-        invoke!((), 0x239A3351AC1DA385, self.get_handle(), pos, axis)
+    fn set_position(&self, pos: Vector3<f32>, invert_axis: Vector3<bool>, clear_area: bool) {
+        invoke!((), 0x06843DA7060A026B, self.get_handle(), pos, invert_axis, clear_area)
+    }
+
+    fn set_position_no_offset(&self, pos: Vector3<f32>, invert_axis: Vector3<bool>) {
+        invoke!((), 0x239A3351AC1DA385, self.get_handle(), pos, invert_axis)
     }
 
     fn set_load_collision(&self, load: bool) {
         invoke!((), 0x0DC7CABAB1E9B67E, self.get_handle(), load)
     }
 
-    fn get_rotation(&self, order: u32) -> Quaternion<f32> {
-        invoke!(Quaternion<f32>, 0xAFBD61CC738D9EB9, self.get_handle(), order)
+    fn get_rotation(&self, order: u32) -> Vector3<f32> {
+        invoke!(Vector3<f32>, 0xAFBD61CC738D9EB9, self.get_handle(), order as u32)
+    }
+
+    fn set_rotation(&self, rotation: Vector3<f32>, order: u32) {
+        invoke!((), 0x8524A8B0171D5E07, self.get_handle(), rotation, order as u32, true)
     }
 
     fn get_rotation_velocity(&self) -> Vector3<f32> {
@@ -43,8 +48,16 @@ pub trait Entity: Handleable {
         invoke!(Vector3<f32>, 0x4805D2B1D8CF94A9, self.get_handle())
     }
 
+    fn set_velocity(&self, velocity: Vector3<f32>) {
+        invoke!((), 0x1C99BB7B6E96D16F, self.get_handle(), velocity)
+    }
+
     fn get_heading(&self) -> f32 {
         invoke!(f32, 0xE83D4F9BA2A38914, self.get_handle())
+    }
+
+    fn set_heading(&self, heading: f32) {
+        invoke!((), 0x8E2530AA8ADA980E, self.get_handle(), heading)
     }
 
     fn get_roll(&self) -> f32 {
@@ -67,6 +80,18 @@ pub trait Entity: Handleable {
         invoke!(bool, 0x20B711662962B472, self.get_handle(), dictionary, name)
     }
 
+    fn set_invincible(&self, invincible: bool) {
+        invoke!((), 0x3882114BDE571AD4, self.get_handle(), invincible)
+    }
+
+    fn is_visible(&self) -> bool {
+        invoke!(bool, 0x47D6F43D77935C75, self.get_handle())
+    }
+
+    fn set_visible(&self, visible: bool) {
+        invoke!((), 0xEA1C610A04DB6BBB, self.get_handle(), visible, false)
+    }
+
     fn set_position_freezed(&self, freezed: bool) {
         invoke!((), 0x428CA6DBD1094446, self.get_handle(), freezed)
     }
@@ -77,10 +102,6 @@ pub trait Entity: Handleable {
 
     fn set_collision(&self, collision: bool, physics: bool) {
         invoke!((), 0x1A9205C1B9EE827F, self.get_handle(), collision, physics)
-    }
-
-    fn set_rotation(&self, rotation: Quaternion<f32>, order: u32) {
-        invoke!((), 0x8524A8B0171D5E07, self.get_handle(), rotation, order, true)
     }
 
     fn get_position_by_offset(&self, offset: Vector3<f32>) -> Vector3<f32> {
@@ -131,6 +152,12 @@ pub trait Entity: Handleable {
 
     fn is_in_water(&self) -> bool {
         invoke!(bool, 0xCFB0A0D8EDD145A3, self.get_handle())
+    }
+}
+
+impl<E> Addressable for E where E: Entity + Sized {
+    fn get_address(&self) -> *mut u8 {
+        (pool::ENTITY_ADDRESS.get().unwrap())(self.get_handle())
     }
 }
 

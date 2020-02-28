@@ -4,9 +4,9 @@ use crate::runtime::ScriptEnv;
 use crate::game::entity::Entity;
 use crate::hash::Hashable;
 use crate::game::streaming::Model;
+use crate::native::pool::GenericPool;
 use cgmath::Vector3;
 use std::mem::ManuallyDrop;
-use crate::native::pool::GenericPool;
 
 pub fn get_pool() -> ManuallyDrop<Box<GenericPool<Prop>>> {
     crate::native::pool::get_props().expect("prop pool not initialized")
@@ -25,6 +25,10 @@ impl Prop {
         } else {
             None
         }
+    }
+
+    pub fn find_nearest<H>(pos: Vector3<f32>, radius: f32, model: H) -> Option<Prop> where H: Hashable {
+        invoke!(Option<Prop>, 0xE143FA2249364369, pos, radius, model.joaat(), false, false, false)
     }
 
     pub fn get_texture_variation(&self) -> i32 {

@@ -440,3 +440,11 @@ pub fn is_disabled_just_pressed(group: Group, control: Control) -> bool {
 pub fn is_disabled_just_released(group: Group, control: Control) -> bool {
     invoke!(bool, 0x305C8DCD79DA8B0F, group as u32, control as u32)
 }
+
+pub fn get_normal(group: Group, control: Control) -> f32 {
+    invoke!(f32, 0xEC3C9B8D5327B563, group as u32, control as u32)
+}
+
+pub fn get_disabled_normal(group: Group, control: Control) -> f32 {
+    invoke!(f32, 0x11E65974A982637C, group as u32, control as u32)
+}

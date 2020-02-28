@@ -7,6 +7,10 @@ use crate::game::camera::Camera;
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
 use crate::events::ScriptEvent;
+use crate::native::pool::Handleable;
+use cgmath::{Vector2, Array};
+use crate::game::Rgba;
+use crate::game::ui::Font;
 
 pub struct ScriptFingerPointing {
     active: bool,
@@ -39,8 +43,7 @@ impl Script for ScriptFingerPointing {
         tasks.set_move_signal("Pitch", pitch);
         tasks.set_move_signal("Heading", heading * -1.0 + 1.0);
         tasks.set_move_signal("isBlocked", false);
-        use crate::invoke;
-        let first_person = invoke!(u32, 0xEE778F8C7E1142E2, invoke!(u32, 0x19CAFA3C87F7C2FF)) == 4;
+        let first_person = game::camera::get_view_mode(game::camera::get_camera_type()) == 4;
         tasks.set_move_signal("isFirstPerson", first_person);
 
         if game::controls::is_disabled_pressed(ControlGroup::Move, Control::Cover) && !player.is_in_any_vehicle(false) {

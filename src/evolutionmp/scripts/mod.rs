@@ -35,6 +35,7 @@ use std::time::{Duration, Instant};
 use std::collections::{VecDeque, HashMap};
 use std::sync::atomic::Ordering;
 use crate::scripts::fishing::ScriptFishing;
+use crate::scripts::fly::ScriptFly;
 
 pub mod console;
 pub mod vehicle;
@@ -42,6 +43,7 @@ pub mod cleanup;
 pub mod pointing;
 pub mod network;
 pub mod fishing;
+pub mod fly;
 
 pub fn init(runtime: &mut Runtime) {
     crate::info!("Registering scripts");
@@ -53,7 +55,8 @@ pub fn init(runtime: &mut Runtime) {
     runtime.register_script("finger_pointing", ScriptFingerPointing::new());
     runtime.register_script("command", ScriptCommand::new());
     runtime.register_script("fishing", ScriptFishing::new());
-    network::init(runtime);
+    runtime.register_script("fly", ScriptFly::new());
+    //network::init(runtime);
 }
 
 pub fn command_teleport(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
