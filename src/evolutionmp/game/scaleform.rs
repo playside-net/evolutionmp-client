@@ -2,6 +2,8 @@ use crate::invoke;
 use crate::game::{Handle, Rgba};
 use cgmath::{Vector2, Vector3};
 use crate::native::pool::Handleable;
+use crate::game::streaming::Resource;
+use crate::runtime::ScriptEnv;
 
 pub struct Scaleform {
     handle: Handle
@@ -10,16 +12,14 @@ pub struct Scaleform {
 crate::impl_handle!(Scaleform);
 
 impl Scaleform {
-    pub fn new(id: &str) -> Option<Scaleform> {
-        invoke!(Option<Scaleform>, 0x11FE353CF9733E6F, id)
+    pub fn new(env: &mut ScriptEnv, id: &str) -> Option<Scaleform> {
+        let scaleform = invoke!(Option<Scaleform>, 0x11FE353CF9733E6F, id)?;
+        env.wait_for_resource(&scaleform);
+        Some(scaleform)
     }
 
     pub fn is_valid(&self) -> bool {
         self.handle > 0
-    }
-
-    pub fn is_loaded(&self) -> bool {
-        invoke!(bool, 0x85F01B8D5B90570E, self.handle)
     }
 
     pub fn invoke<R>(&self, method: &str, args: &[ScaleformArg]) -> R where R: ScaleformResult {
@@ -40,7 +40,7 @@ impl Scaleform {
     }
 
     pub fn render_fullscreen(&self, color: Rgba) {
-        invoke!((), 0x54972ADAF0294A93, self.handle, color, 0u32)
+        invoke!((), 0x0DF606929C105BE1, self.handle, color, 0u32)
     }
 
     pub fn render_volumetric(&self, pos: Vector3<f32>, rot: Vector3<f32>, scale: Vector3<f32>, additive: bool) {
@@ -50,15 +50,23 @@ impl Scaleform {
             invoke!((), 0x1CE592FDC749D6F5, self.handle, pos, rot, 2.0, 2.0, 1.0, scale, 2)
         }
     }
-
-    fn mark_unused(&mut self) {
-        invoke!((), 0x1D132D614DD86811, &mut self.handle);
-    }
 }
 
 impl std::ops::Drop for Scaleform {
     fn drop(&mut self) {
         self.mark_unused()
+    }
+}
+
+impl Resource for Scaleform {
+    fn is_loaded(&self) -> bool {
+        invoke!(bool, 0x85F01B8D5B90570E, self.handle)
+    }
+
+    fn request(&self) {}
+
+    fn mark_unused(&mut self) {
+        invoke!((), 0x1D132D614DD86811, &mut self.handle);
     }
 }
 

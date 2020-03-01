@@ -10,7 +10,7 @@ use crate::game::entity::Entity;
 use crate::game::stats::Stat;
 use crate::game::ped::{Ped, PedBone};
 use crate::game::player::Player;
-use crate::game::vehicle::Vehicle;
+use crate::game::vehicle::{Vehicle, MissionTrain};
 use crate::game::{streaming, gameplay, dlc, script, clock, Rgb, Rgba};
 use crate::win::input::{KeyboardEvent, InputEvent};
 use crate::game::streaming::{Model, AnimDict, Resource};
@@ -86,6 +86,22 @@ pub fn command_vehicle(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<()
     }
 }
 
+pub fn command_train(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let player = Player::local();
+    let ped = player.get_ped();
+    let model = args.read::<u8>()?;
+    let direction = args.read::<bool>()?;
+    if !ped.is_in_any_vehicle(false) {
+        let train = MissionTrain::new(env, model, ped.get_position(), direction)
+            .ok_or("Train creation failed")?;
+        ped.put_into_vehicle(train.as_vehicle(), -1);
+        env.log(format!("~y~Spawned train at your position"));
+        Ok(())
+    } else {
+        Err("You're already in a vehicle")?
+    }
+}
+
 pub fn command_model(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
     let model = args.read::<Model>()?;
     if model.is_valid() && model.is_in_cd_image() && model.is_ped() {
@@ -125,7 +141,8 @@ pub fn command_mod(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), Co
     if let Some(veh) = ped.get_in_vehicle(false) {
         let id = args.read::<u32>()?;
         let value = args.read::<i32>()?;
-        veh.set_mod(id, value, false);
+        veh.set_mod_kit(0);
+        veh.set_mod(id, value, true);
         env.log("~g~Modified!");
         Ok(())
     } else {
@@ -137,6 +154,18 @@ pub fn command_time(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), C
     let hour = args.read::<u32>()?;
     let minute = args.read::<u32>()?;
     game::clock::set_time(hour, minute, 0);
+    Ok(())
+}
+
+pub fn command_timecycle(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let name = args.read::<String>()?;
+    if name == "reset" {
+        game::graphics::timecycle::clear_primary_modifier();
+    } else {
+        let strength = args.read::<f32>()?;
+        game::graphics::timecycle::set_primary_modifier(&name);
+        game::graphics::timecycle::set_primary_modifier_strength(strength);
+    }
     Ok(())
 }
 
@@ -165,11 +194,13 @@ impl Script for ScriptCommand {
     fn prepare(&mut self, env: ScriptEnv) {
         self.register_command("tp", command_teleport);
         self.register_command("veh", command_vehicle);
+        self.register_command("train", command_train);
         self.register_command("model", command_model);
         self.register_command("zone", command_zone);
         self.register_command("repair", command_repair);
         self.register_command("mod", command_mod);
         self.register_command("time", command_time);
+        self.register_command("ts", command_timecycle);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {

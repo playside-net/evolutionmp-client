@@ -1,4 +1,4 @@
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE};
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64};
 use winapi::um::memoryapi::VirtualProtect;
 use winapi::um::libloaderapi::GetModuleHandleA;
 use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use std::mem::ManuallyDrop;
 use detour::RawDetour;
 use winapi::_core::ptr::replace;
+use region::Protection;
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
@@ -70,8 +71,8 @@ impl<S> From<S> for Pattern where S: AsRef<str> {
 
 pub struct RegionIterator {
     pattern: Pattern,
-    current: *mut u8,
-    len: usize
+    base: *mut u8,
+    size: usize
 }
 
 impl RegionIterator {
@@ -79,8 +80,8 @@ impl RegionIterator {
         let pattern = pattern.into();
         RegionIterator {
             pattern,
-            current: region.base,
-            len: region.size
+            base: region.base,
+            size: region.size
         }
     }
 }
@@ -90,18 +91,19 @@ impl Iterator for RegionIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let pattern_len = self.pattern.len();
-        while self.len >= pattern_len {
-            if self.pattern.matches(self.current) {
+        while self.size >= pattern_len {
+            /*let readable = region::query_range(self.base, pattern_len)
+                .unwrap().iter().all(|reg| reg.protection.contains(Protection::Read));*/
+            if /*readable &&*/ self.pattern.matches(self.base) {
                 let region = MemoryRegion {
-                    base: self.current,
-                    size: self.len //FIXME pattern_len
+                    base: self.base,
+                    size: self.size
                 };
-                self.current = unsafe { self.current.add(pattern_len) };
-                self.len -= pattern_len;
+                self.base = unsafe { self.base.add(pattern_len) };
+                self.size -= pattern_len;
                 return Some(region)
             } else {
-                self.current = unsafe { self.current.add(1) };
-                self.len -= 1;
+                self.base = unsafe { self.base.add(1) };
             }
         }
         None
@@ -115,11 +117,11 @@ pub struct MemoryRegion {
 }
 
 impl MemoryRegion {
-    pub fn image() -> MemoryRegion {
+    pub fn with_size<S>(size: S) -> MemoryRegion where S: FnOnce(IMAGE_OPTIONAL_HEADER64) -> u32 {
         unsafe {
             let handle = GetModuleHandleA(null_mut());
             let lfa = handle.offset(std::mem::transmute::<HMODULE, *mut IMAGE_DOS_HEADER>(handle).read().e_lfanew as isize);
-            let size = std::mem::transmute::<*mut (), *mut IMAGE_NT_HEADERS64>(lfa as *mut ()).read().OptionalHeader.SizeOfImage;
+            let size = size(std::mem::transmute::<*mut (), *mut IMAGE_NT_HEADERS64>(lfa as *mut ()).read().OptionalHeader);
             MemoryRegion {
                 base: handle as *mut _,
                 size: size as usize
@@ -127,16 +129,14 @@ impl MemoryRegion {
         }
     }
 
+    #[inline]
+    pub fn image() -> MemoryRegion {
+        Self::with_size(|header| header.SizeOfImage)
+    }
+
+    #[inline]
     pub fn code() -> MemoryRegion {
-        unsafe {
-            let handle = GetModuleHandleA(null_mut());
-            let lfa = handle.offset(std::mem::transmute::<HMODULE, *mut IMAGE_DOS_HEADER>(handle).read().e_lfanew as isize);
-            let size = std::mem::transmute::<*mut (), *mut IMAGE_NT_HEADERS64>(lfa as *mut ()).read().OptionalHeader.SizeOfCode;
-            MemoryRegion {
-                base: handle as *mut _,
-                size: size as usize
-            }
-        }
+        Self::with_size(|header| header.SizeOfCode)
     }
 
     pub fn find<P>(&self, pattern: P) -> RegionIterator where P: Into<Pattern> {
@@ -169,6 +169,11 @@ impl MemoryRegion {
 
     pub unsafe fn read_ptr(&self, offset: usize) -> MemoryRegion {
         self.add(offset).offset(*self.get::<i32>() as isize)
+    }
+
+    pub unsafe fn write_ptr(&self, ptr: *const ()) {
+        let offset = (ptr as i64 - self.base as i64) as i32;
+        *self.get_mut::<i32>() = offset;
     }
 
     pub unsafe fn offset(&self, offset: isize) -> MemoryRegion {
@@ -246,6 +251,13 @@ impl MemoryRegion {
         detour.enable().expect("detour enabling failed");
         let old = detour.trampoline() as *const _;
         std::mem::forget(detour);
+        old
+    }
+
+    pub unsafe fn jump(&self, replacement: *const ()) -> *const () {
+        let old = self.get_call();
+        *self.get_mut::<u8>() = 0xE9;
+        self.add(1).write_ptr(replacement);
         old
     }
 }

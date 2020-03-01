@@ -12,7 +12,7 @@ use cgmath::Vector3;
 pub trait Resource {
     fn is_loaded(&self) -> bool;
     fn request(&self);
-    fn mark_unused(&self);
+    fn mark_unused(&mut self);
 }
 
 #[derive(Clone)]
@@ -107,7 +107,7 @@ impl Resource for Model {
         invoke!((), 0x963D27A58DF860AC, self.hash)
     }
 
-    fn mark_unused(&self) {
+    fn mark_unused(&mut self) {
         invoke!((), 0xE532F5D78798DAAB, self.hash)
     }
 }
@@ -148,6 +148,10 @@ impl AnimDict {
     pub fn is_valid(&self) -> bool {
         invoke!(bool, 0x2DA49C3B79856961, self.get_name())
     }
+
+    pub fn get_duration(&self, animation: &str) -> f32 {
+        invoke!(f32, 0xFEDDF04D62B8D790, self.get_name(), animation)
+    }
 }
 
 impl Resource for AnimDict {
@@ -159,7 +163,7 @@ impl Resource for AnimDict {
         invoke!((), 0xD3BD40951412FEF6, self.get_name())
     }
 
-    fn mark_unused(&self) {
+    fn mark_unused(&mut self) {
         invoke!((), 0xF66A602F829E2A06, self.get_name())
     }
 }
@@ -208,7 +212,7 @@ impl Resource for PedPhoto {
 
     fn request(&self) {}
 
-    fn mark_unused(&self) {
+    fn mark_unused(&mut self) {
         invoke!((), 0x96B1361D9B24C2FF, self.handle)
     }
 }

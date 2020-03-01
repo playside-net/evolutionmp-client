@@ -1,23 +1,26 @@
 use crate::pattern::MemoryRegion;
 use crate::game::{Rgba, Rgb, Handle};
-use std::collections::HashMap;
-use std::ffi::{CString, CStr};
-use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
-use byteorder::WriteBytesExt;
+use crate::native::pool::Handleable;
+use crate::game::entity::Entity;
+use std::collections::HashMap;
+use std::ffi::{CString, CStr};
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ops::Deref;
 use std::ptr::null_mut;
-use crate::native::pool::Handleable;
-use winapi::_core::marker::PhantomData;
-use winapi::_core::sync::atomic::AtomicI32;
-use crate::game::entity::Entity;
+use std::marker::PhantomData;
+use std::sync::atomic::AtomicI32;
+use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
+use byteorder::WriteBytesExt;
 
 pub mod vehicle;
 pub mod pool;
 pub mod object_hashes;
+pub mod fs;
+pub mod core;
+pub mod alloc;
 
 pub struct ThreadSafe<T> {
     t: T
@@ -51,21 +54,32 @@ lazy_static! {
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     let natives = Natives::new(mem);
+    crate::info!("A");
     NATIVES.replace(Some(natives));
+    crate::info!("B");
     SET_VECTOR_RESULTS.set(Some(std::mem::transmute(
-        mem.find_await("83 79 18 ? 48 8B D1 74 4A FF 4A 18", 50, 1000)
-            .expect("vector fixer").get_mut::<NativeFunction>()
+        mem.find("83 79 18 ? 48 8B D1 74 4A FF 4A 18")
+            .next().expect("vector fixer")
+            .get_mut::<NativeFunction>()
     )));
+    crate::info!("C");
     let big_map = mem.find("33 C0 0F 57 C0 ? 0D")
         .next().expect("big map")
         .add(7);
+    crate::info!("D");
     EXPANDED_RADAR.store(big_map.get_mut(), Ordering::SeqCst);
+    crate::info!("E");
     REVEAL_FULL_MAP.store(big_map.add(30).get_mut(), Ordering::SeqCst);
+    crate::info!("F");
     let cursor_sprite = mem.find("74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0")
         .next().expect("cursor sprite");
+    crate::info!("G");
     CURSOR_SPRITE.store(cursor_sprite.get_mut(), Ordering::SeqCst);
+    crate::info!("H");
     pool::init(mem);
+    crate::info!("I");
     vehicle::init(mem);
+    crate::info!("J");
 }
 
 pub fn get_handler(hash: u64) -> NativeFunction {
@@ -366,8 +380,8 @@ pub struct Natives {
 }
 
 impl Natives {
-    pub unsafe fn new(global_region: &MemoryRegion) -> Natives {
-        let table = global_region.find("76 32 48 8B 53 40")
+    pub unsafe fn new(mem: &MemoryRegion) -> Natives {
+        let table = mem.find("76 32 48 8B 53 40")
             .next().expect("native table")
             .add(9).read_ptr(4).get_box::<NativeTable>();
 

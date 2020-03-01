@@ -1,22 +1,29 @@
 use crate::runtime::{TaskQueue, Script, ScriptEnv};
-use std::collections::VecDeque;
 use crate::events::ScriptEvent;
-use crate::game::player::Player;
 use crate::win::input::{InputEvent, KeyboardEvent};
-use winapi::um::winuser::VK_NUMPAD0;
+use crate::game;
+use crate::game::player::Player;
 use crate::game::controls::{Group, Control};
 use crate::game::entity::Entity;
-use crate::game::vehicle::VehicleModel;
+use crate::game::vehicle::{VehicleModel, MissionTrain};
 use crate::game::ped::Ped;
+use crate::game::scaleform::{Scaleform, ScaleformArg};
+use crate::game::Rgba;
+use winapi::um::winuser::VK_NUMPAD0;
+use cgmath::{Vector2, Zero, Array};
+use std::collections::VecDeque;
+use crate::game::ui::Font;
 
 pub struct ScriptVehicle {
-    tasks: TaskQueue
+    tasks: TaskQueue,
+    scaleform: Option<Scaleform>
 }
 
 impl ScriptVehicle {
     pub fn new() -> ScriptVehicle {
         ScriptVehicle {
-            tasks: TaskQueue::new()
+            tasks: TaskQueue::new(),
+            scaleform: None
         }
     }
 
@@ -46,7 +53,10 @@ impl ScriptVehicle {
 
 impl Script for ScriptVehicle {
     fn prepare(&mut self, mut env: ScriptEnv) {
-
+        let scaleform = Scaleform::new(&mut env, "BINOCULARS").unwrap();
+        scaleform.invoke::<()>("SET_CAM_LOGO", &[ScaleformArg::I32(0)]);
+        self.scaleform = Some(scaleform);
+        game::audio::set_mobile_radio_enabled(true);
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
@@ -55,6 +65,19 @@ impl Script for ScriptVehicle {
 
         let player = Player::local();
         let ped = player.get_ped();
+
+        if let Some(scaleform) = self.scaleform.as_ref() {
+            scaleform.render_fullscreen(Rgba::WHITE);
+        }
+
+        if let Some(vehicle) = ped.get_in_vehicle(false) {
+            if VehicleModel::from_vehicle(&vehicle).is_train() {
+                let train = MissionTrain { vehicle };
+                let scale = Vector2::from_value(0.35);
+                let color = Rgba::WHITE;
+                game::ui::draw_text(format!("Train node: {}", train.get_track_node()), Vector2::zero(), color, Font::ChaletLondon, scale);
+            }
+        }
 
         if ped.exists() {
             if controls::is_just_pressed(Group::Move, Control::Enter) {

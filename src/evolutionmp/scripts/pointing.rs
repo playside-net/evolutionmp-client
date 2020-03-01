@@ -3,7 +3,7 @@ use super::{ScriptEnv, Script};
 use crate::game;
 use crate::game::player::Player;
 use crate::game::streaming::AnimDict;
-use crate::game::camera::Camera;
+use crate::game::camera::{Camera, GameplayCamera};
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
 use crate::events::ScriptEvent;
@@ -13,22 +13,19 @@ use crate::game::Rgba;
 use crate::game::ui::Font;
 
 pub struct ScriptFingerPointing {
-    active: bool,
-    camera: Option<Camera>
+    active: bool
 }
 
 impl ScriptFingerPointing {
     pub fn new() -> ScriptFingerPointing {
         ScriptFingerPointing {
-            active: false,
-            camera: None
+            active: false
         }
     }
 }
 
 impl Script for ScriptFingerPointing {
     fn prepare(&mut self, mut env: ScriptEnv) {
-        self.camera = Some(Camera::gameplay());
     }
 
     fn frame(&mut self, mut env: ScriptEnv) {
@@ -38,7 +35,7 @@ impl Script for ScriptFingerPointing {
         tasks.is_move_active();
 
         let pitch = (self.get_relative_pitch().min(42.0).max(-70.0) + 70.0) / 112.0;
-        let heading = (game::camera::get_gameplay_relative_heading().min(180.0).max(-180.0) + 180.0) / 360.0;
+        let heading = (GameplayCamera.get_relative_heading().min(180.0).max(-180.0) + 180.0) / 360.0;
 
         tasks.set_move_signal("Pitch", pitch);
         tasks.set_move_signal("Heading", heading * -1.0 + 1.0);
@@ -68,7 +65,7 @@ impl Script for ScriptFingerPointing {
 
 impl ScriptFingerPointing {
     fn get_relative_pitch(&self) -> f32 {
-        let camera_rotation = self.camera.as_ref().expect("missing gameplay camera").get_rotation(2);
+        let camera_rotation = GameplayCamera.get_rotation(2);
         camera_rotation.x - Player::local().get_ped().get_pitch()
     }
 }

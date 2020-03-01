@@ -6,6 +6,7 @@
       <w>cutscene</w>
       <w>deref</w>
       <w>eyesack</w>
+      <w>fleeca</w>
       <w>freemode</w>
       <w>freezed</w>
       <w>gameplay</w>
@@ -40,6 +41,7 @@
       <w>targetable</w>
       <w>teleport</w>
       <w>teleported</w>
+      <w>timecycle</w>
       <w>towtruck</w>
       <w>unalerted</w>
       <w>vtable</w>

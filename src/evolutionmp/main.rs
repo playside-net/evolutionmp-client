@@ -24,6 +24,8 @@ use log::{info, debug, error};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::hash::Hashable;
 use winapi::_core::ops::RangeInclusive;
+use crate::native::fs::{Device, PackFile, RelativeDevice};
+use std::ffi::{CStr, CString};
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -87,8 +89,6 @@ static mut DIGITAL_DISTRIBUTION: bool = false;
 fn attach(instance: HINSTANCE) {
     unsafe {
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(100));
-
             info!("Injection successful");
 
             let mem = MemoryRegion::image();
@@ -115,12 +115,36 @@ fn attach(instance: HINSTANCE) {
             DIGITAL_DISTRIBUTION = s.offset(-26).get::<u8>().read() == 3;
             info!("Digital distribution: {}", DIGITAL_DISTRIBUTION);
 
+            native::alloc::init(&mem);
+            native::fs::pre_init(&mem);
+
             let input = InputHook::new(&mem);
             info!("Input hooked. Waiting for game being loaded...");
 
             while !get_game_state().is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
+
+            //native::fs::init();
+            //native::core::init(&mem);
+
+            /*if let Some(device) = Device::get("platform:/models/farlods.ydd", false) {
+                walk(&device, Path::new("platform:/"));
+
+                *//*info!("{:?} len is {}", path, device.len(&path));
+                let mut pack = PackFile::open(&path, 3).expect("packfile opening failed");
+                info!("opened pack file {:?}", pack.as_device().get_name());
+                let mount_point = CString::new("temp:/").unwrap();
+                pack.mount(&mount_point);
+                info!("mounted as {:?}", mount_point);
+                let device = pack.as_device();
+                let file = CString::new("temp:/dt1_07_building2.ydr").unwrap();
+                let mut input = device.open(&file, false)
+                    .expect("device opening failed");
+                let mut output = std::fs::File::create("kek.ydr").unwrap();
+                std::io::copy(&mut input, &mut output);*//*
+
+            }*/
 
             info!("Initializing game hooks");
 

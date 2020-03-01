@@ -1,8 +1,64 @@
 use crate::invoke;
 use crate::game::Handle;
-use crate::hash::Hashable;
+use crate::hash::{Hashable, Hash};
 use crate::native::{Addressable, NativeField};
-use cgmath::{Vector3, Matrix3, Euler, Deg, Matrix4, SquareMatrix, Angle};
+use cgmath::{Vector3, Matrix3, Euler, Deg, SquareMatrix, Angle};
+
+pub enum CameraShake {
+    DeathFailInEffect,
+    Drunk,
+    Family5DrugTrip,
+    Hand,
+    Jolt,
+    LargeExplosion,
+    MediumExplosion,
+    SmallExplosion,
+    RoadVibration,
+    SkyDiving,
+    Vibrate
+}
+
+impl CameraShake {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            CameraShake::DeathFailInEffect => "DEATH_FAIL_IN_EFFECT_SHAKE",
+            CameraShake::Drunk => "DRUNK_SHAKE",
+            CameraShake::Family5DrugTrip => "FAMILY5_DRUG_TRIP_SHAKE",
+            CameraShake::Hand => "HAND_SHAKE",
+            CameraShake::Jolt => "JOLT_SHAKE",
+            CameraShake::LargeExplosion => "LARGE_EXPLOSION_SHAKE",
+            CameraShake::MediumExplosion => "MEDIUM_EXPLOSION_SHAKE",
+            CameraShake::SmallExplosion => "SMALL_EXPLOSION_SHAKE",
+            CameraShake::RoadVibration => "ROAD_VIBRATION_SHAKE",
+            CameraShake::SkyDiving => "SKY_DIVING_SHAKE",
+            CameraShake::Vibrate => "VIBRATE_SHAKE",
+        }
+    }
+}
+
+pub enum CameraType {
+    DefaultScripted,
+    DefaultAnimated,
+    DefaultSpline,
+    DefaultScriptedFly,
+    TimedSpline
+}
+
+impl CameraType {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            CameraType::DefaultScripted => "DEFAULT_SCRIPTED_CAMERA",
+            CameraType::DefaultAnimated => "DEFAULT_ANIMATED_CAMERA",
+            CameraType::DefaultSpline => "DEFAULT_SPLINE_CAMERA",
+            CameraType::DefaultScriptedFly => "DEFAULT_SCRIPTED_FLY_CAMERA",
+            CameraType::TimedSpline => "TIMED_SPLINE_CAMERA",
+        }
+    }
+
+    pub fn joaat(&self) -> Hash {
+        self.get_name().joaat()
+    }
+}
 
 pub fn render_scripted(render: bool, transition_time: Option<u32>) {
     invoke!((), 0x07E5B515DB0636FC, render, transition_time.is_some(), transition_time.unwrap_or(0), true, false)
@@ -16,18 +72,6 @@ pub fn get_view_mode(camera_type: u32) -> u32 {
     invoke!(u32, 0xEE778F8C7E1142E2, camera_type)
 }
 
-pub fn get_gameplay_fov() -> f32 {
-    invoke!(f32, 0x65019750A0324133)
-}
-
-pub fn get_gameplay_position() -> Vector3<f32> {
-    invoke!(Vector3<f32>, 0x14D6F5678D8F1B37)
-}
-
-pub fn get_gameplay_rotation(order: u32) -> Vector3<f32> {
-    invoke!(Vector3<f32>, 0x837765A25378F0BB, order)
-}
-
 pub fn rotation_to_direction(rot: Vector3<f32>) -> Vector3<f32> {
     let rot = Euler::new(Deg(rot.x), Deg(rot.y), Deg(rot.z));
     Vector3::new(
@@ -37,16 +81,48 @@ pub fn rotation_to_direction(rot: Vector3<f32>) -> Vector3<f32> {
     )
 }
 
-pub fn get_gameplay_direction() -> Vector3<f32> {
-    rotation_to_direction(get_gameplay_rotation(2))
-}
+pub struct GameplayCamera;
 
-pub fn get_gameplay_relative_heading() -> f32 {
-    invoke!(f32, 0x743607648ADD4587)
-}
+impl GameplayCamera {
+    pub fn get_fov(&self) -> f32 {
+        invoke!(f32, 0x65019750A0324133)
+    }
 
-pub fn get_gameplay_relative_pitch() -> f32 {
-    invoke!(f32, 0x3A6867B4845BEDA2)
+    pub fn get_position(&self) -> Vector3<f32> {
+        invoke!(Vector3<f32>, 0x14D6F5678D8F1B37)
+    }
+
+    pub fn get_rotation(&self, order: u32) -> Vector3<f32> {
+        invoke!(Vector3<f32>, 0x837765A25378F0BB, order)
+    }
+
+    pub fn get_direction(&self) -> Vector3<f32> {
+        rotation_to_direction(self.get_rotation(2))
+    }
+
+    pub fn get_relative_heading(&self) -> f32 {
+        invoke!(f32, 0x743607648ADD4587)
+    }
+
+    pub fn get_relative_pitch(&self) -> f32 {
+        invoke!(f32, 0x3A6867B4845BEDA2)
+    }
+
+    pub fn shake(&self, shake: CameraShake, amplitude: f32) {
+        invoke!((), 0xFD55E49555E017CF, shake.get_name(), amplitude)
+    }
+
+    pub fn set_shake_amplitude(&self, amplitude: f32) {
+        invoke!((), 0xA87E00932DB4D85D, amplitude)
+    }
+
+    pub fn is_shaking(&self) -> bool {
+        invoke!(bool, 0x016C090630DF1F89)
+    }
+
+    pub fn stop_shaking(&self, instant: bool) {
+        invoke!((), 0x0EF93E9F3D08C178, instant)
+    }
 }
 
 pub struct Camera {
@@ -54,16 +130,12 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn gameplay() -> Camera {
-        Self::new_unset("DEFAULT_SCRIPTED_CAMERA").expect("gameplay camera missing")
+    pub fn new(ty: CameraType) -> Option<Camera> {
+        invoke!(Option<Camera>, 0x5E3CF89C6BCCA67D, ty.joaat(), false)
     }
 
-    pub fn new_unset<H>(name: H) -> Option<Camera> where H: Hashable {
-        invoke!(Option<Camera>, 0x5E3CF89C6BCCA67D, name.joaat(), false)
-    }
-
-    pub fn new<H>(name: H, pos: Vector3<f32>, rotation: Vector3<f32>, fov: f32) -> Option<Camera> where H: Hashable {
-        invoke!(Option<Camera>, 0x6ABFA3E16460F22D, name.joaat(), pos, rotation, fov, false, 2)
+    pub fn new_parameterized(ty: CameraType, pos: Vector3<f32>, rotation: Vector3<f32>, fov: f32) -> Option<Camera> {
+        invoke!(Option<Camera>, 0x6ABFA3E16460F22D, ty.joaat(), pos, rotation, fov, false, 2)
     }
 
     pub fn exists(&self) -> bool {
@@ -124,6 +196,22 @@ impl Camera {
 
     pub fn set_active(&self, active: bool) {
         invoke!((), 0x026FB97D0A425F84, self.handle, active)
+    }
+
+    pub fn shake(&self, shake: CameraShake, amplitude: f32) {
+        invoke!((), 0x6A25241C340D3822, self.handle, shake.get_name(), amplitude)
+    }
+
+    pub fn set_shake_amplitude(&self, amplitude: f32) {
+        invoke!((), 0xD93DB43B82BC0D00, self.handle, amplitude)
+    }
+
+    pub fn is_shaking(&self) -> bool {
+        invoke!(bool, 0x6B24BFE83A2BE47B, self.handle)
+    }
+
+    pub fn stop_shaking(&self, instant: bool) {
+        invoke!((), 0xBDECF64367884AC3, self.handle, instant)
     }
 }
 

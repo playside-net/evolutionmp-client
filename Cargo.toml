@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 detour = { version = "*", features = ["nightly"] }
-winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi", "fibersapi", "winerror", "consoleapi"] }
+winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi", "fibersapi", "winerror", "consoleapi", "minwindef", "basetsd", "fileapi"] }
 winreg = "*"
 laminar = "*"
 bincode = "*"
@@ -29,7 +29,9 @@ fern = { version = "*", features = ["colored"] }
 backtrace = "*"
 ansi_term = "*"
 clipboard = "0.5.0"
+alignas = "*"
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
+region = "*"
 
 [[bin]]
 name = "launcher"

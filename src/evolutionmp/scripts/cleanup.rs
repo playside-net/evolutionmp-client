@@ -126,7 +126,7 @@ impl ScriptCleanWorld {
         game::vehicle::set_random_trains(false);
         game::vehicle::set_far_draw(false);
         game::vehicle::set_distant_visible(false);
-        game::vehicle::delete_all_trains();
+        //game::vehicle::delete_all_trains();
         game::vehicle::set_parked_count(-1);
         game::vehicle::set_low_priority_generators_active(false);
         let one = Vector3::new(1.0, 1.0, 1.0);

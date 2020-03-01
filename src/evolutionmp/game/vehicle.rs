@@ -8,7 +8,7 @@ use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
 use crate::runtime::ScriptEnv;
-use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER};
+use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
 use std::time::Duration;
 use std::sync::atomic::Ordering;
@@ -17,11 +17,6 @@ use cgmath::{Vector3, Rad};
 
 pub fn get_pool() -> ManuallyDrop<Box<Box<VehiclePool>>> {
     crate::native::pool::get_vehicles().expect("vehicle pool not initialized")
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Vehicle {
-    handle: Handle
 }
 
 pub fn set_parked_count(count: i32) {
@@ -74,6 +69,58 @@ pub fn set_low_priority_generators_active(active: bool) {
 
 pub fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3<f32>, unknown: bool) {
     invoke!((), 0x46A1E1A299EC4BBA, start, end, unknown)
+}
+
+pub struct MissionTrain {
+    pub vehicle: Vehicle
+}
+
+impl MissionTrain {
+    pub fn new(env: &mut ScriptEnv, model: u8, pos: Vector3<f32>, direction: bool) -> Option<MissionTrain> {
+        env.wait_for_resource(&Model::from("freight"));
+        env.wait_for_resource(&Model::from("freightcar"));
+        env.wait_for_resource(&Model::from("freightgrain"));
+        env.wait_for_resource(&Model::from("freightcont1"));
+        env.wait_for_resource(&Model::from("freightcont2"));
+        env.wait_for_resource(&Model::from("freighttrailer"));
+        env.wait_for_resource(&Model::from("tankercar"));
+        env.wait_for_resource(&Model::from("metrotrain"));
+        let vehicle = invoke!(Option<Vehicle>, 0x63C6CCA8E68AE8C8, model as u32, pos, direction)?;
+        Some(MissionTrain { vehicle })
+    }
+
+    pub fn set_position(&self, pos: Vector3<f32>) {
+        invoke!((), 0x591CA673AA6AB736, self.vehicle.handle, pos)
+    }
+
+    pub fn get_carriage(&self, trailer: u32) -> Option<ProbeEntity> {
+        invoke!(Option<ProbeEntity>, 0x08AAFD0814722BC3, self.vehicle.handle, trailer)
+    }
+
+    pub fn set_speed(&self, speed: f32) {
+        invoke!((), 0xAA0BC91BE0B796E3, self.vehicle.handle, speed)
+    }
+
+    pub fn set_cruise_speed(&self, speed: f32) {
+        invoke!((), 0x16469284DB8C62B5, self.vehicle.handle, speed)
+    }
+
+    pub fn get_track_node(&self) -> i32 {
+        TRAIN_TRACK_NODE.get(&self.vehicle)
+    }
+
+    pub fn as_vehicle(&self) -> &Vehicle {
+        &self.vehicle
+    }
+
+    pub fn delete(&mut self) {
+        invoke!((), 0x5B76B14AE875C795, &mut self.vehicle.handle)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Vehicle {
+    handle: Handle
 }
 
 impl Vehicle {
@@ -224,6 +271,18 @@ impl Vehicle {
 
     pub fn set_mod(&self, id: u32, value: i32, custom_tires: bool) {
         invoke!((), 0x6AF0636DDEDCB6DD, self.handle, id, value, custom_tires)
+    }
+
+    pub fn set_mod_kit(&self, id: u32) {
+        invoke!((), 0x1F2AA07F00B3217A, self.handle, id)
+    }
+
+    pub fn get_mod_kit(&self) -> u32 {
+        invoke!(u32, 0x6325D1A044AE510D, self.handle)
+    }
+
+    pub fn get_mod_kit_type(&self) -> u32 {
+        invoke!(u32, 0xFC058F5121E54C32, self.handle)
     }
 
     pub fn set_livery(&self, livery: u32) {
