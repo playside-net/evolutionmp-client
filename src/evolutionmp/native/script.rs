@@ -19,45 +19,37 @@ static mut SCRIPT_THREAD_KILL: Option<extern "C" fn(*mut ScriptThread)> = None;
 static mut SCRIPT_THREAD_TICK: Option<extern "C" fn(*mut ScriptThread, u32) -> ThreadState> = None;
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
-    crate::info!("thc");
     THREAD_COLLECTION = Some(std::mem::transmute(
         mem.find("48 8B C8 EB 03 48 8B CB 48 8B 05")
             .next().expect("thread collection")
             .add(11).read_ptr(4).as_ptr()
     ));
-    crate::info!("thid");
     THREAD_ID = mem.find("89 15 ? ? ? ? 48 8B 0C D8")
         .next().expect("thread id")
         .add(2).read_ptr(4).get_mut();
-    crate::info!("thcnt");
     THREAD_COUNT = mem.find("FF 0D ? ? ? ? 48 8B F9")
         .next().expect("thread count")
         .add(2).read_ptr(4).get_mut();
-    crate::info!("scmgr");
     SCRIPT_MANAGER = Some(std::mem::transmute(
         mem.find("74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D")
             .next().expect("script manager")
             .add(13).read_ptr(4).as_ptr()
     ));
-    crate::info!("sc th init");
     SCRIPT_THREAD_INIT = Some(std::mem::transmute(
         mem.find("83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0")
             .next().expect("script_thread_init")
             .as_ptr()
     ));
-    crate::info!("sc th kill");
     SCRIPT_THREAD_KILL = Some(std::mem::transmute(
         mem.find("48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14")
             .next().expect("script_thread_kill")
             .offset(-6).as_ptr()
     ));
-    crate::info!("sc th tick");
     SCRIPT_THREAD_TICK = Some(std::mem::transmute(
         mem.find("80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05")
             .next().expect("script_thread_tick")
             .offset(-0xF).as_ptr()
     ));
-    crate::info!("done");
 }
 
 pub fn is_thread_pool_empty() -> bool {
