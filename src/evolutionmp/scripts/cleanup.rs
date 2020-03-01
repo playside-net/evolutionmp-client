@@ -9,42 +9,34 @@ use crate::game::streaming::Model;
 use crate::game::vehicle::Vehicle;
 use std::time::Instant;
 use std::collections::VecDeque;
-use cgmath::Vector3;
+use cgmath::{Vector3, Array};
+use crate::game::GameState;
+use crate::game::ui::LoadingPrompt;
 
 static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
 
 pub struct ScriptCleanWorld {
     tasks: TaskQueue,
-    last_cleanup: Instant
+    last_cleanup: Instant,
+    loaded: bool
 }
 
 impl ScriptCleanWorld {
     pub fn new() -> ScriptCleanWorld {
         ScriptCleanWorld {
             tasks: TaskQueue::new(),
-            last_cleanup: Instant::now()
+            last_cleanup: Instant::now(),
+            loaded: false
         }
     }
 }
 
 impl Script for ScriptCleanWorld {
     fn prepare(&mut self, mut env: ScriptEnv) {
-        let pos = Vector3::new(0.0, 0.0, 73.5);
-
-        game::streaming::load_scene(pos);
         game::misc::set_stunt_jumps_can_trigger(false);
 
-        let player = Player::local();
-        player.set_model(&mut env, "mp_m_freemode_01");
-        let ped = player.get_ped();
-        ped.set_position_no_offset(pos, Vector3::new(false, false, false));
-        ped.get_tasks().clear_immediately();
-
         game::gameplay::set_freemode_map_behavior(true);
-        //game::ui::show_loading_prompt(LoadingPrompt::LoadingRight, "Loading Evolution MP");
         game::dlc::load_mp_maps();
-        game::script::shutdown_loading_screen();
-        game::ui::hide_loading_prompt();
 
         game::clock::pause(true);
 
@@ -52,20 +44,29 @@ impl Script for ScriptCleanWorld {
         self.terminate_script("replay_controller", true);
         self.terminate_all_scripts(true);
 
-        for (id, thread) in game::script::get_all_threads().iter().enumerate() {
-            crate::info!("thread #{}: {}", id, thread.get_name());
-        }
-
-        self.cleanup();
-
         for flag in AUDIO_FLAGS.iter() {
             game::audio::set_flag(flag, true);
         }
         game::audio::set_flag("PlayMenuMusic", false);
         game::audio::set_flag("ActivateSwitchWheelAudio", false);
+
+        let pos = Vector3::new(0.0, 0.0, 71.5);
+
+        game::streaming::load_scene(pos);
+
+        let player = Player::local();
+        player.set_model(&mut env, "mp_m_freemode_01");
+        let ped = player.get_ped();
+        ped.set_position_no_offset(pos, Vector3::new(false, false, false));
+        ped.get_tasks().clear_immediately();
+
+        self.cleanup();
+
+        game::script::shutdown_loading_screen();
+        game::ui::hide_loading_prompt();
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         self.tasks.process(&mut env);
 
         self.disable_controls();
@@ -75,6 +76,11 @@ impl Script for ScriptCleanWorld {
         let ped = player.get_ped();
 
         self.cleanup();
+
+        if !self.loaded && game_state == GameState::Playing {
+            self.loaded = true;
+            game::camera::fade_in(1000);
+        }
 
         game::ped::set_density_multiplier_this_frame(0.0);
         game::ped::set_scenario_density_multiplier_this_frame(0.0);
@@ -129,9 +135,8 @@ impl ScriptCleanWorld {
         //game::vehicle::delete_all_trains();
         game::vehicle::set_parked_count(-1);
         game::vehicle::set_low_priority_generators_active(false);
-        let one = Vector3::new(1.0, 1.0, 1.0);
-        let range = 9999.0;
-        game::vehicle::remove_vehicles_from_generators_in_area(-one * range, one * range, false);
+        let range = Vector3::from_value(9999.0);
+        game::vehicle::remove_vehicles_from_generators_in_area(-range, range, false);
 
         game::ped::set_non_scenario_cops(false);
         game::ped::set_cops(false);

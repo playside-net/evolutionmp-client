@@ -1,6 +1,6 @@
 use crate::hash::{Hash, Hashable};
 use crate::pattern::MemoryRegion;
-use crate::GameState;
+use crate::{GameState, get_game_state};
 use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
 use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe, NativeFunction};
 use crate::hash::joaat;
@@ -183,7 +183,7 @@ impl ScriptContainer {
         script.prepare(ScriptEnv::new(self));
         loop {
             self.process_input(&mut script);
-            script.frame(ScriptEnv::new(self));
+            script.frame(ScriptEnv::new(self), get_game_state());
             self.wait(0)
         }
         self.script = Some(script);
@@ -222,7 +222,7 @@ impl std::ops::Drop for ScriptContainer {
 
 pub trait Script {
     fn prepare(&mut self, env: ScriptEnv);
-    fn frame(&mut self, env: ScriptEnv);
+    fn frame(&mut self, env: ScriptEnv, game_state: GameState);
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool;
 }
 

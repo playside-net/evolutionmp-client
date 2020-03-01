@@ -32,7 +32,15 @@ pub fn is_retuning() -> bool {
     invoke!(bool, 0xA151A7394A214E65)
 }
 
-pub fn skip_forward() {
+pub fn prev_station() {
+    invoke!((), 0xDD6BCF9E94425DF9)
+}
+
+pub fn next_station() {
+    invoke!((), 0xFF266D1D0EB1195D)
+}
+
+pub fn skip_track() {
     invoke!((), 0x6DDBBDD98E2E9C25)
 }
 

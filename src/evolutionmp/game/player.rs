@@ -45,6 +45,10 @@ impl Player {
         Ped::from_player(self)
     }
 
+    pub fn set_ped(&self, ped: &Ped) {
+        invoke!((), 0x048189FAC643DEEE, self.handle, ped.get_handle(), false, false)
+    }
+
     pub fn get_name<'a>(&self) -> &'a str {
         invoke!(&str, 0x6D0DE6A7B5DA71F8, self.handle)
     }

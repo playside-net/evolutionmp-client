@@ -1,7 +1,7 @@
 use crate::runtime::{Script, ScriptEnv, Runtime};
 use crate::network::{Message, PORT, VehicleData, VehicleColor};
 use crate::events::ScriptEvent;
-use crate::game::{self, Handle};
+use crate::game::{self, Handle, GameState};
 use crate::game::vehicle::{Vehicle, VehicleClass};
 use crate::native::pool::Handleable;
 use crate::game::entity::Entity;
@@ -52,7 +52,7 @@ impl Script for ScriptNetwork {
         }, Some(0))
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         while let Some(event) = (self.receiver)() {
             match event {
                 SocketEvent::Packet(packet) => {

@@ -203,7 +203,7 @@ impl Script for ScriptCommand {
         self.register_command("ts", command_timecycle);
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         self.tasks.process(&mut env);
     }
 

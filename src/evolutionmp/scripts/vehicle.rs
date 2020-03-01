@@ -8,8 +8,8 @@ use crate::game::entity::Entity;
 use crate::game::vehicle::{VehicleModel, MissionTrain};
 use crate::game::ped::Ped;
 use crate::game::scaleform::{Scaleform, ScaleformArg};
-use crate::game::Rgba;
-use winapi::um::winuser::VK_NUMPAD0;
+use crate::game::{Rgba, GameState};
+use winapi::um::winuser::{VK_NUMPAD0, VK_LEFT, VK_RIGHT};
 use cgmath::{Vector2, Zero, Array};
 use std::collections::VecDeque;
 use crate::game::ui::Font;
@@ -59,7 +59,7 @@ impl Script for ScriptVehicle {
         game::audio::set_mobile_radio_enabled(true);
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         use crate::game::controls;
         let console = crate::scripts::console::is_open();
 
@@ -98,15 +98,7 @@ impl Script for ScriptVehicle {
                     InputEvent::Keyboard(KeyboardEvent::Key { key, is_up, .. }) => {
                         match *key {
                             VK_NUMPAD0 if !is_up => {
-                                self.tasks.push(move |env| {
-                                    let player = Player::local();
-                                    let ped = player.get_ped();
-
-                                    if let Some(veh) = ped.get_in_vehicle(false) {
-                                        veh.repair();
-                                        //game::audio::play_sound_frontend(-1, "CHECKPOINT_PERFECT", "HUD_MINI_GAME_SOUNDSET", true);
-                                    }
-                                });
+                                game::radio::skip_track();
                             },
                             _ => {}
                         }

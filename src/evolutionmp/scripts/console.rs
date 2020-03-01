@@ -1,6 +1,6 @@
 use crate::runtime::{Script, ScriptEnv, Runtime, TaskQueue};
 use crate::game::ui::{BASE_WIDTH, BASE_HEIGHT, Font, TextInput};
-use crate::game::Rgba;
+use crate::game::{Rgba, GameState};
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::win::input::{InputEvent, KeyboardEvent};
 use crate::events::{ScriptEvent, NativeEvent};
@@ -40,13 +40,15 @@ pub struct ScriptConsole {
 impl Script for ScriptConsole {
     fn prepare(&mut self, mut env: ScriptEnv) {}
 
-    fn frame(&mut self, mut env: ScriptEnv) {
-        self.tasks.process(&mut env);
-        if is_open() {
-            lock_controls();
-            self.draw();
-        } else if get_last_closed() > SystemTime::now() {
-            lock_controls();
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
+        if game_state == GameState::Playing {
+            self.tasks.process(&mut env);
+            if is_open() {
+                lock_controls();
+                self.draw();
+            } else if get_last_closed() > SystemTime::now() {
+                lock_controls();
+            }
         }
     }
 
@@ -61,7 +63,7 @@ impl Script for ScriptConsole {
                                 const VK_KEY_T: i32 = 0x54;
                                 match *key {
                                     VK_ESCAPE if open => {
-                                        set_open(false);
+                                        self.tasks.push(|env| set_open(false));
                                         return false;
                                     },
                                     VK_KEY_T if !open => {

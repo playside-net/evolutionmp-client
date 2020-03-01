@@ -10,6 +10,7 @@ use std::collections::VecDeque;
 use cgmath::{Vector3, Array, Vector2, Zero};
 use winapi::um::winuser::{VK_F2, VK_SHIFT, VK_CONTROL};
 use crate::game::scaleform::Scaleform;
+use crate::game::GameState;
 
 pub struct ScriptFly {
     camera: Option<Camera>,
@@ -36,8 +37,8 @@ impl Script for ScriptFly {
 
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
-        if !crate::scripts::console::is_open() {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
+        if !crate::scripts::console::is_open() && game_state == GameState::Playing {
             if let Some(camera) = self.camera.as_ref() {
                 let pos = camera.get_position();
                 let rot = camera.get_rotation(2);

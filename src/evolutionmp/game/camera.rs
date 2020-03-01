@@ -60,6 +60,22 @@ impl CameraType {
     }
 }
 
+pub fn fade_in(duration: u32) {
+    invoke!((), 0xD4E8E24955024033, duration)
+}
+
+pub fn is_faded_in() -> bool {
+    invoke!(bool, 0x5A859503B0C08678)
+}
+
+pub fn fade_out(duration: u32) {
+    invoke!((), 0x891B5B39AC6302AF , duration)
+}
+
+pub fn is_faded_out() -> bool {
+    invoke!(bool, 0xB16FCE9DDC7BA182)
+}
+
 pub fn render_scripted(render: bool, transition_time: Option<u32>) {
     invoke!((), 0x07E5B515DB0636FC, render, transition_time.is_some(), transition_time.unwrap_or(0), true, false)
 }

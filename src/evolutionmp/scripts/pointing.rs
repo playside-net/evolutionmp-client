@@ -9,7 +9,7 @@ use crate::game::entity::Entity;
 use crate::events::ScriptEvent;
 use crate::native::pool::Handleable;
 use cgmath::{Vector2, Array};
-use crate::game::Rgba;
+use crate::game::{Rgba, GameState};
 use crate::game::ui::Font;
 
 pub struct ScriptFingerPointing {
@@ -28,7 +28,7 @@ impl Script for ScriptFingerPointing {
     fn prepare(&mut self, mut env: ScriptEnv) {
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         let player = Player::local().get_ped();
         let tasks = player.get_tasks().get_network();
 

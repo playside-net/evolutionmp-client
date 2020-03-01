@@ -4,7 +4,7 @@ use crate::game;
 use crate::game::player::Player;
 use crate::game::ped::{PedBone, Ped};
 use crate::game::entity::Entity;
-use crate::game::{Rgba, Rgb};
+use crate::game::{Rgba, Rgb, GameState};
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::events::ScriptEvent;
 use cgmath::{Vector3, Zero, Array, Vector2, MetricSpace};
@@ -40,7 +40,7 @@ impl Script for ScriptFishing {
         set_door_locked("v_ilev_bank4door02", Vector3::new(-111.39079, 6463.931, 32.2215), false);
     }
 
-    fn frame(&mut self, mut env: ScriptEnv) {
+    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         let distance = 10.0;
         let player = Player::local();
         let ped = player.get_ped();

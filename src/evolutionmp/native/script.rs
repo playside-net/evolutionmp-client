@@ -262,8 +262,6 @@ impl ScriptThreadRuntime {
     }
 
     unsafe extern "C" fn do_run(&mut self) {
-        if get_game_state() == GameState::Playing {
-            self.runtime.frame();
-        }
+        self.runtime.frame();
     }
 }
