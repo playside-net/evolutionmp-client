@@ -31,6 +31,7 @@ use crate::game::ped::Ped;
 use crate::game::vehicle::Vehicle;
 use crate::events::{NativeEvent, ScriptEvent, EventPool};
 use crate::game::ui::FrontendButtons;
+use crate::native::script::ScriptThreadRuntime;
 
 const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
 
@@ -51,7 +52,7 @@ impl Runtime {
         }
     }
 
-    fn frame(&mut self) {
+    pub(crate) fn frame(&mut self) {
         if self.main_fiber.is_none() {
             self.main_fiber = Some(Fiber::convert_thread().expect("cannot convert frame thread to fiber"));
         }
@@ -83,27 +84,18 @@ impl Runtime {
     }
 }
 
-static RUNTIME: ThreadSafe<RefCell<Option<Runtime>>> = ThreadSafe::new(RefCell::new(None));
 static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
 
-pub(crate) unsafe fn start(mem: &MemoryRegion, input: InputHook) {
+pub(crate) fn start(input: InputHook) {
     let mut runtime = Runtime::new(input);
     info!("Initializing scripts");
     crate::scripts::init(&mut runtime);
 
-    RUNTIME.replace(Some(runtime));
+    ScriptThreadRuntime::spawn(runtime);
     HOOKS.replace(Some(HashMap::new()));
 
     info!("Hooking natives");
 
-    hook_native(0xFC8202EFC642E6F2, |context| {
-        if let Ok(mut runtime) = RUNTIME.try_borrow_mut() {
-            if let Some(runtime) = runtime.as_mut() {
-                runtime.frame();
-            }
-        }
-        call_native_trampoline(0xFC8202EFC642E6F2, context)
-    });
     hook_native(0x7B5280EBA9840C72, |context| {
         let label = context.get_args().read::<&str>();
         let hash = label.joaat();

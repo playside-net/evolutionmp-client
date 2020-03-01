@@ -50,6 +50,8 @@ pub mod scripts;
 
 pub mod network;
 pub mod hash;
+#[cfg(target_os = "windows")]
+pub mod console;
 
 #[repr(C)]
 pub enum DllCallReason {
@@ -115,18 +117,19 @@ fn attach(instance: HINSTANCE) {
             DIGITAL_DISTRIBUTION = s.offset(-26).get::<u8>().read() == 3;
             info!("Digital distribution: {}", DIGITAL_DISTRIBUTION);
 
-            native::alloc::init(&mem);
             native::fs::pre_init(&mem);
 
             let input = InputHook::new(&mem);
+
             info!("Input hooked. Waiting for game being loaded...");
 
             while !get_game_state().is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
+            native::script::init(&mem);
+
             //native::fs::init();
-            //native::core::init(&mem);
 
             /*if let Some(device) = Device::get("platform:/models/farlods.ydd", false) {
                 walk(&device, Path::new("platform:/"));
@@ -154,15 +157,17 @@ fn attach(instance: HINSTANCE) {
 
             native::init(&mem);
 
-            info!("Waiting for game being started...");
+            info!("Waiting for game being initialized");
 
-            while get_game_state() != GameState::Playing {
+            while native::script::is_thread_pool_empty() {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
+            console::attach();
+
             info!("Starting runtime");
 
-            runtime::start(&mem, input);
+            runtime::start(input);
         });
     }
 }

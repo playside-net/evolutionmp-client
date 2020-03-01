@@ -53,9 +53,9 @@ impl ScriptVehicle {
 
 impl Script for ScriptVehicle {
     fn prepare(&mut self, mut env: ScriptEnv) {
-        let scaleform = Scaleform::new(&mut env, "BINOCULARS").unwrap();
+        /*let scaleform = Scaleform::new(&mut env, "BINOCULARS").unwrap();
         scaleform.invoke::<()>("SET_CAM_LOGO", &[ScaleformArg::I32(0)]);
-        self.scaleform = Some(scaleform);
+        self.scaleform = Some(scaleform);*/
         game::audio::set_mobile_radio_enabled(true);
     }
 
@@ -66,9 +66,9 @@ impl Script for ScriptVehicle {
         let player = Player::local();
         let ped = player.get_ped();
 
-        if let Some(scaleform) = self.scaleform.as_ref() {
+        /*if let Some(scaleform) = self.scaleform.as_ref() {
             scaleform.render_fullscreen(Rgba::WHITE);
-        }
+        }*/
 
         if let Some(vehicle) = ped.get_in_vehicle(false) {
             if VehicleModel::from_vehicle(&vehicle).is_train() {

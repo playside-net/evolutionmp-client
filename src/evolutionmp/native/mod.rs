@@ -19,8 +19,8 @@ pub mod vehicle;
 pub mod pool;
 pub mod object_hashes;
 pub mod fs;
-pub mod core;
 pub mod alloc;
+pub mod script;
 
 pub struct ThreadSafe<T> {
     t: T
@@ -54,32 +54,22 @@ lazy_static! {
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     let natives = Natives::new(mem);
-    crate::info!("A");
     NATIVES.replace(Some(natives));
-    crate::info!("B");
     SET_VECTOR_RESULTS.set(Some(std::mem::transmute(
         mem.find("83 79 18 ? 48 8B D1 74 4A FF 4A 18")
             .next().expect("vector fixer")
             .get_mut::<NativeFunction>()
     )));
-    crate::info!("C");
     let big_map = mem.find("33 C0 0F 57 C0 ? 0D")
         .next().expect("big map")
         .add(7);
-    crate::info!("D");
     EXPANDED_RADAR.store(big_map.get_mut(), Ordering::SeqCst);
-    crate::info!("E");
     REVEAL_FULL_MAP.store(big_map.add(30).get_mut(), Ordering::SeqCst);
-    crate::info!("F");
     let cursor_sprite = mem.find("74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0")
         .next().expect("cursor sprite");
-    crate::info!("G");
     CURSOR_SPRITE.store(cursor_sprite.get_mut(), Ordering::SeqCst);
-    crate::info!("H");
     pool::init(mem);
-    crate::info!("I");
     vehicle::init(mem);
-    crate::info!("J");
 }
 
 pub fn get_handler(hash: u64) -> NativeFunction {
