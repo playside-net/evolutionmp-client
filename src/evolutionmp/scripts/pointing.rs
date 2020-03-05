@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use cgmath::{Vector2, Array};
 use super::{ScriptEnv, Script};
 use crate::game;
 use crate::game::player::Player;
@@ -8,7 +9,6 @@ use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
 use crate::events::ScriptEvent;
 use crate::native::pool::Handleable;
-use cgmath::{Vector2, Array};
 use crate::game::{Rgba, GameState};
 use crate::game::ui::Font;
 

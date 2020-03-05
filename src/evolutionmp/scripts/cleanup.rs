@@ -50,7 +50,7 @@ impl Script for ScriptCleanWorld {
         game::audio::set_flag("PlayMenuMusic", false);
         game::audio::set_flag("ActivateSwitchWheelAudio", false);
 
-        let pos = Vector3::new(0.0, 0.0, 71.5);
+        let pos = Vector3::new(-10300.0, -2730.0, 13.46);
 
         game::streaming::load_scene(pos);
 

@@ -1,4 +1,8 @@
 use std::collections::VecDeque;
+use std::time::Instant;
+use std::time::Duration;
+use std::cmp::Ordering::Equal;
+use cgmath::{Vector3, Zero, Array, Vector2, MetricSpace};
 use super::{ScriptEnv, Script};
 use crate::game;
 use crate::game::player::Player;
@@ -7,16 +11,12 @@ use crate::game::entity::Entity;
 use crate::game::{Rgba, Rgb, GameState};
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::events::ScriptEvent;
-use cgmath::{Vector3, Zero, Array, Vector2, MetricSpace};
-use std::time::Instant;
-use std::time::Duration;
-use crate::game::streaming::AnimDict;
+use crate::game::streaming::{AnimDict, Ipl};
 use crate::game::prop::Prop;
 use crate::native::pool::Pool;
 use crate::hash::{Hashable, Hash};
 use crate::game::ui::{Font, LoadingPrompt};
 use crate::game::door::Door;
-use std::cmp::Ordering::Equal;
 use crate::game::camera::GameplayCamera;
 
 pub struct ScriptFishing {
@@ -25,7 +25,7 @@ pub struct ScriptFishing {
 }
 
 impl Script for ScriptFishing {
-    fn prepare(&mut self, env: ScriptEnv) {
+    fn prepare(&mut self, mut env: ScriptEnv) {
         fn set_door_locked(name: &str, position: Vector3<f32>, locked: bool) {
             Door::new(name)
                 .set_locked(position, locked, Vector3::new(0.0, 50.0, 0.0))
@@ -39,60 +39,15 @@ impl Script for ScriptFishing {
         set_door_locked("v_ilev_shrf2door", Vector3::new(-442.73795, 6015.3564, 32.2838), false);
         set_door_locked("v_ilev_shrf2door", Vector3::new(-444.43552, 6017.0537, 32.3005), false);
         set_door_locked("v_ilev_bank4door02", Vector3::new(-111.39079, 6463.931, 32.2215), false);
+
+        let maze_arena = Ipl::new("SP1_10_real_interior");
+        env.wait_for_resource(&maze_arena);
     }
 
     fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
         let distance = 10.0;
         let player = Player::local();
         let ped = player.get_ped();
-
-        if let Some(prop) = Prop::find_nearest(ped.get_position(), 15.0, "v_ilev_bk_vaultdoor") {
-            prop.set_heading(-20.0);
-            prop.set_position_freezed(true);
-        }
-
-        for model in ["prop_atm_01", "prop_atm_02", "prop_atm_03", "prop_fleeca_atm"].iter() {
-            if let Some(atm) = Prop::find_nearest(ped.get_position(), 1.0, model) {
-                game::graphics::draw_marker(0, atm.get_position(), Vector3::zero(), Vector3::zero(), Vector3::from_value(1.5), Rgba::WHITE, false, false, false, None, false);
-                break;
-            }
-        }
-
-        /*let cameras = game::camera::get_pool();
-
-        game::ui::show_loading_prompt(LoadingPrompt::SavingLeft, &format!("Cameras: {}/{}", cameras.iter().count(), cameras.capacity()));*/
-
-        let dist = |prop: &Prop| -> f32 {
-            prop.get_position().distance(ped.get_position())
-        };
-
-        /*if let Some(nearest) = props.iter().min_by(|a, b| dist(a).partial_cmp(&dist(b)).unwrap_or(Equal)) {
-            let model = nearest.get_model();
-            let scale = Vector2::from_value(0.35);
-            let color = Rgba::WHITE;
-            game::ui::at_origin(nearest.get_position() + Vector3::unit_z() * 0.5, || {
-                game::ui::draw_text(format!("Model: {}", model), Vector2::zero(), color, Font::ChaletLondon, scale);
-            });
-            game::graphics::draw_marker(0, nearest.get_position(), Vector3::zero(), Vector3::zero(), Vector3::from_value(1.5), color, false, false, false, None, false);
-        }*/
-
-        /*let props = game::prop::get_pool();
-
-        for prop in props.iter() {
-            //if prop.get_model() == "prop_traffic_01a".joaat() {
-                //prop.set_dynamic(false);
-                //prop.set_light_color(false, Rgb::new(255, 0, 0));
-            //}
-            if prop.get_position().distance(ped.get_position()) < 25.0 {
-                let model = prop.get_model();
-                let scale = Vector2::from_value(0.35);
-                let color = Rgba::WHITE;
-                game::ui::at_origin(prop.get_position() + Vector3::unit_z() * 0.5, || {
-                    game::ui::draw_text(format!("Model: {}", model), Vector2::zero(), color, Font::ChaletLondon, scale);
-                });
-                game::graphics::draw_marker(0, prop.get_position(), Vector3::zero(), Vector3::zero(), Vector3::from_value(1.5), Rgba::WHITE, false, false, false, None, false);
-            }
-        }*/
 
         let cam = GameplayCamera;
         let start = cam.get_position();

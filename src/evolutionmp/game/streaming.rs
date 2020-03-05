@@ -269,3 +269,29 @@ impl NativeStackValue for Option<Texture> {
         stack.write_option(name);
     }
 }
+
+pub struct Ipl {
+    name: String
+}
+
+impl Ipl {
+    pub fn new<N>(name: N) -> Ipl where N: Into<String> {
+        Ipl {
+            name: name.into()
+        }
+    }
+}
+
+impl Resource for Ipl {
+    fn is_loaded(&self) -> bool {
+        invoke!(bool, 0x88A741E44A2B3495, self.name.as_str())
+    }
+
+    fn request(&self) {
+        invoke!((), 0x41B4893843BBDB74, self.name.as_str())
+    }
+
+    fn mark_unused(&mut self) {
+        invoke!((), 0xEE6C5AD3ECE0A82D, self.name.as_str())
+    }
+}

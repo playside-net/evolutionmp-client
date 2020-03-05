@@ -36,6 +36,7 @@ use std::collections::{VecDeque, HashMap};
 use std::sync::atomic::Ordering;
 use crate::scripts::fishing::ScriptFishing;
 use crate::scripts::fly::ScriptFly;
+use crate::scripts::money::ScriptMoney;
 
 pub mod console;
 pub mod vehicle;
@@ -44,6 +45,7 @@ pub mod pointing;
 pub mod network;
 pub mod fishing;
 pub mod fly;
+pub mod money;
 
 pub fn init(runtime: &mut Runtime) {
     crate::info!("Registering scripts");
@@ -56,6 +58,7 @@ pub fn init(runtime: &mut Runtime) {
     runtime.register_script("command", ScriptCommand::new());
     runtime.register_script("fishing", ScriptFishing::new());
     runtime.register_script("fly", ScriptFly::new());
+    runtime.register_script("money", ScriptMoney::new());
     //network::init(runtime);
 }
 
