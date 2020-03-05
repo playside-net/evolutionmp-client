@@ -14,6 +14,9 @@ use std::marker::PhantomData;
 use std::sync::atomic::AtomicI32;
 use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
 use byteorder::WriteBytesExt;
+use std::os::raw::c_char;
+use winapi::_core::mem::ManuallyDrop;
+use detour::RawDetour;
 
 pub mod vehicle;
 pub mod pool;
@@ -21,6 +24,14 @@ pub mod object_hashes;
 pub mod fs;
 pub mod alloc;
 pub mod script;
+pub mod streaming;
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TypeInfo {
+    undecorated: ManuallyDrop<Box<CStr>>,
+    decorated: [c_char; 1]
+}
 
 pub struct ThreadSafe<T> {
     t: T
@@ -43,45 +54,85 @@ impl<T> std::ops::Deref for ThreadSafe<T> {
     }
 }
 
-pub static NATIVES: ThreadSafe<RefCell<Option<Natives>>> = ThreadSafe::new(RefCell::new(None));
-pub static SET_VECTOR_RESULTS: ThreadSafe<Cell<Option<NativeFunction>>> = ThreadSafe::new(Cell::new(None));
-pub static EXPANDED_RADAR: AtomicPtr<bool> = AtomicPtr::new(null_mut());
-pub static REVEAL_FULL_MAP: AtomicPtr<bool> = AtomicPtr::new(null_mut());
-pub static CURSOR_SPRITE: AtomicPtr<CursorSprite> = AtomicPtr::new(null_mut());
 lazy_static! {
-    pub static ref OBJECT_HASHES: HashMap<i32, &'static str> = object_hashes::HASHES.iter().cloned().collect::<_>();
+    pub static ref MEM: MemoryRegion = MemoryRegion::image();
 }
 
+#[macro_export]
+macro_rules! bind_fn {
+    ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+                let ptr = crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to bind call for", stringify!($name)))
+                    .offset($offset).as_ptr();
+                std::mem::transmute(ptr)
+            };
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! bind_field {
+    ($name:ident,$pattern:literal,$offset:literal,$ty:ty) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: std::mem::ManuallyDrop<Box<$ty>> = unsafe {
+                crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to bind field for", stringify!($name)))
+                    .offset($offset).get_box()
+            };
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! bind_field_redirect {
+    ($name:ident,$pattern:literal,$offset:literal,$ty:ty) => {
+        bind_field_redirect!($name,$pattern,$offset,$ty,4);
+    };
+    ($name:ident,$pattern:literal,$offset:literal,$ty:ty,$ptr_len:literal) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: crate::native::ThreadSafe<std::mem::ManuallyDrop<Box<$ty>>> = unsafe {
+                crate::native::ThreadSafe::new(crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to bind field for", stringify!($name)))
+                    .offset($offset).read_ptr($ptr_len).get_box())
+            };
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! redirect {
+    ($from:ident,$to:ident) => {
+        let d = detour::RawDetour::new($from,$to).expect(concat!("failed to create redirect from", stringify!($from), "to", stringify!($to)))
+            .enable().expect(concat!("error redirecting from", stringify!($from), "to", stringify!($to)));
+        let t = d.trampoline();
+        std::mem::forget(d);
+        d
+    };
+}
+
+lazy_static! {
+    pub static ref OBJECT_HASHES: HashMap<i32, &'static str> = object_hashes::HASHES.iter().cloned().collect::<_>();
+    pub static ref NATIVES: Natives = Natives::new();
+}
+
+bind_fn!(SET_VECTOR_RESULTS, "83 79 18 ? 48 8B D1 74 4A FF 4A 18", 0, "C", fn(*mut NativeCallContext) -> ());
+
+bind_field!(EXPANDED_RADAR, "33 C0 0F 57 C0 ? 0D", 7, bool);
+bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
+bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSprite);
+
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
-    let natives = Natives::new(mem);
-    NATIVES.replace(Some(natives));
-    SET_VECTOR_RESULTS.set(Some(std::mem::transmute(
-        mem.find("83 79 18 ? 48 8B D1 74 4A FF 4A 18")
-            .next().expect("vector fixer")
-            .get_mut::<NativeFunction>()
-    )));
-    let big_map = mem.find("33 C0 0F 57 C0 ? 0D")
-        .next().expect("big map")
-        .add(7);
-    EXPANDED_RADAR.store(big_map.get_mut(), Ordering::SeqCst);
-    REVEAL_FULL_MAP.store(big_map.add(30).get_mut(), Ordering::SeqCst);
-    let cursor_sprite = mem.find("74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0")
-        .next().expect("cursor sprite");
-    CURSOR_SPRITE.store(cursor_sprite.get_mut(), Ordering::SeqCst);
+    NATIVES.deref(); //Call NATIVES field initializer
+    SET_VECTOR_RESULTS.deref();
+    streaming::init();
     pool::init(mem);
     vehicle::init(mem);
 }
 
 pub fn get_handler(hash: u64) -> NativeFunction {
-    let natives = NATIVES.try_borrow().expect("Natives already borrowed");
-    let natives = natives.as_ref().expect("Natives aren't initialized yet");
-    natives.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash))
-}
-
-pub fn get_all_native_handlers() -> HashMap<u64, *const ()> {
-    let natives = NATIVES.try_borrow().expect("Natives already borrowed");
-    let natives = natives.as_ref().expect("Natives aren't initialized yet");
-    natives.handlers.iter().map(|(k, v)| (*k, *v as *const ())).collect()
+    NATIVES.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash))
 }
 
 #[repr(C, packed(1))]
@@ -122,7 +173,7 @@ struct NativeGroup {
 }
 
 #[repr(C)]
-struct NativeTable {
+pub struct NativeTable {
     groups: [Box<NativeGroup>; 256],
     _unknown: u32,
     initialized: bool
@@ -351,7 +402,7 @@ impl NativeCallContext {
     }
 
     pub fn get_result<R>(&mut self) -> R where R: NativeStackValue {
-        (SET_VECTOR_RESULTS.get().unwrap())(self);
+        SET_VECTOR_RESULTS(self);
         let mut reader = NativeStackReader::new(&*self.returns);
         reader.read()
     }
@@ -370,15 +421,13 @@ pub struct Natives {
 }
 
 impl Natives {
-    pub unsafe fn new(mem: &MemoryRegion) -> Natives {
-        let table = mem.find("76 32 48 8B 53 40")
-            .next().expect("native table")
-            .add(9).read_ptr(4).get_box::<NativeTable>();
+    pub fn new() -> Natives {
+        bind_field_redirect!(NATIVE_TABLE, "76 32 48 8B 53 40", 9, NativeTable);
 
         let mut mappings = crate::mappings::MAPPINGS.iter().cloned().collect::<HashMap<_, _>>();
         let mut handlers = HashMap::with_capacity(mappings.len());
 
-        for group in table.groups.iter() {
+        for group in NATIVE_TABLE.groups.iter() {
             for (hash, handler) in group.iter() {
                 handlers.insert(hash, handler);
             }

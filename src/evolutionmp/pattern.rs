@@ -143,6 +143,12 @@ impl MemoryRegion {
         RegionIterator::new(pattern, &self)
     }
 
+    pub fn find_str<S>(&self, str: S) -> RegionIterator where S: AsRef<str> {
+        self.find(Pattern {
+            nibbles: str.as_ref().as_bytes().iter().map(|b|Some(*b)).collect::<_>()
+        })
+    }
+
     pub fn find_await<P>(&self, pattern: P, sleep_ms: u64, timeout_ms: u64) -> Option<MemoryRegion> where P: Into<Pattern> + Copy {
         let start = Instant::now();
         loop {

@@ -1,4 +1,4 @@
-#![feature(asm, set_stdio, core_intrinsics)]
+#![feature(asm, set_stdio, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -26,6 +26,8 @@ use crate::hash::Hashable;
 use winapi::_core::ops::RangeInclusive;
 use crate::native::fs::{Device, PackFile, RelativeDevice};
 use std::ffi::{CStr, CString};
+use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
+use winapi::um::winnt::{EXCEPTION_POINTERS, LONG};
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -61,31 +63,37 @@ pub enum DllCallReason {
 pub const LOG_ROOT: &'static str = "root";
 pub const LOG_PANIC: &'static str = "panic";
 
-static GAME_STATE: AtomicPtr<GameState> = AtomicPtr::new(null_mut());
+//bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, "C", fn() -> ());
+//bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, "C", fn(u32) -> bool);
 
-fn get_game_state() -> GameState {
-    unsafe { GAME_STATE.load(Ordering::SeqCst).read() }
-}
+/*extern "C" fn run_init_state() {
+    RUN_INIT_STATE()
+}*/
 
-type RunInitState = extern "C" fn();
-static mut RUN_INIT_STATE: *const () = std::ptr::null();
-
-unsafe extern "C" fn run_init_state() {
-    let origin: RunInitState = std::mem::transmute(RUN_INIT_STATE);
-    origin()
-}
-
-type SkipInit = extern "C" fn(u32) -> bool;
-static mut SKIP_INIT: *const () = std::ptr::null();
-
-unsafe extern "C" fn skip_init(stage: u32) -> bool {
-    let origin: SkipInit = std::mem::transmute(SKIP_INIT);
+/*extern "C" fn skip_init(stage: u32) -> bool {
     info!("skipping init {}", stage);
-    origin(stage)
-}
+    SKIP_INIT(stage)
+}*/
 
-static mut INIT_STATE: *mut u32 = std::ptr::null_mut();
-static mut DIGITAL_DISTRIBUTION: bool = false;
+bind_field_redirect!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
+bind_field_redirect!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bool);
+bind_field_redirect!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
+
+extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
+    unsafe {
+        let info = &mut *info;
+        let rec = &mut *info.ExceptionRecord;
+        let addr = rec.ExceptionAddress;
+        let code = rec.ExceptionCode;
+        error!("Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
+        let s = format!("{:?}", Backtrace::new());
+
+        for line in s.lines(){
+            debug!(target: LOG_PANIC, "{}", line);
+        }
+    }
+    0 //EXCEPTION_CONTINUE_SEARCH
+}
 
 #[cfg(target_os = "windows")]
 fn attach(instance: HINSTANCE) {
@@ -93,61 +101,35 @@ fn attach(instance: HINSTANCE) {
         std::thread::spawn(move || {
             info!("Injection successful");
 
+            if AddVectoredExceptionHandler(0, Some(except)).is_null() {
+                panic!("Unable to set exception handler");
+            }
+
             let mem = MemoryRegion::image();
 
             //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-            mem.find("70 6C 61 74 66 6F 72 6D 3A 2F 6D 6F 76").next()
-                .expect("movie").nop(13); //Disable movie
+            mem.find_str("platform:/movies").next() //platform:/movies/rockstar_logos.bik
+                .expect("movie").nop(16); //Disable movie
+
+            mem.find("70 6C 61 74 66 6F 72 6D 3A").next()
+                .expect("logos").write_bytes(&[0xC3]);
 
             mem.find("72 1F E8 ? ? ? ? 8B 0D").next()
                 .expect("legals").nop(2);
 
-            GAME_STATE.store(mem.find("83 3D ? ? ? ? ? 8A D9 74 0A").next()
-                .expect("game state")
-                .add(2)
-                .read_ptr(5).get_mut(), Ordering::SeqCst);
-
-            let r = mem.find("32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B")
-                .next().expect("run_init_state");
-            RUN_INIT_STATE = r.add(6).detour(run_init_state as _);
-            //SKIP_INIT = r.offset(-9).detour(skip_init as _);
-            let s = mem.find("BA 07 00 00 00 8D 41 FC 83 F8 01")
-                .next().expect("init state");
-            INIT_STATE = s.add(2).read_ptr(4).get_mut();
-            DIGITAL_DISTRIBUTION = s.offset(-26).get::<u8>().read() == 3;
-            info!("Digital distribution: {}", DIGITAL_DISTRIBUTION);
-
             native::fs::pre_init(&mem);
 
-            let input = InputHook::new(&mem);
+            let input = InputHook::new();
 
             info!("Input hooked. Waiting for game being loaded...");
 
-            while !get_game_state().is_loaded() {
+            while !GAME_STATE.is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
+            console::attach();
             native::script::init(&mem);
-
-            //native::fs::init();
-
-            /*if let Some(device) = Device::get("platform:/models/farlods.ydd", false) {
-                walk(&device, Path::new("platform:/"));
-
-                *//*info!("{:?} len is {}", path, device.len(&path));
-                let mut pack = PackFile::open(&path, 3).expect("packfile opening failed");
-                info!("opened pack file {:?}", pack.as_device().get_name());
-                let mount_point = CString::new("temp:/").unwrap();
-                pack.mount(&mount_point);
-                info!("mounted as {:?}", mount_point);
-                let device = pack.as_device();
-                let file = CString::new("temp:/dt1_07_building2.ydr").unwrap();
-                let mut input = device.open(&file, false)
-                    .expect("device opening failed");
-                let mut output = std::fs::File::create("kek.ydr").unwrap();
-                std::io::copy(&mut input, &mut output);*//*
-
-            }*/
+            native::fs::init();
 
             info!("Initializing game hooks");
 
@@ -157,17 +139,15 @@ fn attach(instance: HINSTANCE) {
 
             native::init(&mem);
 
+            info!("Starting runtime");
+
+            runtime::start(input);
+
             info!("Waiting for game being initialized");
 
             while native::script::is_thread_pool_empty() {
                 std::thread::sleep(Duration::from_millis(50));
             }
-
-            console::attach();
-
-            info!("Starting runtime");
-
-            runtime::start(input);
         });
     }
 }
@@ -256,7 +236,7 @@ fn is_ansi_supported() -> bool {
 }
 
 pub fn setup_logger(prefix: &str, debug: bool) {
-    if !is_ansi_supported() {
+    if !is_ansi_supported() || prefix == "client" {
         colored::control::set_override(false);
     }
 

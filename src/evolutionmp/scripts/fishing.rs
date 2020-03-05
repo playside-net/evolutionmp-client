@@ -32,6 +32,7 @@ impl Script for ScriptFishing {
         }
         set_door_locked("hei_prop_hei_bankdoor_new", Vector3::new(232.6054, 214.1584, 106.4049), true);
         set_door_locked("hei_prop_hei_bankdoor_new", Vector3::new(231.5123, 216.5177, 106.4049), true);
+        set_door_locked("v_ilev_trevtraildr", Vector3::new(1973.0499, 3815.5686, 33.7879), true);
         set_door_locked("v_ilev_bk_door", Vector3::new(256.9125, 206.8366, 109.2830), false);
         set_door_locked("v_ilev_bk_door", Vector3::new(265.6144, 217.7971, 109.2830), false);
         set_door_locked("v_ilev_shrfdoor", Vector3::new(1855.5922, 3683.8213, 34.8928), false);

@@ -1,6 +1,6 @@
 use crate::hash::{Hash, Hashable};
 use crate::pattern::MemoryRegion;
-use crate::{GameState, get_game_state};
+use crate::{GameState, GAME_STATE};
 use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
 use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe, NativeFunction};
 use crate::hash::joaat;
@@ -54,6 +54,7 @@ impl Runtime {
 
     pub(crate) fn frame(&mut self) {
         if self.main_fiber.is_none() {
+            crate::info!("converting main script thread to fiber");
             self.main_fiber = Some(Fiber::convert_thread().expect("cannot convert frame thread to fiber"));
         }
         while let Some(event) = self.user_input.next_event().ok() {
@@ -163,6 +164,7 @@ pub struct ScriptContainer {
     main_fiber: Option<Fiber>,
     script: Option<Box<dyn Script>>,
     wake_at: Instant,
+    terminated: bool,
     event_pool: Option<EventPool>
 }
 
@@ -173,6 +175,7 @@ impl ScriptContainer {
             fiber: None,
             main_fiber: None,
             wake_at: Instant::now(),
+            terminated: false,
             script: Some(Box::new(script)),
             event_pool: None
         }
@@ -181,9 +184,9 @@ impl ScriptContainer {
     extern "system" fn fiber_loop(&mut self) {
         let mut script = self.script.take().unwrap();
         script.prepare(ScriptEnv::new(self));
-        loop {
+        while !self.terminated {
             self.process_input(&mut script);
-            script.frame(ScriptEnv::new(self), get_game_state());
+            script.frame(ScriptEnv::new(self), ****GAME_STATE);
             self.wait(0)
         }
         self.script = Some(script);
@@ -201,6 +204,7 @@ impl ScriptContainer {
             if let Some(fiber) = &self.fiber {
                 fiber.make_current();
             } else {
+                crate::info!("creating fiber for script {}", self.name);
                 self.fiber = Some(Fiber::new(0, self, ScriptContainer::fiber_loop));
             }
         }

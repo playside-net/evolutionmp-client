@@ -98,7 +98,11 @@ impl Script for ScriptVehicle {
                     InputEvent::Keyboard(KeyboardEvent::Key { key, is_up, .. }) => {
                         match *key {
                             VK_NUMPAD0 if !is_up => {
-                                game::radio::skip_track();
+                                let player = Player::local();
+                                let ped = player.get_ped();
+                                if let Some(vehicle) = ped.get_in_vehicle(false) {
+                                    vehicle.get_radio().skip_track();
+                                }
                             },
                             _ => {}
                         }

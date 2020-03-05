@@ -16,13 +16,11 @@ pub mod notification;
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
 
-type GetWarnResult = extern "C" fn(bool, u32) -> FrontendButtons;
-static mut GET_WARN_RESULT: *const () = std::ptr::null();
+use crate::bind_fn;
+
+bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
 
 pub unsafe fn init(mem: &MemoryRegion) {
-    GET_WARN_RESULT = mem.find("33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84")
-        .next().expect("get_warn_result").add(4).get_call();
-
     let no_slowmo = mem.find("38 51 64 74 19")
         .next().expect("no_slowmo");
 
@@ -98,6 +96,7 @@ pub enum Font {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub enum LoadingPrompt {
     LoadingLeft,
     LoadingLeft2,
@@ -107,6 +106,7 @@ pub enum LoadingPrompt {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub enum CursorSprite {
     None,
     Normal,
@@ -216,7 +216,7 @@ pub fn set_cursor_sprite(sprite: u32) {
 }
 
 pub fn get_cursor_sprite() -> CursorSprite {
-    unsafe { native::CURSOR_SPRITE.load(std::sync::atomic::Ordering::SeqCst).read() }
+    ***native::CURSOR_SPRITE
 }
 
 pub fn set_cursor_active_this_frame() {
@@ -236,11 +236,11 @@ pub fn set_big_map_active(toggle: bool, full: bool) {
 }
 
 pub fn is_big_map_active() -> bool {
-    unsafe { native::EXPANDED_RADAR.load(std::sync::atomic::Ordering::SeqCst).read() }
+    ***native::EXPANDED_RADAR
 }
 
 pub fn is_big_map_full() -> bool {
-    unsafe { native::REVEAL_FULL_MAP.load(std::sync::atomic::Ordering::SeqCst).read() }
+    ***native::REVEAL_FULL_MAP
 }
 
 pub fn is_hud_element_active(element: HudElement) -> bool {
@@ -310,11 +310,6 @@ pub fn prompt(env: &mut ScriptEnv, title: &str, placeholder: &str, max_length: u
     }
 }
 
-fn get_warn_result() -> FrontendButtons {
-    let getter: GetWarnResult = unsafe { std::mem::transmute(GET_WARN_RESULT) };
-    getter(true, 0)
-}
-
 pub fn warn(env: &mut ScriptEnv, title: &str, line1: &str, line2: &str, buttons: FrontendButtons, background: bool) -> FrontendButtons {
     super::locale::set_translation("WNMC_TITLE", title);
     super::locale::set_translation("WNMC_LINE1", line1);
@@ -323,7 +318,7 @@ pub fn warn(env: &mut ScriptEnv, title: &str, line1: &str, line2: &str, buttons:
     loop {
         env.wait(0);
         invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, true);
-        let result = get_warn_result();
+        let result = GET_WARN_RESULT(true, 0);
         if result != FrontendButtons::None {
             break result;
         }

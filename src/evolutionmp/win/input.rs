@@ -152,7 +152,7 @@ pub struct InputHook {
 }
 
 impl InputHook {
-    pub unsafe fn new(mem: &MemoryRegion) -> InputHook {
+    pub unsafe fn new() -> InputHook {
         let (sender, receiver) = channel::<InputEvent>();
         EVENT_POOL.replace(EventPool { sender });
         std::thread::spawn(move || {

@@ -11,8 +11,9 @@ use winapi::um::winbase::{FILE_BEGIN, FILE_END, FILE_CURRENT};
 use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
 use alignas::AlignAs;
 use detour::RawDetour;
-use winapi::_core::fmt::Formatter;
+use std::fmt::Formatter;
 use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
+use crate::launcher_dir;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -36,62 +37,30 @@ impl std::fmt::Display for RagePath {
 
 impl<P> From<P> for RagePath where P: AsRef<OsStr> {
     fn from(other: P) -> Self {
-        let mut path = unsafe { std::mem::transmute::<_, &[u8]>(other.as_ref()) }.to_vec();
-        path.push(b'\0');
+        let path: Vec<u8> = unsafe { std::mem::transmute::<_, &[u8]>(other.as_ref()) }
+            .iter()
+            .cloned()
+            .chain(once(b'\0'))
+            .collect::<_>();
         RagePath {
             inner: ManuallyDrop::new(path.into_boxed_slice()).as_ptr()
         }
     }
 }
 
-type GetDevice = extern "C" fn(RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>;
-static mut GET_DEVICE: Option<GetDevice> = None;
+use crate::{bind_fn, bind_field};
+use std::fs::File;
+use winapi::_core::iter::once;
 
-extern "C" fn get_device(file: RagePath, allow_root: bool) -> Option<ManuallyDrop<Box<Device>>> {
-    unsafe {
-        (GET_DEVICE.unwrap())(file, allow_root)
-    }
-}
-
-type MountGlobal = extern "C" fn(RagePath, *const Device, bool) -> bool;
-static mut MOUNT_GLOBAL: Option<MountGlobal> = None;
-
-unsafe extern "C" fn mount_global(mount_point: RagePath, device: *const Device, allow_root: bool) -> bool {
-    let device = &*device;
-    if (MOUNT_GLOBAL.unwrap())(mount_point, device, allow_root) {
-        //crate::info!("Mounted device {} globally to {} ({})", device.get_name(), mount_point, allow_root);
-        true
-    } else {
-        //crate::error!("Unable to mount device {} globally to {} ({})", device.get_name(), mount_point, allow_root);
-        false
-    }
-}
-
-type Unmount = extern "C" fn(RagePath);
-static mut UNMOUNT: Option<Unmount> = None;
-
-unsafe extern "C" fn unmount(mount_point: RagePath) {
-    //crate::info!("Unmount {}", mount_point);
-    (UNMOUNT.unwrap())(mount_point)
-}
-
-type PackFileInit = extern "C" fn(this: *mut PackFile);
-static mut PACK_FILE_INIT: Option<PackFileInit> = None;
-
-type PackFileOpen = extern "C" fn(this: *mut PackFile, archive: RagePath, bool, ty: i32, u64) -> bool;
-static mut PACK_FILE_OPEN: Option<PackFileOpen> = None;
-
-type PackFileMount = extern "C" fn(this: *mut PackFile, mount_point: RagePath);
-static mut PACK_FILE_MOUNT: Option<PackFileMount> = None;
-
-type RelativeDeviceSetPath = extern "C" fn(this: *mut RelativeDevice, path: RagePath, allow_root: bool, base_device: Option<&Device>);
-static mut RELATIVE_DEVICE_SET_PATH: Option<RelativeDeviceSetPath> = None;
-
-type RelativeDeviceMount = extern "C" fn(this: *mut RelativeDevice, mount_point: RagePath, bool);
-static mut RELATIVE_DEVICE_MOUNT: Option<RelativeDeviceMount> = None;
-
-type KeyStateInit = extern "C" fn(this: *mut KeyState, key: *const u8);
-static mut KEY_STATE_INIT: Option<KeyStateInit> = None;
+bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, "C", fn(RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
+bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, "C", fn(RagePath, *const Device, bool) -> bool);
+bind_fn!(UNMOUNT, "E8 ? ? ? ? 85 C0 75 23 48 83", -0x22, "C", fn(RagePath) -> ());
+bind_fn!(PACK_FILE_INIT, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E, "thiscall", fn(*mut PackFile) -> ());
+bind_fn!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, "thiscall", fn(*mut PackFile, RagePath, bool, i32, bool) -> bool);
+bind_fn!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, "thiscall", fn(*mut PackFile, RagePath) -> ());
+bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, "thiscall", fn(*mut RelativeDevice, RagePath, bool, Option<&Device>) -> ());
+bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, "thiscall", fn(*mut RelativeDevice, RagePath, bool) -> ());
+bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, "thiscall", fn(*mut KeyState, *const u8) -> ());
 
 type InitialMount = extern "C" fn();
 static mut INITIAL_MOUNT: Option<InitialMount> = None;
@@ -101,36 +70,17 @@ static mut PACK_FILE_VTABLE: *const u8 = std::ptr::null();
 static mut RELATIVE_DEVICE_VTABLE: *const u8 = std::ptr::null();
 static mut ENCRYPTING_DEVICE_VTABLE: *const u8 = std::ptr::null();
 
-lazy_static! {
-    static ref MEM: MemoryRegion = MemoryRegion::image();
-}
-
 macro_rules! vtable {
     ($field:ident,$name:literal,$pattern:literal,$offset:literal) => {
-        $field = MEM.find($pattern)
+        $field = crate::native::MEM.find($pattern)
             .next().expect(concat!($name, "vtable"))
             .offset($offset).read_ptr(4).as_ptr();
     };
 }
 
-macro_rules! detour {
-    ($original:ident,$replacement:path,$pattern:literal,$offset:literal) => {
-        let old = MEM.find($pattern)
-            .next().expect(stringify!($replacement))
-            .offset($offset).as_ptr();
-        let d = RawDetour::new(old as _, $replacement as _)
-            .expect("detour creation failed");
-        d.enable().expect("detour enabling failed");
-        $original = Some(std::mem::transmute(d.trampoline()));
-        std::mem::forget(d);
-    };
-}
-
 pub(crate) unsafe fn pre_init(mem: &MemoryRegion) {
-    let mut device_limit = &mut *mem.find("C7 05 ? ? ? ? 64 00 00 00 48 8B")
-        .next().expect("device mount limit")
-        .add(6).get_mut::<u32>();
-    *device_limit *= 5;
+    bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
+    *(&mut *((**DEVICE_LIMIT).as_ref() as *const u32 as *mut u32)) *= 5;
     mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8")
         .next().expect("no relative device sorting")
         .add(12).nop(5);
@@ -147,19 +97,12 @@ pub(crate) unsafe fn pre_init(mem: &MemoryRegion) {
 }
 
 pub(crate) unsafe fn init() {
-    detour!(GET_DEVICE, get_device, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F);
-    detour!(MOUNT_GLOBAL, mount_global, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28);
-    detour!(UNMOUNT, unmount, "E8 ? ? ? ? 85 C0 75 23 48 83", -0x22);
-    detour!(PACK_FILE_INIT, PackFile::init, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E);
-    detour!(PACK_FILE_OPEN, PackFile::open0, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18);
-    detour!(PACK_FILE_MOUNT, PackFile::mount0, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E);
-    detour!(RELATIVE_DEVICE_SET_PATH, RelativeDevice::set_path0, "49 8B F9 48 8B D9 4C 8B CA", -0x17);
-    detour!(RELATIVE_DEVICE_MOUNT, RelativeDevice::mount0, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD);
-    detour!(KEY_STATE_INIT, KeyState::init, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12);
+
 }
 
 unsafe extern "C" fn initial_mount() {
     crate::info!("Initial mount");
+
     unsafe {
         (INITIAL_MOUNT.unwrap())();
     }
@@ -168,21 +111,51 @@ unsafe extern "C" fn initial_mount() {
         for f in device.entries(path) {
             let path = path.join(f.get_name());
             if f.is_directory() {
+                crate::info!("found dir: {}", path.display());
                 walk(device, &path);
             } else {
                 crate::info!("found file: {} ({} bytes)", path.display(), f.get_size());
-                *//*let c_path = CString::new(path).unwrap();
-                let open = PackFile::open(&c_path, 3)
-                    .expect("pack file opening failed");*//*
+                let mut d = Device::get(&path, true).unwrap();
+                let mut op = d.open(&path, false)
+                    .expect("device opening failed");
+                let mut output = File::create(launcher_dir().join(&path))
+                    .expect("output file creation failed");
+                std::io::copy(&mut op, &mut output);
+                let open = PackFile::open(&path, 3)
+                    .expect("pack file opening failed");
             }
         }
-    }
+    }*/
 
-    let mut d = RelativeDevice::new();
-    let dlc = Path::new("C:/dlc.rpf");
-    d.set_path(&dlc, true, None);
-    walk(&d, Path::new("/"));
-    d.mount("kek:/", true).unmount();*/
+    /*let path = PathBuf::from("platform:/models/farlods.ydd");
+
+    if let Some(mut device) = Device::get(&path, false) {
+        device.mount_global("kek:/", true);
+        let mut input = device.open("kek:/models/farlods.ydd", false)
+            .expect("device opening failed");
+        let mut output = std::fs::File::create(launcher_dir().join("farlods.ydd")).unwrap();
+        std::io::copy(&mut input, &mut output);
+
+        *//*crate::info!("{:?} len is {}", path, device.len(&path));
+        device.mount_global("temp:/", true);
+        info!("mounted as temp:/");*//*
+        *//*let mut pack_file = PackFile::open("platform:/levels/gta5/_citye/downtown_01/dt1_07.rpf", 3)
+            .expect("pack file opening failed");
+        crate::info!("opened pack file: {}", pack_file.get_name());
+        pack_file.mount("kek:/");
+        let mut dev = Device::get("kek:/", true)
+            .expect("device getting failed");
+        walk(&dev, Path::new("/"));*//*
+        *//*let mut input = device.open(&path, false)
+            .expect("device opening failed");*//*
+
+    }*/
+
+    /*let mut d = RelativeDevice::new();
+    d.set_path("C:/dlc.rpf", true, None);
+    crate::info!("dlc pack: {}", d.get_name());*/
+    //walk(&d, Path::new("/"));
+    //d.mount("kek:/", true).unmount();
 }
 
 #[repr(C)]
@@ -225,53 +198,53 @@ struct ResourceFlags {
 
 #[repr(C)]
 struct DeviceVTable {
-    destructor:         extern "C" fn(this: *mut Device),
-    open:               extern "C" fn(this: *mut Device, file_name: RagePath, read_only: bool) -> u64,
-    open_bulk:          extern "C" fn(this: *mut Device, file_name: RagePath, ptr: *const u64) -> u64,
-    open_bulk_wrap:     extern "C" fn(this: *mut Device, file_name: RagePath, ptr: *const u64, *const ()) -> u64,
-    create_local:       extern "C" fn(this: *mut Device, file_name: RagePath) -> u64,
-    create:             extern "C" fn(this: *mut Device, file_name: RagePath) -> u64,
-    read:               extern "C" fn(this: *mut Device, handle: u64, buffer: *mut u8, to_read: u32) -> u32,
-    read_bulk:          extern "C" fn(this: *mut Device, handle: u64, ptr: u64, buffer: *const (), to_read: u32) -> u32,
-    write_bulk:         extern "C" fn(this: *mut Device, handle: u64, i32, i32, i32, i32) -> u32,
-    write:              extern "C" fn(this: *mut Device, handle: u64, buffer: *const u8, to_write: u32) -> u32,
-    seek:               extern "C" fn(this: *mut Device, handle: u64, distance: i32, method: u32) -> u32,
-    seek_long:          extern "C" fn(this: *mut Device, handle: u64, distance: i64, method: u32) -> u64,
-    close:              extern "C" fn(this: *mut Device, handle: u64) -> i32,
-    close_bulk:         extern "C" fn(this: *mut Device, handle: u64) -> i32,
-    get_file_len:       extern "C" fn(this: *mut Device, handle: u64) -> i32,
-    get_file_len_u:     extern "C" fn(this: *mut Device, handle: u64) -> u64,
-    m_40:               extern "C" fn(this: *mut Device, i32) -> i32,
-    remove_file:        extern "C" fn(this: *mut Device, file_name: RagePath) -> bool,
-    rename_file:        extern "C" fn(this: *mut Device, from: RagePath, to: RagePath) -> i32,
-    create_dir:         extern "C" fn(this: *mut Device, dir_name: RagePath) -> i32,
-    remove_dir:         extern "C" fn(this: *mut Device, dir_name: RagePath) -> i32,
-    m_xx:               extern "C" fn(this: *mut Device),
-    get_file_len_l:     extern "C" fn(this: *const Device, file_name: RagePath) -> u64,
-    get_file_time:      extern "C" fn(this: *const Device, file_name: RagePath) -> u64,
-    set_file_time:      extern "C" fn(this: *mut Device, file_name: RagePath, time: FILETIME),
-    find_first:         extern "C" fn(this: *const Device, path: RagePath, data: *mut DeviceEntry) -> u64,
-    find_next:          extern "C" fn(this: *const Device, handle: u64, data: *mut DeviceEntry) -> bool,
-    find_close:         extern "C" fn(this: *const Device, handle: u64),
-    get_unk_device:     extern "C" fn(this: *mut Device) -> *const Device,
-    m_xy:               extern "C" fn(this: *mut Device, *const (), i32, *const ()) -> *const (),
-    truncate:           extern "C" fn(this: *mut Device, handle: u64) -> bool,
-    get_file_attr:      extern "C" fn(this: *const Device, path: RagePath) -> u32,
-    m_xz:               extern "C" fn(this: *mut Device) -> bool,
-    set_file_attr:      extern "C" fn(this: *mut Device, attributes: u32) -> bool,
-    m_yx:               extern "C" fn(this: *mut Device) -> i32,
-    read_full:          extern "C" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
-    write_full:         extern "C" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
-    get_res_ver:        extern "C" fn(this: *mut Device, file_name: RagePath, flags: *const ResourceFlags) -> i32,
-    m_yy:               extern "C" fn(this: *mut Device) -> i32,
-    m_yz:               extern "C" fn(this: *mut Device, *const ()) -> i32,
-    m_zx:               extern "C" fn(this: *mut Device, *const ()) -> i32,
-    is_collection:      extern "C" fn(this: *mut Device) -> bool,
-    m_added_in_1290:    extern "C" fn(this: *mut Device) -> bool,
-    get_collection:     extern "C" fn(this: *mut Device) -> *const Device,
-    m_ax:               extern "C" fn(this: *mut Device) -> bool,
-    get_collection_id:  extern "C" fn(this: *mut Device) -> i32,
-    get_name:           extern "C" fn(this: *const Device) -> RagePath
+    destructor:         extern "thiscall" fn(this: *mut Device),
+    open:               extern "thiscall" fn(this: *mut Device, file_name: RagePath, read_only: bool) -> u64,
+    open_bulk:          extern "thiscall" fn(this: *mut Device, file_name: RagePath, ptr: *const u64) -> u64,
+    open_bulk_wrap:     extern "thiscall" fn(this: *mut Device, file_name: RagePath, ptr: *const u64, *const ()) -> u64,
+    create_local:       extern "thiscall" fn(this: *mut Device, file_name: RagePath) -> u64,
+    create:             extern "thiscall" fn(this: *mut Device, file_name: RagePath) -> u64,
+    read:               extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *mut u8, to_read: u32) -> u32,
+    read_bulk:          extern "thiscall" fn(this: *mut Device, handle: u64, ptr: u64, buffer: *const (), to_read: u32) -> u32,
+    write_bulk:         extern "thiscall" fn(this: *mut Device, handle: u64, i32, i32, i32, i32) -> u32,
+    write:              extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *const u8, to_write: u32) -> u32,
+    seek:               extern "thiscall" fn(this: *mut Device, handle: u64, distance: i32, method: u32) -> u32,
+    seek_long:          extern "thiscall" fn(this: *mut Device, handle: u64, distance: i64, method: u32) -> u64,
+    close:              extern "thiscall" fn(this: *mut Device, handle: u64) -> i32,
+    close_bulk:         extern "thiscall" fn(this: *mut Device, handle: u64) -> i32,
+    get_file_len:       extern "thiscall" fn(this: *mut Device, handle: u64) -> i32,
+    get_file_len_u:     extern "thiscall" fn(this: *mut Device, handle: u64) -> u64,
+    m_40:               extern "thiscall" fn(this: *mut Device, i32) -> i32,
+    remove_file:        extern "thiscall" fn(this: *mut Device, file_name: RagePath) -> bool,
+    rename_file:        extern "thiscall" fn(this: *mut Device, from: RagePath, to: RagePath) -> i32,
+    create_dir:         extern "thiscall" fn(this: *mut Device, dir_name: RagePath) -> i32,
+    remove_dir:         extern "thiscall" fn(this: *mut Device, dir_name: RagePath) -> i32,
+    m_xx:               extern "thiscall" fn(this: *mut Device),
+    get_file_len_l:     extern "thiscall" fn(this: *const Device, file_name: RagePath) -> u64,
+    get_file_time:      extern "thiscall" fn(this: *const Device, file_name: RagePath) -> u64,
+    set_file_time:      extern "thiscall" fn(this: *mut Device, file_name: RagePath, time: FILETIME),
+    find_first:         extern "thiscall" fn(this: *const Device, path: RagePath, data: *mut DeviceEntry) -> u64,
+    find_next:          extern "thiscall" fn(this: *const Device, handle: u64, data: *mut DeviceEntry) -> bool,
+    find_close:         extern "thiscall" fn(this: *const Device, handle: u64),
+    get_unk_device:     extern "thiscall" fn(this: *mut Device) -> *const Device,
+    m_xy:               extern "thiscall" fn(this: *mut Device, *const (), i32, *const ()) -> *const (),
+    truncate:           extern "thiscall" fn(this: *mut Device, handle: u64) -> bool,
+    get_file_attr:      extern "thiscall" fn(this: *const Device, path: RagePath) -> u32,
+    m_xz:               extern "thiscall" fn(this: *mut Device) -> bool,
+    set_file_attr:      extern "thiscall" fn(this: *mut Device, attributes: u32) -> bool,
+    m_yx:               extern "thiscall" fn(this: *mut Device) -> i32,
+    read_full:          extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
+    write_full:         extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
+    get_res_ver:        extern "thiscall" fn(this: *mut Device, file_name: RagePath, flags: *const ResourceFlags) -> i32,
+    m_yy:               extern "thiscall" fn(this: *mut Device) -> i32,
+    m_yz:               extern "thiscall" fn(this: *mut Device, *const ()) -> i32,
+    m_zx:               extern "thiscall" fn(this: *mut Device, *const ()) -> i32,
+    is_collection:      extern "thiscall" fn(this: *mut Device) -> bool,
+    m_added_in_1290:    extern "thiscall" fn(this: *mut Device) -> bool,
+    get_collection:     extern "thiscall" fn(this: *mut Device) -> *const Device,
+    m_ax:               extern "thiscall" fn(this: *mut Device) -> bool,
+    get_collection_id:  extern "thiscall" fn(this: *mut Device) -> i32,
+    get_name:           extern "thiscall" fn(this: *const Device) -> RagePath
 }
 
 #[repr(C)]
@@ -281,12 +254,14 @@ pub struct Device {
 
 impl Device {
     pub fn get<P>(path: P, allow_root: bool) -> Option<ManuallyDrop<Box<Device>>> where P: Into<RagePath> {
-        unsafe { get_device(path.into(), allow_root) }
+        unsafe {
+            GET_DEVICE(path.into(), allow_root)
+        }
     }
 
     pub fn mount_global<P>(&self, mount_point: P, allow_root: bool) -> bool where P: Into<RagePath> {
         unsafe {
-            mount_global(mount_point.into(), self, allow_root)
+            MOUNT_GLOBAL(mount_point.into(), self, allow_root)
         }
     }
 
@@ -370,16 +345,16 @@ impl Device {
         (self.v_table.find_close)(self, handle)
     }
 
-    pub fn create_local(&mut self, file_name: RagePath) -> u64 {
-        (self.v_table.create_local)(self, file_name)
+    pub fn create_local<P>(&mut self, file_name: P) -> u64 where P: Into<RagePath> {
+        (self.v_table.create_local)(self, file_name.into())
     }
 
-    pub fn create(&mut self, file_name: RagePath) -> u64 {
-        (self.v_table.create)(self, file_name)
+    pub fn create<P>(&mut self, file_name: P) -> u64 where P: Into<RagePath> {
+        (self.v_table.create)(self, file_name.into())
     }
 
-    pub fn len(&self, file_name: RagePath) -> u64 {
-        (self.v_table.get_file_len_l)(self, file_name)
+    pub fn len<P>(&self, file_name: P) -> u64 where P: Into<RagePath> {
+        (self.v_table.get_file_len_l)(self, file_name.into())
     }
 
     pub fn get_name(&self) -> RagePath {
@@ -502,8 +477,8 @@ impl PackFile {
                 },
                 inner: [0; PACK_FILE_SIZE]
             };
-            pack_file.init();
-            if pack_file.open0(archive.into(), true, ty, 0) {
+            PACK_FILE_INIT(&mut pack_file);
+            if PACK_FILE_OPEN(&mut pack_file, archive.into(), true, ty, false) {
                 Some(pack_file)
             } else {
                 None
@@ -511,23 +486,9 @@ impl PackFile {
         }
     }
 
-    unsafe extern "C" fn init(&mut self) {
-        (PACK_FILE_INIT.unwrap())(self)
-    }
-
-    unsafe extern "C" fn open0(&mut self, archive: RagePath, unk1: bool, ty: i32, unk2: u64) -> bool {
-        crate::info!("Opening pack file {} ({}, {}, {})", archive, unk1, ty, unk2);
-        (PACK_FILE_OPEN.unwrap())(self, archive, unk1, ty, unk2)
-    }
-
-    unsafe extern "C" fn mount0(&mut self, mount_point: RagePath) {
-        crate::info!("Mounting pack file {} to {}", self.device.get_name(), mount_point);
-        (PACK_FILE_MOUNT.unwrap())(self, mount_point)
-    }
-
     pub fn mount<P>(&mut self, mount_point: P) where P: Into<RagePath> {
         unsafe {
-            self.mount0(mount_point.into())
+            PACK_FILE_MOUNT(self, mount_point.into())
         }
     }
 }
@@ -566,25 +527,16 @@ impl RelativeDevice {
         }
     }
 
-    unsafe extern "C" fn set_path0(&mut self, relative_to: RagePath, allow_root: bool, base_device: Option<&Device>) {
-        (RELATIVE_DEVICE_SET_PATH.unwrap())(self, relative_to, allow_root, base_device)
-    }
-
-    unsafe extern "C" fn mount0(&mut self, mount_point: RagePath, allow_root: bool) {
-        //crate::info!("Mounting relative device {} to {} ({})", self.device.get_name(), mount_point, allow_root);
-        (RELATIVE_DEVICE_MOUNT.unwrap())(self, mount_point, allow_root)
-    }
-
     pub fn set_path<P>(&mut self, relative_to: P, allow_root: bool, base_device: Option<&Device>) where P: AsRef<OsStr> {
         unsafe {
-            self.set_path0(relative_to.into(), allow_root, base_device)
+            RELATIVE_DEVICE_SET_PATH(self, relative_to.into(), allow_root, base_device)
         }
     }
 
     pub fn mount<P>(mut self, mount_point: P, allow_root: bool) -> MountLock<Self> where P: Into<RagePath> {
         let mount_point = mount_point.into();
         unsafe {
-            self.mount0(mount_point.clone(), allow_root)
+            RELATIVE_DEVICE_MOUNT(&mut self, mount_point.clone(), allow_root)
         }
         MountLock {
             device: ManuallyDrop::new(self),
@@ -598,14 +550,14 @@ pub struct MountLock<D> where D: Deref<Target=Device> {
     mount_point: RagePath
 }
 
-impl<D> MountLock<D> where D: Deref<Target=Device> {
+/*impl<D> MountLock<D> where D: Deref<Target=Device> {
     pub fn unmount(self) -> D {
         unsafe {
             (UNMOUNT.unwrap())(self.mount_point)
         }
         ManuallyDrop::into_inner(self.device)
     }
-}
+}*/
 
 impl Deref for RelativeDevice {
     type Target = Device;
@@ -634,14 +586,9 @@ impl KeyState {
             state: Box::new([0; KEY_STATE_SIZE])
         };
         unsafe {
-            state.init(key.as_ptr());
+            KEY_STATE_INIT(&mut state, key.as_ptr());
         }
         state
-    }
-
-    unsafe extern "C" fn init(&mut self, state: *const u8) {
-        crate::info!("initializing key state");
-        (KEY_STATE_INIT.unwrap())(self, state);
     }
 }
 

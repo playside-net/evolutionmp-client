@@ -40,10 +40,6 @@ pub fn next_station() {
     invoke!((), 0xFF266D1D0EB1195D)
 }
 
-pub fn skip_track() {
-    invoke!((), 0x6DDBBDD98E2E9C25)
-}
-
 pub fn does_player_vehicle_have_radio() -> bool {
     invoke!(bool, 0x109697E2FFBAC8A1)
 }

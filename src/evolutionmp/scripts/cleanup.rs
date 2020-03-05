@@ -79,7 +79,7 @@ impl Script for ScriptCleanWorld {
 
         if !self.loaded && game_state == GameState::Playing {
             self.loaded = true;
-            game::camera::fade_in(1000);
+            game::camera::fade_in(5000);
         }
 
         game::ped::set_density_multiplier_this_frame(0.0);

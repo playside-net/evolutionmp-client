@@ -7,24 +7,23 @@ use crate::game::pickup::Pickup;
 use crate::game::checkpoint::Checkpoint;
 use crate::native::ThreadSafe;
 use crate::game::prop::Prop;
+use crate::game::camera::Camera;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::cell::Cell;
-use crate::game::camera::Camera;
+
+use crate::{bind_field_redirect};
 
 pub static PARTICLE_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
 pub static ENTITY_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
 pub static PLAYER_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
 static ADDRESS_TO_HANDLE: ThreadSafe<Cell<Option<GetAddressHandle>>> = ThreadSafe::new(Cell::new(None));
 
-pub type RefPool<T> = *mut Option<ManuallyDrop<Box<T>>>;
-
-static mut PED_POOL: RefPool<GenericPool<Ped>> = std::ptr::null_mut();
-static mut GLOBAL_POOL: RefPool<GlobalPool> = std::ptr::null_mut();
-static mut PROP_POOL: RefPool<GenericPool<Prop>> = std::ptr::null_mut();
-static mut PICKUP_POOL: RefPool<GenericPool<Pickup>> = std::ptr::null_mut();
-static mut VEHICLE_POOL: RefPool<Box<VehiclePool>> = std::ptr::null_mut();
-static mut CHECKPOINT_POOL: RefPool<GenericPool<Checkpoint>> = std::ptr::null_mut();
+bind_field_redirect!(PED, "48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10", 3, GenericPool<Ped>);
+bind_field_redirect!(PROP, "48 8B 05 ? ? ? ? 8B 78 10 85 FF", 3, GenericPool<Prop>);
+bind_field_redirect!(GLOBAL, "4C 8B 0D ? ? ? ? 44 8B C1 49 8B 41 08", 3, GlobalPool);
+bind_field_redirect!(VEHICLE, "48 8B 05 ? ? ? ? F3 0F 59 F6 48 8B 08", 3, Box<VehiclePool>);
+bind_field_redirect!(PICKUP, "4C 8B 05 ? ? ? ? 40 8A F2 8B E9", 3, GenericPool<Pickup>);
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     PARTICLE_ADDRESS.set(Some(std::mem::transmute(mem.find("74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8")
@@ -41,21 +40,11 @@ pub(crate) unsafe fn init(mem: &MemoryRegion) {
         .next().expect("address to handle")
         .offset(-0x68).as_mut_ptr())));
 
-    PED_POOL = mem.find("48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10")
-        .next().expect("ped pool")
-        .add(3).read_ptr(4).get_mut();
-    PROP_POOL = mem.find("48 8B 05 ? ? ? ? 8B 78 10 85 FF")
-        .next().expect("object pool")
-        .add(3).read_ptr(4).get_mut();
-    GLOBAL_POOL = mem.find("4C 8B 0D ? ? ? ? 44 8B C1 49 8B 41 08")
-        .next().expect("entity pool")
-        .add(3).read_ptr(4).get_mut();
-    VEHICLE_POOL = mem.find("48 8B 05 ? ? ? ? F3 0F 59 F6 48 8B 08")
-        .next().expect("vehicle pool")
-        .add(3).read_ptr(4).get_mut();
-    PICKUP_POOL = mem.find("4C 8B 05 ? ? ? ? 40 8A F2 8B E9")
-        .next().expect("pickup pool")
-        .add(3).read_ptr(4).get_mut();
+    PED.len(); //Calling pool initializers
+    PROP.len();
+    GLOBAL.is_full();
+    VEHICLE.len();
+    PICKUP.len();
 }
 
 pub type GetHandleAddress = extern "C" fn(Handle) -> *mut u8;
@@ -108,10 +97,10 @@ pub trait Pool<T: Handleable> {
 
 #[repr(C)]
 pub struct VehiclePool {
-    pool_address: *mut u64,
+    pool_address: ThreadSafe<*mut u64>,
     capacity: u32,
     pad1: [u32; 9],
-    bit_array: *mut u32,
+    bit_array: ThreadSafe<*mut u32>,
     pad2: [u32; 10],
     len: u32
 }
@@ -139,7 +128,7 @@ impl Pool<Vehicle> for VehiclePool {
 #[repr(C)]
 pub struct GenericPool<T: Handleable> {
     start_address: u64,
-    byte_array: *mut u8,
+    byte_array: ThreadSafe<*mut u8>,
     capacity: u32,
     len: u32,
     _ty: PhantomData<T>
@@ -173,7 +162,7 @@ impl<T> Pool<T> for GenericPool<T> where T: Handleable {
 #[repr(C)]
 pub struct CameraPool {
     start_address: u64,
-    byte_array: *mut u8,
+    byte_array: ThreadSafe<*mut u8>,
     capacity: u32,
     len: u32
 }
@@ -196,30 +185,6 @@ impl Pool<Camera> for CameraPool {
     }
 }
 
-pub fn get_peds() -> Option<ManuallyDrop<Box<GenericPool<Ped>>>> {
-    unsafe { PED_POOL.read() }
-}
-
-pub fn get_global() -> Option<ManuallyDrop<Box<GlobalPool>>> {
-    unsafe { GLOBAL_POOL.read() }
-}
-
-pub fn get_props() -> Option<ManuallyDrop<Box<GenericPool<Prop>>>> {
-    unsafe { PROP_POOL.read() }
-}
-
-pub fn get_pickups() -> Option<ManuallyDrop<Box<GenericPool<Pickup>>>> {
-    unsafe { PICKUP_POOL.read() }
-}
-
-pub fn get_vehicles() -> Option<ManuallyDrop<Box<Box<VehiclePool>>>> {
-    unsafe { VEHICLE_POOL.read() }
-}
-
-pub fn get_checkpoints() -> Option<ManuallyDrop<Box<GenericPool<Checkpoint>>>> {
-    unsafe { CHECKPOINT_POOL.read() }
-}
-
 pub struct PoolIterator<'a, T: Handleable> {
     pool: &'a dyn Pool<T>,
     poisoned: bool,
@@ -231,19 +196,17 @@ impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
 
     fn next(&mut self) -> Option<Self::Item> {
         if !self.poisoned {
-            if let Some(global) = get_global() {
-                if !global.is_full() {
-                    let capacity = self.pool.capacity();
-                    while self.index < capacity {
-                        let index = self.index;
-                        self.index += 1;
-                        if let Some(result) = self.pool.get(index) {
-                            return Some(result);
-                        }
+            if !GLOBAL.is_full() {
+                let capacity = self.pool.capacity();
+                while self.index < capacity {
+                    let index = self.index;
+                    self.index += 1;
+                    if let Some(result) = self.pool.get(index) {
+                        return Some(result);
                     }
-                } else {
-                    self.poisoned = true;
                 }
+            } else {
+                self.poisoned = true;
             }
         }
         None

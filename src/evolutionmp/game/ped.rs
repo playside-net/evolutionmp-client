@@ -8,10 +8,9 @@ use crate::native::pool::{Handleable, Pool, GenericPool};
 use crate::hash::Hashable;
 use crate::game::streaming::{AnimDict, PedPhoto};
 use cgmath::{Vector3, MetricSpace};
-use winapi::_core::mem::ManuallyDrop;
 
-pub fn get_pool() -> ManuallyDrop<Box<GenericPool<Ped>>> {
-    crate::native::pool::get_peds().expect("ped pool not initialized")
+pub fn get_pool() -> &'static GenericPool<Ped> {
+    crate::native::pool::PED.as_ref()
 }
 
 #[derive(Debug, PartialEq)]

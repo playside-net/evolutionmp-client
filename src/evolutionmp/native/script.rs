@@ -6,17 +6,19 @@ use crate::win::thread::__readgsqword;
 use crate::runtime::{Script, ScriptContainer, Runtime};
 use std::mem::ManuallyDrop;
 use std::os::raw::c_char;
-use winapi::_core::mem::MaybeUninit;
-use crate::get_game_state;
-use crate::game::GameState;
+use std::mem::MaybeUninit;
 
 static mut THREAD_COLLECTION: Option<ManuallyDrop<Box<RageVec<ManuallyDrop<Box<ScriptThread>>>>>> = None;
 static mut THREAD_ID: *mut u32 = std::ptr::null_mut();
 static mut THREAD_COUNT: *mut u32 = std::ptr::null_mut();
 static mut SCRIPT_MANAGER: Option<ManuallyDrop<Box<ScriptManager>>> = None;
-static mut SCRIPT_THREAD_INIT: Option<extern "C" fn(*mut ScriptThread)> = None;
-static mut SCRIPT_THREAD_KILL: Option<extern "C" fn(*mut ScriptThread)> = None;
-static mut SCRIPT_THREAD_TICK: Option<extern "C" fn(*mut ScriptThread, u32) -> ThreadState> = None;
+
+use crate::bind_fn;
+use std::ffi::CStr;
+
+bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, "thiscall", fn(*mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, "thiscall", fn(*mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, "thiscall", fn(*mut ScriptThread, u32) -> ThreadState);
 
 pub(crate) unsafe fn init(mem: &MemoryRegion) {
     THREAD_COLLECTION = Some(std::mem::transmute(
@@ -34,21 +36,6 @@ pub(crate) unsafe fn init(mem: &MemoryRegion) {
         mem.find("74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D")
             .next().expect("script manager")
             .add(13).read_ptr(4).as_ptr()
-    ));
-    SCRIPT_THREAD_INIT = Some(std::mem::transmute(
-        mem.find("83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0")
-            .next().expect("script_thread_init")
-            .as_ptr()
-    ));
-    SCRIPT_THREAD_KILL = Some(std::mem::transmute(
-        mem.find("48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14")
-            .next().expect("script_thread_kill")
-            .offset(-6).as_ptr()
-    ));
-    SCRIPT_THREAD_TICK = Some(std::mem::transmute(
-        mem.find("80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05")
-            .next().expect("script_thread_tick")
-            .offset(-0xF).as_ptr()
     ));
 }
 
@@ -119,11 +106,12 @@ pub struct ScriptThreadContext {
 
 #[repr(C)]
 pub struct ThreadVTable {
-    do_run: extern "C" fn(this: *mut ()),
+    drop:   extern "C" fn(this: *mut ()),
     reset:  extern "C" fn(this: *mut (), id: u32, args: *const (), len: u32) -> ThreadState,
     run:    extern "C" fn(this: *mut (), ops: u32) -> ThreadState,
     tick:   extern "C" fn(this: *mut (), ops: u32) -> ThreadState,
-    kill:   extern "C" fn(this: *mut ())
+    kill:   extern "C" fn(this: *mut ()),
+    do_run: extern "C" fn(this: *mut ()),
 }
 
 #[repr(C)]
@@ -157,11 +145,12 @@ impl ScriptThreadRuntime {
     pub fn spawn(runtime: Runtime) {
         unsafe {
             let v_table = ManuallyDrop::new(Box::new(ThreadVTable {
-                do_run: std::mem::transmute(Self::do_run as *const ()),
+                drop: std::mem::transmute(Self::drop as *const ()),
                 reset: std::mem::transmute(Self::reset as *const ()),
                 run: std::mem::transmute(Self::run as *const ()),
                 tick: std::mem::transmute(Self::tick as *const ()),
-                kill: std::mem::transmute(Self::kill as *const ())
+                kill: std::mem::transmute(Self::kill as *const ()),
+                do_run: std::mem::transmute(Self::do_run as *const ())
             }));
             let mut script_name = [0; 64];
             std::ptr::copy_nonoverlapping(b"runtime".as_ptr(), script_name.as_mut_ptr(), 7);
@@ -220,11 +209,13 @@ impl ScriptThreadRuntime {
     }
 
     unsafe fn init(&mut self) {
-        (SCRIPT_THREAD_INIT.unwrap())(&mut self.parent)
+        SCRIPT_THREAD_INIT(&mut self.parent)
     }
 
+    unsafe extern "C" fn drop(&mut self) {}
+
     unsafe extern "C" fn kill(&mut self) {
-        (SCRIPT_THREAD_KILL.unwrap())(&mut self.parent)
+        SCRIPT_THREAD_KILL(&mut self.parent)
     }
 
     unsafe extern "C" fn run(&mut self, ops: u32) -> ThreadState {
@@ -258,7 +249,7 @@ impl ScriptThreadRuntime {
     }
 
     unsafe extern "C" fn tick(&mut self, ops: u32) -> ThreadState {
-        (SCRIPT_THREAD_TICK.unwrap())(&mut self.parent, ops)
+        SCRIPT_THREAD_TICK(&mut self.parent, ops)
     }
 
     unsafe extern "C" fn do_run(&mut self) {

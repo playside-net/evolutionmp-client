@@ -8,8 +8,8 @@ use crate::native::pool::GenericPool;
 use cgmath::Vector3;
 use std::mem::ManuallyDrop;
 
-pub fn get_pool() -> ManuallyDrop<Box<GenericPool<Prop>>> {
-    crate::native::pool::get_props().expect("prop pool not initialized")
+pub fn get_pool() -> &'static GenericPool<Prop> {
+    crate::native::pool::PROP.as_ref()
 }
 
 pub struct Prop {

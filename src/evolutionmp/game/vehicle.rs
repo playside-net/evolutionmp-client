@@ -15,8 +15,8 @@ use std::sync::atomic::Ordering;
 use std::mem::ManuallyDrop;
 use cgmath::{Vector3, Rad};
 
-pub fn get_pool() -> ManuallyDrop<Box<Box<VehiclePool>>> {
-    crate::native::pool::get_vehicles().expect("vehicle pool not initialized")
+pub fn get_pool() -> &'static Box<VehiclePool> {
+    crate::native::pool::VEHICLE.as_ref()
 }
 
 pub fn set_parked_count(count: i32) {
@@ -132,10 +132,6 @@ impl Vehicle {
         } else {
             None
         }
-    }
-
-    pub fn is_radio_loud(&self) -> bool {
-        invoke!(bool, 0x032A116663A4D5AC, self.handle)
     }
 
     pub fn get_colors(&self) -> VehicleColors {
@@ -513,6 +509,10 @@ impl<'a> VehicleRadio<'a> {
 
     pub fn set_station(&self, station: &RadioStation) {
         invoke!((), 0x1B9C0099CB942AC6, self.vehicle.handle, station.get_name())
+    }
+
+    pub fn skip_track(&self) {
+        invoke!((), 0x6DDBBDD98E2E9C25, self.vehicle.handle)
     }
 }
 

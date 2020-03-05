@@ -37,6 +37,21 @@ pub fn joaat<S>(s: S) -> Hash where S: AsRef<str> {
     Hash(hash.0)
 }
 
+//Case-sensitive version of joaat
+pub fn joaat_cs<S>(s: S) -> Hash where S: AsRef<str> {
+    let s = s.as_ref();
+    let mut hash = Wrapping(0u32);
+    for c in s.chars() {
+        hash += Wrapping(c as u32);
+        hash += hash << 10;
+        hash ^= hash >> 6;
+    }
+    hash += hash << 3;
+    hash ^= hash >> 11;
+    hash += hash << 15;
+    Hash(hash.0)
+}
+
 pub trait Hashable {
     fn joaat(&self) -> Hash;
 
