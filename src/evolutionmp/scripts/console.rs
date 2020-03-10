@@ -10,11 +10,11 @@ use cgmath::{Vector2, Array};
 use std::time::Duration;
 use std::ffi::CString;
 use widestring::WideCStr;
-use winapi::_core::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicBool;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use std::ops::Range;
 use winapi::um::winuser::VK_ESCAPE;
-use winapi::_core::cell::RefCell;
+use std::cell::RefCell;
 use crate::native::ThreadSafe;
 
 pub const FONT: Font = Font::ChaletLondon;

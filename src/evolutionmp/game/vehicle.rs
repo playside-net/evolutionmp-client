@@ -10,13 +10,14 @@ use crate::hash::{Hashable, Hash};
 use crate::runtime::ScriptEnv;
 use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
+use crate::pattern::RageBox;
 use std::time::Duration;
 use std::sync::atomic::Ordering;
 use std::mem::ManuallyDrop;
-use cgmath::{Vector3, Rad};
+use cgmath::{Vector3, Rad, Vector2};
 
 pub fn get_pool() -> &'static Box<VehiclePool> {
-    crate::native::pool::VEHICLE.as_ref()
+    crate::native::pool::VEHICLE.as_ref().as_ref().expect("vehicle pool is not initialized")
 }
 
 pub fn set_parked_count(count: i32) {
@@ -70,6 +71,45 @@ pub fn set_low_priority_generators_active(active: bool) {
 pub fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3<f32>, unknown: bool) {
     invoke!((), 0x46A1E1A299EC4BBA, start, end, unknown)
 }
+
+#[repr(u32)]
+pub enum Dispatch {
+    PoliceAutomobile = 1,
+    PoliceHelicopter = 2,
+    FireDepartment = 3,
+    SwatAutomobile = 4,
+    AmbulanceDepartment = 5,
+    PoliceRiders = 6,
+    PoliceVehicleRequest = 7,
+    PoliceRoadBlock = 8,
+    PoliceAutomobileWaitPulledOver = 9,
+    PoliceAutomobileWaitCruising = 10,
+    Gangs = 11,
+    SwatHelicopter = 12,
+    PoliceBoat = 13,
+    ArmyVehicle = 14,
+    BikerBackup = 15
+}
+
+pub fn set_dispatch_service(dispatch: Dispatch, enabled: bool) {
+    invoke!((), 0xDC0F817884CDD856, dispatch as u32, enabled)
+}
+
+pub struct DispatchSpawnBlockingArea {
+    handle: Handle
+}
+
+impl DispatchSpawnBlockingArea {
+    pub fn new(start: Vector2<f32>, end: Vector2<f32>) -> Option<Self> {
+        invoke!(Option<Self>, 0x2D4259F1FEB81DA9, start, end)
+    }
+
+    pub fn delete(self) {
+        invoke!((), 0x264AC28B01B353A5, self.handle)
+    }
+}
+
+crate::impl_handle!(DispatchSpawnBlockingArea);
 
 pub struct MissionTrain {
     pub vehicle: Vehicle

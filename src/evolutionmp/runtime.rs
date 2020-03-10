@@ -33,8 +33,6 @@ use crate::events::{NativeEvent, ScriptEvent, EventPool};
 use crate::game::ui::FrontendButtons;
 use crate::native::script::ScriptThreadRuntime;
 
-const ACTIVE_THREAD_TLS_OFFSET: isize = 0x830;
-
 pub struct Runtime {
     user_input: InputHook,
     main_fiber: Option<Fiber>,
@@ -186,7 +184,7 @@ impl ScriptContainer {
         script.prepare(ScriptEnv::new(self));
         while !self.terminated {
             self.process_input(&mut script);
-            script.frame(ScriptEnv::new(self), ****GAME_STATE);
+            script.frame(ScriptEnv::new(self), *GAME_STATE.as_ref());
             self.wait(0)
         }
         self.script = Some(script);
@@ -204,7 +202,6 @@ impl ScriptContainer {
             if let Some(fiber) = &self.fiber {
                 fiber.make_current();
             } else {
-                crate::info!("creating fiber for script {}", self.name);
                 self.fiber = Some(Fiber::new(0, self, ScriptContainer::fiber_loop));
             }
         }

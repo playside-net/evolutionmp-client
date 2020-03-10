@@ -1,3 +1,4 @@
+use crate::bind_fn_detour;
 use crate::pattern::MemoryRegion;
 use crate::native::{NativeCallContext, ThreadSafe};
 use crate::game::vehicle::Vehicle;
@@ -6,10 +7,10 @@ use crate::hash::{Hash, Hashable};
 use crate::win::input::InputEvent;
 use cgmath::{Vector3, Vector2};
 use std::collections::VecDeque;
-use winapi::_core::cell::RefCell;
+use std::cell::RefCell;
 use detour::RawDetour;
 use std::ffi::CStr;
-use winapi::_core::mem::ManuallyDrop;
+use std::mem::ManuallyDrop;
 
 #[repr(C)]
 struct EventVTable {
@@ -206,8 +207,7 @@ macro_rules! native_event {
     };
 }
 
-type CallEvent = extern "C" fn(*mut (), *mut Event) -> *mut ();
-static mut CALL_EVENT: *const () = std::ptr::null();
+bind_fn_detour!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, "C", fn(*mut (), *mut Event) -> *mut ());
 
 pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut () {
     if !event.is_null() {
@@ -222,17 +222,13 @@ pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut (
         }
         crate::info!("Called event id {} ({} args: {:?})", event.get_id(), arg_count, &args[..arg_count]);
     }
-    let origin: CallEvent = std::mem::transmute(CALL_EVENT);
-    origin(group, event)
+    CALL_EVENT(group, event)
 }
 
-pub unsafe fn init(mem: &MemoryRegion) {
+pub fn init() {
     EVENTS.replace(Some(VecDeque::new()));
 
-    CALL_EVENT = mem.find("81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8")
-        .next().expect("call_event")
-        .offset(-0x36)
-        .detour(call_event as _);
+    lazy_static::initialize(&CALL_EVENT);
 
     native_event!(0xAF35D0D2583051B0, new_vehicle);
     native_event!(0xD49F9B0955C367DE, new_ped);

@@ -1,7 +1,7 @@
-use crate::{bind_fn, bind_field, bind_field_redirect};
+use crate::{bind_fn, bind_field, bind_field_ip};
 use crate::hash::Hash;
 use std::collections::HashMap;
-use winapi::_core::mem::ManuallyDrop;
+use std::mem::ManuallyDrop;
 use crate::native::TypeInfo;
 
 bind_fn!(INIT_MANIFEST_CHUNK, "48 8D 4F 10 B2 01 48 89 2F", -0x2E, "C", fn(*const ()) -> ());
@@ -11,18 +11,18 @@ bind_fn!(ADD_PACK_FILE, "EB 15 48 8B 0B 40 38 7B 0C 74 07 E8", 11, "C", fn(*cons
 bind_fn!(REMOVE_PACK_FILE, "EB 15 48 8B 0B 40 38 7B 0C 74 07 E8", 18, "C", fn(*const DataFileEntry) -> ());
 
 bind_field!(MANIFEST_CHUNK, "83 F9 08 75 43 48 8D 0D", 8, ());
-bind_field_redirect!(MOUNTERS, "48 63 82 90 00 00 00 49 8B 8C C0 ? ? ? ? 48", 11, [PackFileMounter; 255]);
-bind_field_redirect!(DATA_TYPES, "61 44 DF 04 00 00 00 00", 0, *const DataFileType);
+bind_field_ip!(MOUNTERS, "48 63 82 90 00 00 00 49 8B 8C C0 ? ? ? ? 48", 11, [PackFileMounter; 255]);
+bind_field_ip!(DATA_TYPES, "61 44 DF 04 00 00 00 00", 0, *const DataFileType);
 /*lazy_static! {
     pub static ref DATA_TYPES_BY_HASH: HashMap<Hash, u32> = {
         DATA_TYPES.iter().map(|t| (t.hash, t.index)).collect::<_>()
     };
 }*/
 
-pub(crate) unsafe fn init() {
-    MANIFEST_CHUNK.as_ref();
-    MOUNTERS.as_ref();
-    DATA_TYPES.as_ref();
+pub(crate) fn pre_init() {
+    lazy_static::initialize(&MANIFEST_CHUNK);
+    lazy_static::initialize(&MOUNTERS);
+    lazy_static::initialize(&DATA_TYPES);
 }
 
 #[repr(C)]

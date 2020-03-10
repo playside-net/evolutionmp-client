@@ -4,7 +4,6 @@ use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCES
 use winapi::um::tlhelp32::TH32CS_SNAPPROCESS;
 use evolutionmp::registry::Registry;
 use evolutionmp::win::ps::{ProcessIterator, get_process, ModuleEntry, ProcessHandle};
-use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::psapi::LIST_MODULES_ALL;
 use evolutionmp::launcher_dir;
 use std::path::Path;
@@ -58,7 +57,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
                     module => {
                         for m in proc.get_modules(LIST_MODULES_ALL) {
                             if m.get_instance() as u64 & 0xFFFFFFFF == module as u64 {
-                                initialize(proc, m, &client_dll);
+                                initialize(&proc, m, &client_dll);
                                 break;
                             }
                         }
@@ -72,6 +71,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
             }
         }
     };
+    std::mem::drop(proc);
 
     println!("Launcher process exited with code: {}", process.wait().unwrap().code().unwrap());
 }
@@ -80,7 +80,7 @@ fn is_process_alive<S>(file_name: S) -> bool where S: AsRef<str> {
     ProcessIterator::new(TH32CS_SNAPPROCESS).unwrap().any(move |p|&p.get_name().to_string_lossy() == file_name.as_ref())
 }
 
-fn initialize(proc: ProcessHandle, m: ModuleEntry, client_dll: &Path) {
+fn initialize(proc: &ProcessHandle, m: ModuleEntry, client_dll: &Path) {
     /*//println!("Looking for set_io in: {:p} ({})", m.get_instance(), m.get_name());
     let p = get_procedure_address(&client_dll.to_string_lossy(), "set_io").expect("no set_io");
     //let p = m.get_procedure_address("set_io").expect("missing set_io procedure in target module");

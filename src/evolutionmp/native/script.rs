@@ -1,4 +1,4 @@
-use crate::pattern::MemoryRegion;
+use crate::pattern::{MemoryRegion, RageBox};
 use crate::native::alloc::RageVec;
 use crate::scripts::vehicle::ScriptVehicle;
 use crate::hash::{Hash, Hashable};
@@ -8,45 +8,41 @@ use std::mem::ManuallyDrop;
 use std::os::raw::c_char;
 use std::mem::MaybeUninit;
 
-static mut THREAD_COLLECTION: Option<ManuallyDrop<Box<RageVec<ManuallyDrop<Box<ScriptThread>>>>>> = None;
-static mut THREAD_ID: *mut u32 = std::ptr::null_mut();
-static mut THREAD_COUNT: *mut u32 = std::ptr::null_mut();
-static mut SCRIPT_MANAGER: Option<ManuallyDrop<Box<ScriptManager>>> = None;
-
-use crate::bind_fn;
+use crate::{bind_fn, bind_field_ip};
 use std::ffi::CStr;
+use std::alloc::Layout;
+use std::ops::{Deref, DerefMut};
+
+bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
+bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
+bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B F9", 2, u32);
+bind_field_ip!(SCRIPT_MANAGER, "74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D", 13, ScriptManager);
 
 bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, "thiscall", fn(*mut ScriptThread) -> ());
 bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, "thiscall", fn(*mut ScriptThread) -> ());
 bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, "thiscall", fn(*mut ScriptThread, u32) -> ThreadState);
 
-pub(crate) unsafe fn init(mem: &MemoryRegion) {
-    THREAD_COLLECTION = Some(std::mem::transmute(
-        mem.find("48 8B C8 EB 03 48 8B CB 48 8B 05")
-            .next().expect("thread collection")
-            .add(11).read_ptr(4).as_ptr()
-    ));
-    THREAD_ID = mem.find("89 15 ? ? ? ? 48 8B 0C D8")
-        .next().expect("thread id")
-        .add(2).read_ptr(4).get_mut();
-    THREAD_COUNT = mem.find("FF 0D ? ? ? ? 48 8B F9")
-        .next().expect("thread count")
-        .add(2).read_ptr(4).get_mut();
-    SCRIPT_MANAGER = Some(std::mem::transmute(
-        mem.find("74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D")
-            .next().expect("script manager")
-            .add(13).read_ptr(4).as_ptr()
-    ));
+pub(crate) fn pre_init() {
+    lazy_static::initialize(&THREAD_COLLECTION);
+    lazy_static::initialize(&THREAD_ID);
+    lazy_static::initialize(&THREAD_COUNT);
+    lazy_static::initialize(&SCRIPT_MANAGER);
+
+    lazy_static::initialize(&SCRIPT_THREAD_INIT);
+    lazy_static::initialize(&SCRIPT_THREAD_KILL);
+    lazy_static::initialize(&SCRIPT_THREAD_TICK);
 }
 
 pub fn is_thread_pool_empty() -> bool {
-    unsafe { THREAD_COLLECTION.as_ref().unwrap().is_empty() }
+    THREAD_COLLECTION.is_empty()
 }
+
+const ACTIVE_THREAD_TLS_OFFSET: usize = 0x830;
 
 fn get_active_thread() -> *mut *mut Thread {
     unsafe {
         let module_tls = *(__readgsqword(88) as *mut *mut u8);
-        module_tls.add(0x830).cast::<*mut Thread>()
+        module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut Thread>()
     }
 }
 
@@ -75,6 +71,12 @@ pub enum ThreadState {
     Unknown4 = 4,
 }
 
+impl Default for ThreadState {
+    fn default() -> Self {
+        ThreadState::Idle
+    }
+}
+
 #[repr(C)]
 pub struct ScriptManager {
     v_table: ManuallyDrop<Box<ScriptManagerVTable>>
@@ -87,6 +89,7 @@ impl ScriptManager {
 }
 
 #[repr(C)]
+#[derive(Default)]
 pub struct ScriptThreadContext {
     id: u32,
     script_hash: Hash,
@@ -99,9 +102,9 @@ pub struct ScriptThreadContext {
     timer_c: u32,
     unk1: u32,
     unk2: u32,
-    pad1: [u8; 52],
+    pad1: [u32; 13],
     set1: u32,
-    pad2: [u8; 68]
+    pad2: [u32; 17]
 }
 
 #[repr(C)]
@@ -112,6 +115,7 @@ pub struct ThreadVTable {
     tick:   extern "C" fn(this: *mut (), ops: u32) -> ThreadState,
     kill:   extern "C" fn(this: *mut ()),
     do_run: extern "C" fn(this: *mut ()),
+    wut:    extern "C" fn(this: *mut ())
 }
 
 #[repr(C)]
@@ -129,10 +133,37 @@ pub struct ScriptThread {
     parent: Thread,
     script_name: [u8; 64],
     script_handler: *const (),
-    pad2: [u8; 40],
+    pad2: [u64; 5],
     flag1: u8,
     net_flag: u8,
-    pad3: [u8; 22]
+    pad3: [u16; 11]
+}
+
+impl ScriptThread {
+    pub fn new(name: &str, v_table: ThreadVTable) -> ScriptThread {
+        assert!(name.len() < 64, "script name too long");
+        let mut script_name = [0; 64];
+        unsafe { std::ptr::copy_nonoverlapping(name.as_ptr(), script_name.as_mut_ptr(), name.len()) };
+        ScriptThread {
+            parent: Thread {
+                v_table: ManuallyDrop::new(Box::new(v_table)),
+                context: ScriptThreadContext {
+                    script_hash: name.joaat(),
+                    .. Default::default()
+                },
+                stack: 0,
+                pad1: 0,
+                pad2: 0,
+                sz_exit_message: std::ptr::null()
+            },
+            script_name,
+            script_handler: std::ptr::null(),
+            pad2: [0; 5],
+            flag1: 0,
+            net_flag: 0,
+            pad3: [0; 11]
+        }
+    }
 }
 
 #[repr(C)]
@@ -141,118 +172,114 @@ pub struct ScriptThreadRuntime {
     runtime: Runtime
 }
 
+macro_rules! vtable_fn {
+    ($path:path) => {
+        unsafe { std::mem::transmute($path as *const ()) }
+    };
+}
+
 impl ScriptThreadRuntime {
     pub fn spawn(runtime: Runtime) {
         unsafe {
-            let v_table = ManuallyDrop::new(Box::new(ThreadVTable {
-                drop: std::mem::transmute(Self::drop as *const ()),
-                reset: std::mem::transmute(Self::reset as *const ()),
-                run: std::mem::transmute(Self::run as *const ()),
-                tick: std::mem::transmute(Self::tick as *const ()),
-                kill: std::mem::transmute(Self::kill as *const ()),
-                do_run: std::mem::transmute(Self::do_run as *const ())
-            }));
-            let mut script_name = [0; 64];
-            std::ptr::copy_nonoverlapping(b"runtime".as_ptr(), script_name.as_mut_ptr(), 7);
             let mut thread = ScriptThreadRuntime {
-                parent: ScriptThread {
-                    parent: Thread {
-                        v_table,
-                        context: ScriptThreadContext {
-                            id: 0,
-                            script_hash: "runtime".joaat(),
-                            state: ThreadState::Idle,
-                            ip: 0,
-                            frame_sp: 0,
-                            sp: 0,
-                            timer_a: 0,
-                            timer_b: 0,
-                            timer_c: 0,
-                            unk1: 0,
-                            unk2: 0,
-                            pad1: [0; 52],
-                            set1: 0,
-                            pad2: [0; 68]
-                        },
-                        stack: 0,
-                        pad1: 0,
-                        pad2: 0,
-                        sz_exit_message: std::ptr::null()
-                    },
-                    script_name,
-                    script_handler: std::ptr::null(),
-                    pad2: [0; 40],
-                    flag1: 0,
-                    net_flag: 0,
-                    pad3: [0; 22]
-                },
+                parent: ScriptThread::new("runtime", ThreadVTable {
+                    drop: vtable_fn!(Self::drop),
+                    reset: vtable_fn!(Self::reset),
+                    run: vtable_fn!(Self::run),
+                    tick: vtable_fn!(Self::tick),
+                    kill: vtable_fn!(Self::kill),
+                    do_run: vtable_fn!(Self::do_run),
+                    wut: vtable_fn!(Self::wut)
+                }),
                 runtime
             };
-            let mut collection = THREAD_COLLECTION.as_mut().unwrap();
-            let mut slot = 0;
-            for thr in collection.iter() {
-                let ctx = &thr.parent.context;
-                if ctx.id == 0 {
-                    break;
-                }
-                slot += 1;
-            }
-            thread.reset(Hash(*THREAD_COUNT + 1), std::ptr::null(), 0);
-            if *THREAD_ID == 0 {
-                *THREAD_ID += 1;
-            }
-            thread.parent.parent.context.id = *THREAD_ID;
-            *THREAD_COUNT += 1;
-            *THREAD_ID += 1;
+            let mut collection = THREAD_COLLECTION.as_mut();
+            let mut slot = collection.iter()
+                .enumerate()
+                .find_map(|(i, t)| {
+                    if t.context.id == 0 { Some(i) } else { None }
+                })
+                .unwrap_or(0);
+            let thread_id = THREAD_ID.min(1);
+            thread.reset(Hash(**THREAD_COUNT + 1), std::ptr::null(), 0);
+            thread.context.id = thread_id;
+            *THREAD_COUNT.as_mut() += 1;
+            *THREAD_ID.as_mut() = thread_id + 1;
             collection[slot] = ManuallyDrop::new(std::mem::transmute(Box::new(thread)));
         }
     }
 
-    unsafe fn init(&mut self) {
-        SCRIPT_THREAD_INIT(&mut self.parent)
+    unsafe extern "C" fn drop(&mut self) {
+        std::ptr::drop_in_place(self as *mut _);
+        std::alloc::dealloc(self as *mut Self as *mut _, Layout::new::<Self>())
     }
 
-    unsafe extern "C" fn drop(&mut self) {}
-
-    unsafe extern "C" fn kill(&mut self) {
-        SCRIPT_THREAD_KILL(&mut self.parent)
+    extern "C" fn kill(&mut self) {
+        SCRIPT_THREAD_KILL(&mut **self)
     }
 
     unsafe extern "C" fn run(&mut self, ops: u32) -> ThreadState {
-        if self.parent.script_handler.is_null() {
-            SCRIPT_MANAGER.as_mut().unwrap().attach(&mut self.parent);
-            self.parent.net_flag = 1;
+        if self.script_handler.is_null() {
+            SCRIPT_MANAGER.as_mut().attach(&mut **self);
+            self.net_flag = 1;
         }
-        let state = self.parent.parent.context.state;
+        let state = self.context.state;
         if state != ThreadState::Killed {
             let prev_thread = &mut **get_active_thread();
-            *get_active_thread() = &mut self.parent.parent;
+            *get_active_thread() = (self as *mut Self).cast();
             self.do_run();
             *get_active_thread() = prev_thread;
         }
-        self.parent.parent.context.state
+        self.context.state
     }
 
-    unsafe extern "C" fn reset(&mut self, hash: Hash, args: *const (), len: u32) -> ThreadState {
-        self.parent.parent.context = std::mem::zeroed();
-        {
-            let mut context = &mut self.parent.parent.context;
-            context.state = ThreadState::Idle;
-            context.script_hash = hash;
-            context.unk1 = std::u32::MAX;
-            context.unk2 = std::u32::MAX;
-            context.set1 = 1;
-        }
-        self.init();
-        self.parent.parent.sz_exit_message = b"Normal exit\0".as_ptr() as _;
-        self.parent.parent.context.state
+    extern "C" fn reset(&mut self, hash: Hash, args: *const (), len: u32) -> ThreadState {
+        self.context = ScriptThreadContext {
+            state: ThreadState::Idle,
+            script_hash: hash,
+            unk1: std::u32::MAX,
+            unk2: std::u32::MAX,
+            set1: 1,
+            .. Default::default()
+        };
+        SCRIPT_THREAD_INIT(&mut **self);
+        self.sz_exit_message = b"Normal exit\0".as_ptr() as _;
+        self.context.state
     }
 
-    unsafe extern "C" fn tick(&mut self, ops: u32) -> ThreadState {
-        SCRIPT_THREAD_TICK(&mut self.parent, ops)
+    extern "C" fn tick(&mut self, ops: u32) -> ThreadState {
+        SCRIPT_THREAD_TICK(&mut **self, ops)
     }
 
-    unsafe extern "C" fn do_run(&mut self) {
+    extern "C" fn do_run(&mut self) {
         self.runtime.frame();
+    }
+}
+
+impl Deref for ScriptThreadRuntime {
+    type Target = ScriptThread;
+
+    fn deref(&self) -> &Self::Target {
+        &self.parent
+    }
+}
+
+impl DerefMut for ScriptThreadRuntime {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parent
+    }
+}
+
+impl Deref for ScriptThread {
+    type Target = Thread;
+
+    fn deref(&self) -> &Self::Target {
+        &self.parent
+    }
+}
+
+impl DerefMut for ScriptThread {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parent
     }
 }

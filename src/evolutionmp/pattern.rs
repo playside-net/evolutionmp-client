@@ -7,8 +7,9 @@ use std::ptr::null_mut;
 use std::time::{Duration, Instant};
 use std::mem::ManuallyDrop;
 use detour::RawDetour;
-use winapi::_core::ptr::replace;
+use std::ptr::replace;
 use region::Protection;
+use std::ops::{Deref, DerefMut};
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
@@ -109,6 +110,38 @@ impl Iterator for RegionIterator {
         None
     }
 }
+
+#[repr(transparent)]
+pub struct RageBox<T> {
+    ptr: *mut T
+}
+
+impl<T> Deref for RageBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+impl<T> AsRef<T> for RageBox<T> {
+    fn as_ref(&self) -> &T {
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<T> RageBox<T> {
+    pub fn is_null(&self) -> bool {
+        self.ptr.is_null()
+    }
+
+    pub unsafe fn as_mut(&self) -> &mut T {
+        unsafe { &mut *self.ptr }
+    }
+}
+
+unsafe impl<T> Send for RageBox<T> {}
+unsafe impl<T> Sync for RageBox<T> {}
 
 #[derive(Clone)]
 pub struct MemoryRegion {
@@ -243,8 +276,10 @@ impl MemoryRegion {
         self.base.cast()
     }
 
-    pub unsafe fn get_box<T>(&self) -> ManuallyDrop<Box<T>> {
-        ManuallyDrop::new(Box::from_raw(self.base.cast()))
+    pub unsafe fn get_box<T>(&self) -> RageBox<T> {
+        RageBox {
+            ptr: self.base.cast()
+        }
     }
 
     pub unsafe fn get_call(&self) -> *const () {

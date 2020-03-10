@@ -38,7 +38,7 @@ impl Player {
     }
 
     pub fn get_address(&self) -> *mut u8 {
-        (pool::PLAYER_ADDRESS.get().unwrap())(self.get_handle())
+        pool::PLAYER_ADDRESS(self.get_handle())
     }
 
     pub fn get_ped(&self) -> Ped {

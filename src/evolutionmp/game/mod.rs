@@ -35,6 +35,7 @@ pub mod prop;
 pub mod pathfind;
 pub mod door;
 pub mod data;
+pub mod fire;
 
 pub type Handle = u32;
 
@@ -88,7 +89,7 @@ impl GameState {
     }
 }
 
-pub unsafe fn init(mem: &MemoryRegion) {
-    locale::init(mem);
-    ui::init(mem);
+pub fn init() {
+    locale::init();
+    ui::init();
 }

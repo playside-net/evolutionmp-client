@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::io::prelude::*;
 use std::panic::PanicInfo;
 use std::io::stdout;
-use backtrace::Backtrace;
+use backtrace::{Backtrace, BacktraceFmt, BacktraceFrame, SymbolName};
 use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE};
 use winapi::um::libloaderapi::DisableThreadLibraryCalls;
 use colored::{Color, Colorize};
@@ -23,9 +23,6 @@ use fern::Dispatch;
 use log::{info, debug, error};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::hash::Hashable;
-use winapi::_core::ops::RangeInclusive;
-use crate::native::fs::{Device, PackFile, RelativeDevice};
-use std::ffi::{CStr, CString};
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
 use winapi::um::winnt::{EXCEPTION_POINTERS, LONG};
 
@@ -75,9 +72,9 @@ pub const LOG_PANIC: &'static str = "panic";
     SKIP_INIT(stage)
 }*/
 
-bind_field_redirect!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
-bind_field_redirect!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bool);
-bind_field_redirect!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
+bind_field_ip!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
+bind_field_ip!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bool);
+bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
 
 extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
     unsafe {
@@ -85,11 +82,22 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let rec = &mut *info.ExceptionRecord;
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
-        error!("Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
-        let s = format!("{:?}", Backtrace::new());
+        if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ {
+            error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
+            let backtrace = Backtrace::new();
 
-        for line in s.lines(){
-            debug!(target: LOG_PANIC, "{}", line);
+            for frame in backtrace.frames().iter().skip_while(|f| f.symbol_address() != addr) {
+                for symbol in frame.symbols() {
+                    let name = symbol.name().unwrap_or(SymbolName::new(b"<unknown>\0"));
+                    let addr = symbol.addr().unwrap_or(std::ptr::null_mut());
+                    let line = symbol.lineno().unwrap_or(0);
+                    if let Some(filename) = symbol.filename() {
+                        debug!(target: LOG_PANIC, "{:p}: {} file {} line {}", addr, name, filename.display(), line);
+                    } else {
+                        debug!(target: LOG_PANIC, "{:p}: {}", addr, name);
+                    }
+                }
+            }
         }
     }
     0 //EXCEPTION_CONTINUE_SEARCH
@@ -128,16 +136,14 @@ fn attach(instance: HINSTANCE) {
             }
 
             console::attach();
-            native::script::init(&mem);
-            native::fs::init();
 
             info!("Initializing game hooks");
 
-            game::init(&mem);
+            game::init();
 
             info!("Initializing natives");
 
-            native::init(&mem);
+            native::init();
 
             info!("Starting runtime");
 

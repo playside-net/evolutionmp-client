@@ -1,3 +1,4 @@
+use crate::pattern::MemoryRegion;
 use winapi::shared::windef::{HWND, POINT};
 use winapi::shared::basetsd::LONG_PTR;
 use winapi::shared::minwindef::{UINT, WPARAM, LPARAM, LRESULT, HKL};
@@ -7,21 +8,14 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 use std::ffi::CString;
 use std::time::{Duration, Instant};
-use crate::pattern::MemoryRegion;
 use std::ptr::null_mut;
 use widestring::WideCStr;
 
-static mut EVENT_POOL: Option<EventPool> = None;
+static mut EVENT_POOL: Option<Sender<InputEvent>> = None;
 static mut WND_PROC: WNDPROC = None;
 
 struct EventPool {
     sender: Sender<InputEvent>
-}
-
-impl EventPool {
-    fn send(&mut self, event: InputEvent) {
-        self.sender.send(event).expect("Unable to sync keyboard event")
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +57,7 @@ static mut LAST_LAYOUT_CHANGE: Option<Instant> = None;
 
 fn push_event(event: InputEvent) {
     unsafe {
-        EVENT_POOL.as_mut().unwrap().send(event);
+        EVENT_POOL.as_ref().unwrap().send(event).expect("failed to push input event");
     }
 }
 
@@ -154,7 +148,7 @@ pub struct InputHook {
 impl InputHook {
     pub unsafe fn new() -> InputHook {
         let (sender, receiver) = channel::<InputEvent>();
-        EVENT_POOL.replace(EventPool { sender });
+        EVENT_POOL = Some(sender);
         std::thread::spawn(move || {
             let mut handle: HWND = std::ptr::null_mut();
             let window = CString::new("grcWindow").unwrap();

@@ -15,7 +15,7 @@ use std::sync::atomic::AtomicI32;
 use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
 use byteorder::WriteBytesExt;
 use std::os::raw::c_char;
-use winapi::_core::mem::ManuallyDrop;
+use std::mem::ManuallyDrop;
 use detour::RawDetour;
 
 pub mod vehicle;
@@ -59,13 +59,44 @@ lazy_static! {
 }
 
 #[macro_export]
+macro_rules! bind_fn_detour {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:ident,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+                let d = crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to find call for ", stringify!($name)))
+                    .offset($offset).detour($detour as _);
+                std::mem::transmute(d)
+            };
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! bind_fn {
     ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let ptr = crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind call for", stringify!($name)))
+                    .next().expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).as_ptr();
+                std::mem::transmute(ptr)
+            };
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! bind_fn_ip {
+    ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+        bind_fn_ip!($name,$pattern,$offset,$abi,fn($($arg),*) -> $ret,4);
+    };
+    ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+                let ptr = crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to bind call for ", stringify!($name)))
+                    .offset($offset).read_ptr($ptr_len).as_ptr();
                 std::mem::transmute(ptr)
             };
         }
@@ -76,9 +107,9 @@ macro_rules! bind_fn {
 macro_rules! bind_field {
     ($name:ident,$pattern:literal,$offset:literal,$ty:ty) => {
         lazy_static::lazy_static! {
-            pub static ref $name: std::mem::ManuallyDrop<Box<$ty>> = unsafe {
+            pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
                 crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind field for", stringify!($name)))
+                    .next().expect(concat!("failed to bind field for ", stringify!($name)))
                     .offset($offset).get_box()
             };
         }
@@ -86,16 +117,16 @@ macro_rules! bind_field {
 }
 
 #[macro_export]
-macro_rules! bind_field_redirect {
+macro_rules! bind_field_ip {
     ($name:ident,$pattern:literal,$offset:literal,$ty:ty) => {
-        bind_field_redirect!($name,$pattern,$offset,$ty,4);
+        bind_field_ip!($name,$pattern,$offset,$ty,4);
     };
     ($name:ident,$pattern:literal,$offset:literal,$ty:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
-            pub static ref $name: crate::native::ThreadSafe<std::mem::ManuallyDrop<Box<$ty>>> = unsafe {
-                crate::native::ThreadSafe::new(crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind field for", stringify!($name)))
-                    .offset($offset).read_ptr($ptr_len).get_box())
+            pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
+                crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to bind field for ", stringify!($name)))
+                    .offset($offset).read_ptr($ptr_len).get_box()
             };
         }
     };
@@ -104,11 +135,11 @@ macro_rules! bind_field_redirect {
 #[macro_export]
 macro_rules! redirect {
     ($from:ident,$to:ident) => {
-        let d = detour::RawDetour::new($from,$to).expect(concat!("failed to create redirect from", stringify!($from), "to", stringify!($to)))
-            .enable().expect(concat!("error redirecting from", stringify!($from), "to", stringify!($to)));
-        let t = d.trampoline();
+        let d = detour::RawDetour::new($from,$to as _).expect(concat!("failed to create redirect from ", stringify!($from), " to ", stringify!($to)));
+        d.enable().expect(concat!("error redirecting from ", stringify!($from), " to ", stringify!($to)));
+        let t = d.trampoline() as *const ();
         std::mem::forget(d);
-        d
+        t
     };
 }
 
@@ -123,12 +154,20 @@ bind_field!(EXPANDED_RADAR, "33 C0 0F 57 C0 ? 0D", 7, bool);
 bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
 bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSprite);
 
-pub(crate) unsafe fn init(mem: &MemoryRegion) {
-    NATIVES.deref(); //Call NATIVES field initializer
-    SET_VECTOR_RESULTS.deref();
-    streaming::init();
-    pool::init(mem);
-    vehicle::init(mem);
+pub(crate) fn pre_init() {
+    script::pre_init();
+    streaming::pre_init();
+    pool::pre_init();
+    vehicle::pre_init();
+    lazy_static::initialize(&EXPANDED_RADAR);
+    lazy_static::initialize(&REVEAL_FULL_MAP);
+    lazy_static::initialize(&CURSOR_SPRITE);
+}
+
+pub(crate) fn init() {
+    lazy_static::initialize(&NATIVES);
+    lazy_static::initialize(&SET_VECTOR_RESULTS);
+    vehicle::init();
 }
 
 pub fn get_handler(hash: u64) -> NativeFunction {
@@ -422,7 +461,7 @@ pub struct Natives {
 
 impl Natives {
     pub fn new() -> Natives {
-        bind_field_redirect!(NATIVE_TABLE, "76 32 48 8B 53 40", 9, NativeTable);
+        bind_field_ip!(NATIVE_TABLE, "76 32 48 8B 53 40", 9, NativeTable);
 
         let mut mappings = crate::mappings::MAPPINGS.iter().cloned().collect::<HashMap<_, _>>();
         let mut handlers = HashMap::with_capacity(mappings.len());
@@ -609,7 +648,7 @@ impl NativeStackValue for () {}
 impl NativeStackValue for Hash {}
 impl NativeStackValue for &mut Hash {}
 
-pub struct NativeField<T> where T: Sized {
+pub struct EntityField<T> where T: Sized {
     offset: AtomicI32,
     _ty: PhantomData<T>
 }
@@ -618,13 +657,13 @@ pub trait Addressable {
     fn get_address(&self) -> *mut u8;
 }
 
-impl<T> NativeField<T> where T: Sized {
-    pub const fn unset() -> NativeField<T> {
+impl<T> EntityField<T> where T: Sized {
+    pub const fn unset() -> EntityField<T> {
         Self::predefined(0)
     }
 
-    pub const fn predefined(offset: i32) -> NativeField<T> {
-        NativeField {
+    pub const fn predefined(offset: i32) -> EntityField<T> {
+        EntityField {
             offset: AtomicI32::new(offset),
             _ty: PhantomData
         }

@@ -2,7 +2,7 @@ use std::num::Wrapping;
 
 use serde_derive::{Serialize, Deserialize};
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Default, Copy, Clone, PartialEq, Debug, Eq, Hash, PartialOrd, Serialize, Deserialize)]
 pub struct Hash(pub u32);
 

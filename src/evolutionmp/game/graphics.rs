@@ -13,6 +13,10 @@ pub fn draw_line(start: Vector3<f32>, end: Vector3<f32>, color: Rgba) {
     invoke!((), 0x6B7256074AE34680, start, end, color)
 }
 
+pub fn set_artificial_light(enabled: bool) {
+    invoke!((), 0x1268615ACE24D504, enabled)
+}
+
 pub mod night_vision {
     use crate::invoke;
 

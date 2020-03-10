@@ -48,9 +48,9 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
     }
 }
 
-use crate::{bind_fn, bind_field};
+use crate::{bind_fn, bind_field, bind_fn_detour};
 use std::fs::File;
-use winapi::_core::iter::once;
+use std::iter::once;
 
 bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, "C", fn(RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
 bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, "C", fn(RagePath, *const Device, bool) -> bool);
@@ -62,8 +62,7 @@ bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, "thiscal
 bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, "thiscall", fn(*mut RelativeDevice, RagePath, bool) -> ());
 bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, "thiscall", fn(*mut KeyState, *const u8) -> ());
 
-type InitialMount = extern "C" fn();
-static mut INITIAL_MOUNT: Option<InitialMount> = None;
+bind_fn_detour!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, "C", fn() -> ());
 
 static mut DEVICE_VTABLE: *const u8 = std::ptr::null();
 static mut PACK_FILE_VTABLE: *const u8 = std::ptr::null();
@@ -80,32 +79,25 @@ macro_rules! vtable {
 
 pub(crate) unsafe fn pre_init(mem: &MemoryRegion) {
     bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
-    *(&mut *((**DEVICE_LIMIT).as_ref() as *const u32 as *mut u32)) *= 5;
+    unsafe { *DEVICE_LIMIT.as_mut() *= 5 };
     mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8")
         .next().expect("no relative device sorting")
         .add(12).nop(5);
 
-    INITIAL_MOUNT = Some(std::mem::transmute(
-        mem.find("0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66")
-            .next().expect("initial mount")
-            .add(0x15).detour(initial_mount as _)
-    ));
+    lazy_static::initialize(&INITIAL_MOUNT);
+
     vtable!(DEVICE_VTABLE, "Device", "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15);
     vtable!(PACK_FILE_VTABLE, "PackFile", "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15);
     vtable!(RELATIVE_DEVICE_VTABLE, "RelativeDevice", "48 85 C0 74 11 48 83 63 08 00 48", 13);
     vtable!(ENCRYPTING_DEVICE_VTABLE, "EncryptingDevice", "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4);
 }
 
-pub(crate) unsafe fn init() {
-
-}
-
-unsafe extern "C" fn initial_mount() {
+extern "C" fn initial_mount() {
     crate::info!("Initial mount");
 
-    unsafe {
-        (INITIAL_MOUNT.unwrap())();
-    }
+    INITIAL_MOUNT();
+
+    super::pre_init();
 
     /*fn walk(device: &Device, path: &Path) {
         for f in device.entries(path) {

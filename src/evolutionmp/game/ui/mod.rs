@@ -20,15 +20,19 @@ use crate::bind_fn;
 
 bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
 
-pub unsafe fn init(mem: &MemoryRegion) {
-    let no_slowmo = mem.find("38 51 64 74 19")
-        .next().expect("no_slowmo");
+pub fn init() {
+    lazy_static::initialize(&GET_WARN_RESULT);
 
-    no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
+    unsafe {
+        let no_slowmo = crate::native::MEM.find("38 51 64 74 19")
+            .next().expect("no_slowmo");
 
-    no_slowmo.add(8).nop(5); //Vignetting call patch
+        no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
 
-    no_slowmo.add(34).write_bytes(&[XOR_32_64, 0xD2]); //Timescale override patch
+        no_slowmo.add(8).nop(5); //Vignetting call patch
+
+        no_slowmo.add(34).write_bytes(&[XOR_32_64, 0xD2]); //Timescale override patch
+    }
 }
 
 pub fn show_loading_prompt(ty: LoadingPrompt, text: &str) {
@@ -216,7 +220,7 @@ pub fn set_cursor_sprite(sprite: u32) {
 }
 
 pub fn get_cursor_sprite() -> CursorSprite {
-    ***native::CURSOR_SPRITE
+    *native::CURSOR_SPRITE.as_ref()
 }
 
 pub fn set_cursor_active_this_frame() {
@@ -236,11 +240,11 @@ pub fn set_big_map_active(toggle: bool, full: bool) {
 }
 
 pub fn is_big_map_active() -> bool {
-    ***native::EXPANDED_RADAR
+    *native::EXPANDED_RADAR.as_ref()
 }
 
 pub fn is_big_map_full() -> bool {
-    ***native::REVEAL_FULL_MAP
+    *native::REVEAL_FULL_MAP.as_ref()
 }
 
 pub fn is_hud_element_active(element: HudElement) -> bool {

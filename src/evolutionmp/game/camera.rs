@@ -1,7 +1,6 @@
 use crate::invoke;
 use crate::game::Handle;
 use crate::hash::{Hashable, Hash};
-use crate::native::{Addressable, NativeField};
 use cgmath::{Vector3, Matrix3, Euler, Deg, SquareMatrix, Angle};
 
 pub enum CameraShake {

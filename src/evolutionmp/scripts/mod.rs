@@ -37,6 +37,7 @@ use std::sync::atomic::Ordering;
 use crate::scripts::fishing::ScriptFishing;
 use crate::scripts::fly::ScriptFly;
 use crate::scripts::money::ScriptMoney;
+use crate::game::fire::ExplosionSource;
 
 pub mod console;
 pub mod vehicle;
@@ -172,6 +173,13 @@ pub fn command_timecycle(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<
     Ok(())
 }
 
+pub fn command_explosion(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let player = Player::local();
+    let ped = player.get_ped();
+    game::fire::explode(ped.get_position(), ExplosionSource::GasTank, 1.0, true, false, true);
+    Ok(())
+}
+
 pub struct ScriptCommand {
     tasks: TaskQueue,
     commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError>>>>
@@ -204,6 +212,7 @@ impl Script for ScriptCommand {
         self.register_command("mod", command_mod);
         self.register_command("time", command_time);
         self.register_command("ts", command_timecycle);
+        self.register_command("explode", command_explosion);
     }
 
     fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {

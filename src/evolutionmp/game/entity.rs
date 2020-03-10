@@ -2,7 +2,7 @@ use crate::hash::Hash;
 use super::Handle;
 use crate::invoke;
 use crate::native::pool::{self, Handleable};
-use crate::native::{NativeField, Addressable};
+use crate::native::{EntityField, Addressable};
 use crate::game::streaming::{Resource, AnimDict};
 use cgmath::{Vector3, Euler, Deg, Quaternion, Matrix3};
 
@@ -157,7 +157,7 @@ pub trait Entity: Handleable {
 
 impl<E> Addressable for E where E: Entity + Sized {
     fn get_address(&self) -> *mut u8 {
-        (pool::ENTITY_ADDRESS.get().unwrap())(self.get_handle())
+        pool::ENTITY_ADDRESS(self.get_handle())
     }
 }
 

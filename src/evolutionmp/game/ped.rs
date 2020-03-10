@@ -3,14 +3,15 @@ use crate::native;
 use crate::game::entity::{Entity, Bone};
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
-use crate::invoke;
+use crate::{invoke, invoke_option};
 use crate::native::pool::{Handleable, Pool, GenericPool};
 use crate::hash::Hashable;
 use crate::game::streaming::{AnimDict, PedPhoto};
-use cgmath::{Vector3, MetricSpace};
+use crate::native::NativeStackValue;
+use cgmath::{Vector3, MetricSpace, Zero};
 
 pub fn get_pool() -> &'static GenericPool<Ped> {
-    crate::native::pool::PED.as_ref()
+    crate::native::pool::PED.as_ref().as_ref().expect("ped pool is not initialized")
 }
 
 #[derive(Debug, PartialEq)]
@@ -105,7 +106,7 @@ impl Ped {
         let pos = self.get_position_by_offset(Vector3::new(0.0, 0.0, -1.0));
         let mut result = None;
         let mut last_max_distance = max_distance;
-        for vehicle in super::vehicle::get_pool().iter() {
+        for vehicle in super::vehicle::get_pool().iter().filter_map(|e| e.pooled()) {
             if vehicle.exists() && filter(&vehicle) {
                 let v_pos = vehicle.get_position_by_offset(Vector3::new(0.0, 0.0, 0.0));
                 let distance = v_pos.distance(pos);
@@ -140,6 +141,18 @@ impl Ped {
             None
         }
     }
+
+    pub fn get_parental_features(&self) -> PedParentalFeatures {
+        PedParentalFeatures {
+            ped: self
+        }
+    }
+
+    pub fn get_appearance(&self) -> PedAppearance {
+        PedAppearance {
+            ped: self
+        }
+    }
 }
 
 impl Entity for Ped {
@@ -150,6 +163,269 @@ impl Entity for Ped {
 }
 
 crate::impl_handle!(Ped);
+
+pub struct PedAppearance<'a> {
+    ped: &'a Ped
+}
+
+impl<'a> PedAppearance<'a> {
+    pub fn get_components(&self) -> PedAppearanceComponents {
+        PedAppearanceComponents {
+            ped: self.ped
+        }
+    }
+
+    pub fn get_props(&self) -> PedAppearanceProps {
+        PedAppearanceProps {
+            ped: self.ped
+        }
+    }
+
+    pub fn get_overlays(&self) -> PedAppearanceOverlays {
+        PedAppearanceOverlays {
+            ped: self.ped
+        }
+    }
+
+    pub fn set_hair_color(&self, color: u32, highlight_color: u32) {
+        invoke!((), 0x4CFFC65454C93A49, self.ped.handle, color, highlight_color)
+    }
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone)]
+pub enum OverlayColorType {
+    Other,
+    Hair,
+    Cosmetics,
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone)]
+pub enum AppearanceOverlay {
+    Blemishes,
+    FacialHair,
+    Eyebrows,
+    Ageing,
+    Makeup,
+    Blush,
+    Complexion,
+    SunDamage,
+    Lipstick,
+    MolesFreckles,
+    ChestHair,
+    BodyBlemishes,
+    AddBodyBlemishes
+}
+
+pub struct PedAppearanceOverlays<'a> {
+    ped: &'a Ped
+}
+
+impl<'a> PedAppearanceOverlays<'a> {
+    pub fn get_total(&self, overlay: AppearanceOverlay) -> u32 {
+        invoke!(u32, 0xCF1CE768BB43480E, self.ped.handle, overlay as u32)
+    }
+
+    pub fn set(&self, overlay: AppearanceOverlay, drawable: u32, opacity: f32) {
+        invoke!((), 0x48F44967FA05CC1E, self.ped.handle, overlay as u32, drawable, opacity)
+    }
+
+    pub fn get(&self, overlay: AppearanceOverlay) -> u32 {
+        invoke!(u32, 0xA60EF3B6461A4D43, self.ped.handle, overlay as u32)
+    }
+
+    pub fn set_color(&self, overlay: AppearanceOverlay, ty: OverlayColorType, primary: u32, secondary: u32) {
+        invoke!((), 0x497BF74A7B9CB952, self.ped.handle, overlay as u32, ty as u32, primary, secondary)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct AppearanceVariation {
+    pub drawable: u32,
+    pub texture: u32,
+    pub palette: u32
+}
+
+pub struct PedAppearanceComponents<'a> {
+    ped: &'a Ped
+}
+
+impl<'a> PedAppearanceComponents<'a> {
+    pub fn set_defaults(&self) {
+        invoke!((), 0x45EEE61580806D63, self.ped.handle)
+    }
+
+    pub fn set_random(&self) {
+        invoke!((), 0xC8A9481A01E63C28, self.ped.handle, false)
+    }
+
+    pub fn preload(&self, component: AppearanceComponent, variation: AppearanceVariation) {
+        invoke!((), 0x39D55A620FCB6A3A, self.ped.handle, component as u32, variation.drawable, variation.texture)
+    }
+
+    pub fn has_preload_finished(&self) -> bool {
+        invoke!(bool, 0x66680A92700F43DF, self.ped.handle)
+    }
+
+    pub fn release_preload(&self) {
+        invoke!((), 0x5AAB586FFEC0FD96, self.ped.handle)
+    }
+
+    pub fn get_total_drawables(&self, component: AppearanceComponent) -> u32 {
+        invoke!(u32, 0x27561561732A7842, self.ped.handle, component as u32)
+    }
+
+    pub fn get_total_textures(&self, component: AppearanceComponent, drawable: u32) -> u32 {
+        invoke!(u32, 0x8F7156A3142A6BAD, self.ped.handle, component as u32, drawable)
+    }
+
+    pub fn get_drawable(&self, component: AppearanceComponent) -> u32 {
+        invoke!(u32, 0x67F3780DD425D4FC, self.ped.handle, component as u32)
+    }
+
+    pub fn get_texture(&self, component: AppearanceComponent) -> u32 {
+        invoke!(u32, 0x04A355E041E004E6, self.ped.handle, component as u32)
+    }
+
+    pub fn get_palette(&self, component: AppearanceComponent) -> u32 {
+        invoke!(u32, 0xE3DD5F2A84B42281, self.ped.handle, component as u32)
+    }
+
+    pub fn get(&self, component: AppearanceComponent) -> AppearanceVariation {
+        AppearanceVariation {
+            drawable: self.get_drawable(component),
+            texture: self.get_texture(component),
+            palette: self.get_palette(component)
+        }
+    }
+
+    pub fn set(&self, component: AppearanceComponent, variation: AppearanceVariation) {
+        invoke!((), 0x262B14F48D29DE80, self.ped.handle, component as u32, variation.drawable, variation.texture, variation.palette)
+    }
+}
+
+pub struct PedAppearanceProps<'a> {
+    ped: &'a Ped
+}
+
+impl<'a> PedAppearanceProps<'a> {
+    pub fn clear(&self) {
+        invoke!((), 0xCD8A7537A9B52F06, self.ped.handle)
+    }
+
+    pub fn remove(&self, prop: AppearanceProp) {
+        invoke!((), 0x0943E5B8E078E76E, self.ped.handle, prop as u32)
+    }
+
+    pub fn preload(&self, prop: AppearanceProp, variation: AppearanceVariation) {
+        invoke!((), 0x2B16A3BFF1FBCE49, self.ped.handle, prop as u32, variation.drawable, variation.texture)
+    }
+
+    pub fn has_preload_finished(&self) -> bool {
+        invoke!(bool, 0x784002A632822099, self.ped.handle)
+    }
+
+    pub fn release_preload(&self) {
+        invoke!((), 0xF79F9DEF0AADE61A, self.ped.handle)
+    }
+
+    pub fn get_total_drawables(&self, prop: AppearanceProp) -> u32 {
+        invoke!(u32, 0x5FAF9754E789FB47, self.ped.handle, prop as u32)
+    }
+
+    pub fn get_total_textures(&self, prop: AppearanceProp, drawable: u32) -> u32 {
+        invoke!(u32, 0xA6E7F1CEB523E171, self.ped.handle, prop as u32, drawable)
+    }
+
+    pub fn get_drawable(&self, prop: AppearanceProp) -> u32 {
+        invoke!(u32, 0x898CC20EA75BACD8, self.ped.handle, prop as u32)
+    }
+
+    pub fn get_texture(&self, prop: AppearanceProp) -> u32 {
+        invoke!(u32, 0xE131A28626F81AB2, self.ped.handle, prop as u32)
+    }
+
+    pub fn get(&self, prop: AppearanceProp) -> AppearanceVariation {
+        AppearanceVariation {
+            drawable: self.get_drawable(prop),
+            texture: self.get_texture(prop),
+            palette: 0
+        }
+    }
+
+    pub fn set(&self, prop: AppearanceProp, variation: AppearanceVariation, attach: bool) {
+        invoke!((), 0x93376B65A266EB5F, self.ped.handle, prop as u32, variation.drawable, variation.texture, attach)
+    }
+}
+
+#[repr(u32)]
+#[derive(Copy, Clone)]
+pub enum AppearanceComponent {
+    Face,
+    Mask,
+    Hair,
+    Torso,
+    Leg,
+    Bag,
+    Shoes,
+    Accessory,
+    Undershirt,
+    Kevlar,
+    Badge,
+    Torso2
+}
+
+#[repr(u32)]
+#[derive(Copy, Clone)]
+pub enum AppearanceProp {
+    Hat,
+    Glass,
+    Ear,
+    Watch,
+    Bracelet
+}
+
+pub struct PedParentalFeatures<'a> {
+    ped: &'a Ped
+}
+
+impl<'a> PedParentalFeatures<'a> {
+    pub fn disable_palette_color(&self) {
+        invoke!((), 0xA21C118553BBDF02, self.ped.handle)
+    }
+
+    pub fn has_blend_finished(&self) -> bool {
+        invoke!(bool, 0x654CD0A825161131, self.ped.handle)
+    }
+
+    pub fn get(&self) -> Option<ParentalFeatures> {
+        let mut data = ParentalFeatures {
+            face_shape: Vector3::zero(),
+            skin_tone: Vector3::zero(),
+            mix: Vector3::zero()
+        };
+        invoke_option!(data, 0x2746BD9D88C5C5D0, self.ped.handle, &mut data)
+    }
+
+    pub fn set(&self, features: ParentalFeatures) {
+        invoke!((), 0x9414E18B9434C2FE, self.ped.handle, features.face_shape, features.skin_tone, features.mix, false)
+    }
+
+    pub fn update(&self, mix: Vector3<f32>) {
+        invoke!((), 0x723538F61C647C5A, self.ped.handle, mix)
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ParentalFeatures {
+    pub face_shape: Vector3<u32>,
+    pub skin_tone: Vector3<u32>,
+    pub mix: Vector3<f32>
+}
+
+impl NativeStackValue for &mut ParentalFeatures {}
 
 pub trait NetworkSignalValue {
     fn set(&self, ped: &Ped, name: &str);

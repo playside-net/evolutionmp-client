@@ -1,4 +1,4 @@
-use crate::pattern::MemoryRegion;
+use crate::pattern::{MemoryRegion, RageBox};
 use crate::game::Handle;
 use crate::game::vehicle::Vehicle;
 use crate::game::ped::Ped;
@@ -12,39 +12,33 @@ use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::cell::Cell;
 
-use crate::{bind_field_redirect};
+use crate::{bind_fn, bind_fn_ip, bind_field_ip};
+use cgmath::{Vector3, MetricSpace, Zero, Array};
 
-pub static PARTICLE_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
-pub static ENTITY_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
-pub static PLAYER_ADDRESS: ThreadSafe<Cell<Option<GetHandleAddress>>> = ThreadSafe::new(Cell::new(None));
-static ADDRESS_TO_HANDLE: ThreadSafe<Cell<Option<GetAddressHandle>>> = ThreadSafe::new(Cell::new(None));
+bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, "C", fn(Handle) -> *mut u8);
+bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, "C", fn(Handle) -> *mut u8);
+bind_fn_ip!(PLAYER_ADDRESS, "B2 01 E8 ? ? ? ? 48 85 C0 74 1C 8A 88", 3, "C", fn(Handle) -> *mut u8);
+bind_fn!(ENTITY_ADD_TO_POOL, "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 8B 15 ? ? ? ? 48 8B F9 48 83 C1 10 33 DB", 0, "C", fn(*mut u8) -> Handle);
+//bind_fn!(ENTITY_ADD_TO_POOL, "48 F7 F9 49 8B 48 08 48 63 D0 C1 E0 08 0F B6 1C 11 03 D8", -0x68, "C", fn(*mut u8) -> Handle);
+bind_fn!(ENTITY_POS, "48 8B DA E8 ? ? ? ? F3 0F 10 44 24", -6, "C", fn(*mut u8, *mut f32) -> u64);
 
-bind_field_redirect!(PED, "48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10", 3, GenericPool<Ped>);
-bind_field_redirect!(PROP, "48 8B 05 ? ? ? ? 8B 78 10 85 FF", 3, GenericPool<Prop>);
-bind_field_redirect!(GLOBAL, "4C 8B 0D ? ? ? ? 44 8B C1 49 8B 41 08", 3, GlobalPool);
-bind_field_redirect!(VEHICLE, "48 8B 05 ? ? ? ? F3 0F 59 F6 48 8B 08", 3, Box<VehiclePool>);
-bind_field_redirect!(PICKUP, "4C 8B 05 ? ? ? ? 40 8A F2 8B E9", 3, GenericPool<Pickup>);
+bind_field_ip!(PED, "48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10", 3, Option<Box<GenericPool<Ped>>>);
+bind_field_ip!(PROP, "48 8B 05 ? ? ? ? 8B 78 10 85 FF", 3, Option<Box<GenericPool<Prop>>>);
+bind_field_ip!(GLOBAL, "4C 8B 0D ? ? ? ? 44 8B C1 49 8B 41 08", 3, Option<Box<GlobalPool>>);
+bind_field_ip!(VEHICLE, "48 8B 05 ? ? ? ? F3 0F 59 F6 48 8B 08", 3, Option<Box<Box<VehiclePool>>>);
+bind_field_ip!(PICKUP, "4C 8B 05 ? ? ? ? 40 8A F2 8B E9", 3, Option<Box<GenericPool<Pickup>>>);
 
-pub(crate) unsafe fn init(mem: &MemoryRegion) {
-    PARTICLE_ADDRESS.set(Some(std::mem::transmute(mem.find("74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8")
-        .next().expect("particle address")
-        .offset(-10).read_ptr(4).as_mut_ptr())));
-    ENTITY_ADDRESS.set(Some(std::mem::transmute(mem.find("E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D")
-        .next().expect("entity address")
-        .add(1).read_ptr(4).as_mut_ptr())));
-    PLAYER_ADDRESS.set(Some(std::mem::transmute(mem.find("B2 01 E8 ? ? ? ? 48 85 C0 74 1C 8A 88")
-        .next().expect("entity address")
-        .add(3).read_ptr(4).as_mut_ptr())));
+pub(crate) fn pre_init() {
+    lazy_static::initialize(&PARTICLE_ADDRESS);
+    lazy_static::initialize(&ENTITY_ADDRESS);
+    lazy_static::initialize(&PLAYER_ADDRESS);
+    lazy_static::initialize(&ENTITY_ADD_TO_POOL);
 
-    ADDRESS_TO_HANDLE.set(Some(std::mem::transmute(mem.find("48 F7 F9 49 8B 48 08 48 63 D0 C1 E0 08 0F B6 1C 11 03 D8")
-        .next().expect("address to handle")
-        .offset(-0x68).as_mut_ptr())));
-
-    PED.len(); //Calling pool initializers
-    PROP.len();
-    GLOBAL.is_full();
-    VEHICLE.len();
-    PICKUP.len();
+    lazy_static::initialize(&PED);
+    lazy_static::initialize(&PROP);
+    lazy_static::initialize(&GLOBAL);
+    lazy_static::initialize(&VEHICLE);
+    lazy_static::initialize(&PICKUP);
 }
 
 pub type GetHandleAddress = extern "C" fn(Handle) -> *mut u8;
@@ -69,29 +63,12 @@ pub trait Pool<T: Handleable> {
 
     fn get_address(&self, index: u32) -> *mut u8;
 
-    fn get_handle(&self, index: u32) -> Option<Handle> {
-        if self.is_valid(index) {
-            let address = self.get_address(index);
-            let handle = unsafe { (ADDRESS_TO_HANDLE.get().unwrap())(address) };
-            Some(handle)
-        } else {
-            None
-        }
-    }
-
-    fn get(&self, index: u32) -> Option<T> {
-        self.get_handle(index).and_then(T::from_handle)
-    }
-
     fn len(&self) -> u32;
+
     fn capacity(&self) -> u32;
 
     fn iter(&self) -> PoolIterator<T> where Self: Sized {
-        PoolIterator {
-            pool: self,
-            poisoned: false,
-            index: 0
-        }
+        PoolIterator::new(self)
     }
 }
 
@@ -185,31 +162,59 @@ impl Pool<Camera> for CameraPool {
     }
 }
 
+pub struct PoolEntry<T: Handleable> {
+    address: *mut u8,
+    _ty: PhantomData<T>
+}
+
+impl<E> PoolEntry<E> where E: Entity {
+    pub fn get_position(&self) -> Vector3<f32> {
+        let mut pos = Vector3::zero();
+        ENTITY_POS(self.address, pos.as_mut_ptr());
+        pos
+    }
+
+    pub fn pooled(self) -> Option<E> {
+        let global = GLOBAL.as_ref().as_ref().expect("global pool is not initialized");
+        if global.is_full() {
+            None
+        } else {
+            E::from_handle(ENTITY_ADD_TO_POOL(self.address))
+        }
+    }
+}
+
 pub struct PoolIterator<'a, T: Handleable> {
     pool: &'a dyn Pool<T>,
-    poisoned: bool,
     index: u32
 }
 
 impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
-    type Item = T;
+    type Item = PoolEntry<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.poisoned {
-            if !GLOBAL.is_full() {
-                let capacity = self.pool.capacity();
-                while self.index < capacity {
-                    let index = self.index;
-                    self.index += 1;
-                    if let Some(result) = self.pool.get(index) {
-                        return Some(result);
-                    }
-                }
-            } else {
-                self.poisoned = true;
+        let capacity = self.pool.capacity();
+        while self.index < capacity {
+            let index = self.index;
+            self.index += 1;
+            if self.pool.is_valid(index) {
+                let address = self.pool.get_address(index);
+                return Some(PoolEntry {
+                    address,
+                    _ty: PhantomData
+                });
             }
         }
         None
+    }
+}
+
+impl<'a, T> PoolIterator<'a, T> where T: Handleable {
+    pub fn new(pool: &dyn Pool<T>) -> PoolIterator<T> {
+        PoolIterator {
+            pool,
+            index: 0
+        }
     }
 }
 

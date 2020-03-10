@@ -6,12 +6,13 @@ use crate::game::player::Player;
 use crate::game::entity::Entity;
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::streaming::Model;
-use crate::game::vehicle::Vehicle;
+use crate::game::vehicle::{Vehicle, Dispatch};
 use std::time::Instant;
 use std::collections::VecDeque;
-use cgmath::{Vector3, Array};
+use cgmath::{Vector3, Array, Vector2};
 use crate::game::GameState;
 use crate::game::ui::LoadingPrompt;
+use crate::game::ped::{ParentalFeatures, AppearanceComponent, AppearanceVariation};
 
 static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
 
@@ -50,7 +51,7 @@ impl Script for ScriptCleanWorld {
         game::audio::set_flag("PlayMenuMusic", false);
         game::audio::set_flag("ActivateSwitchWheelAudio", false);
 
-        let pos = Vector3::new(-10300.0, -2730.0, 13.46);
+        let pos = Vector3::new(-1030.0, -2730.0, 13.46);
 
         game::streaming::load_scene(pos);
 
@@ -59,6 +60,18 @@ impl Script for ScriptCleanWorld {
         let ped = player.get_ped();
         ped.set_position_no_offset(pos, Vector3::new(false, false, false));
         ped.get_tasks().clear_immediately();
+        let pf = ped.get_parental_features();
+        pf.set(ParentalFeatures {
+            face_shape: Vector3::new(14, 17, 0),
+            skin_tone: Vector3::new(14, 17, 0),
+            mix: Vector3::new(0.85, 0.84, 0.0)
+        });
+        let appearance = ped.get_appearance();
+        appearance.get_components().set(AppearanceComponent::Hair, AppearanceVariation {
+            drawable: 2,
+            texture: 0,
+            palette: 2
+        });
 
         self.cleanup();
 
@@ -127,6 +140,9 @@ impl ScriptCleanWorld {
 
         game::player::set_max_wanted_level(0);
 
+        game::vehicle::set_dispatch_service(Dispatch::AmbulanceDepartment, false);
+        game::vehicle::set_dispatch_service(Dispatch::FireDepartment, false);
+        game::vehicle::set_dispatch_service(Dispatch::BikerBackup, false);
         game::vehicle::set_garbage_trucks(false);
         game::vehicle::set_random_boats(false);
         game::vehicle::set_random_trains(false);

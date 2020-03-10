@@ -9,7 +9,7 @@ use cgmath::Vector3;
 use std::mem::ManuallyDrop;
 
 pub fn get_pool() -> &'static GenericPool<Prop> {
-    crate::native::pool::PROP.as_ref()
+    crate::native::pool::PROP.as_ref().as_ref().expect("prop pool is not initialized")
 }
 
 pub struct Prop {
@@ -53,6 +53,10 @@ impl Prop {
 
     pub fn set_paint(&self, paint: u32) {
         invoke!((), 0x971DA0055324D033, self.handle, paint)
+    }
+
+    pub fn set_breakable(&self, breakable: bool) {
+        invoke!((), 0x5CEC1A84620E7D5B, self.handle, !breakable)
     }
 
     pub fn is_broken(&self) -> bool {
