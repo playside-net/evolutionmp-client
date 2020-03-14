@@ -66,18 +66,24 @@ impl Script for ScriptVehicle {
         let player = Player::local();
         let ped = player.get_ped();
 
+        if let Some(pos) = ped.get_weapon_last_hit_pos() {
+            let scale = Vector2::from_value(0.35);
+            let color = Rgba::WHITE;
+            game::ui::draw_text(format!("Weapon hit pos: {:?}", pos), Vector2::zero(), color, Font::ChaletLondon, scale);
+        }
+
         /*if let Some(scaleform) = self.scaleform.as_ref() {
             scaleform.render_fullscreen(Rgba::WHITE);
         }*/
 
-        if let Some(vehicle) = ped.get_in_vehicle(false) {
+        /*if let Some(vehicle) = ped.get_in_vehicle(false) {
             if VehicleModel::from_vehicle(&vehicle).is_train() {
                 let train = MissionTrain { vehicle };
                 let scale = Vector2::from_value(0.35);
                 let color = Rgba::WHITE;
                 game::ui::draw_text(format!("Train node: {}", train.get_track_node()), Vector2::zero(), color, Font::ChaletLondon, scale);
             }
-        }
+        }*/
 
         if ped.exists() {
             if controls::is_just_pressed(Group::Move, Control::Enter) {

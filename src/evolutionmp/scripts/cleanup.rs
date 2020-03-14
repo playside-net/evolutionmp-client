@@ -191,9 +191,9 @@ impl ScriptCleanWorld {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 17] = [
     Control::Cover,
-    Control::EnterCheatCode,
+    //Control::EnterCheatCode,
     Control::FrontendSocialClub,
     Control::FrontendSocialClubSecondary,
     Control::SpecialAbilityPC,
@@ -210,7 +210,7 @@ pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
     Control::VehicleSlowMoUpDown
 ];
 
-pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 762] = [
+pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [
     "abigail1",
     "abigail2",
     "achievement_controller",
@@ -368,7 +368,7 @@ pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 762] = [
     "cellphone_flashhand",
     "charactergoals",
     "charanimtest",
-    "cheat_controller",
+    //"cheat_controller",
     "chinese1",
     "chinese2",
     "chop",

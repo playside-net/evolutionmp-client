@@ -7,7 +7,7 @@ use crate::{invoke, invoke_option};
 use crate::native::pool::{Handleable, Pool, GenericPool};
 use crate::hash::Hashable;
 use crate::game::streaming::{AnimDict, PedPhoto};
-use crate::native::NativeStackValue;
+use crate::native::{NativeStackValue, NativeVector3};
 use cgmath::{Vector3, MetricSpace, Zero};
 
 pub fn get_pool() -> &'static GenericPool<Ped> {
@@ -98,6 +98,15 @@ impl Ped {
 
     pub fn get_seat_is_trying_to_enter(&self) -> i32 {
         invoke!(i32, 0x6F4C85ACD641BCD2, self.handle)
+    }
+
+    pub fn get_weapon_last_hit_pos(&self) -> Option<Vector3<f32>> {
+        let mut result = NativeVector3::zero();
+        invoke_option!(result.into(), 0x6C4D0409BA1A2BC2, self.handle, &mut result)
+    }
+
+    pub fn give_weapon<W>(&self, weapon: W, ammo: u32, hidden: bool, equip: bool) where W: Hashable {
+        invoke!((), 0xBF0FD6E56C964FCB, self.handle, weapon.joaat(), ammo, hidden, equip)
     }
 
     pub fn get_closest_vehicle<F>(&self, max_distance: f32, filter: F) -> Option<Vehicle>

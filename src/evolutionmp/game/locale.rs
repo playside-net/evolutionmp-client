@@ -5,7 +5,6 @@ use std::ffi::{CString, CStr};
 
 bind_fn_detour!(GET_TEXT, "48 8B CB 8B D0 E8 ? ? ? ? 48 85 C0 0F 95 C0", 5, get_text, "C", fn(*mut (), Hash) -> *const u8);
 bind_fn_detour!(GET_TEXT2, "48 85 C0 75 34 8B 0D", -5, get_text, "C", fn(*mut (), Hash) -> *const u8);
-bind_fn_detour!(PAUSE_MENU_TRIGGER, "48 8D 8D 18 01 00 00 BE 74 26 B5 9F", -5, pause_menu_trigger, "C", fn(u32, u32, u32) -> ());
 
 pub extern "C" fn get_text(text: *mut (), hash: Hash) -> *const u8 {
     let mut table = TRANSLATION_TABLE.lock().expect("translation table lock failed");
@@ -18,14 +17,9 @@ pub extern "C" fn get_text(text: *mut (), hash: Hash) -> *const u8 {
     result
 }
 
-pub unsafe extern "C" fn pause_menu_trigger(trigger: u32, arg2: u32, arg3: u32) {
-    PAUSE_MENU_TRIGGER(trigger, arg2, arg3)
-}
-
 pub fn init() {
     lazy_static::initialize(&GET_TEXT);
     lazy_static::initialize(&GET_TEXT2);
-    lazy_static::initialize(&PAUSE_MENU_TRIGGER);
 
     set_translation("PM_PAUSE_HDR", "Evolution MP");
     set_translation("FE_THDR_GTAO", "Evolution MP");

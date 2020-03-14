@@ -36,6 +36,7 @@ pub mod pathfind;
 pub mod door;
 pub mod data;
 pub mod fire;
+pub mod weapon;
 
 pub type Handle = u32;
 

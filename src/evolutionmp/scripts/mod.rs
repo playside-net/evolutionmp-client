@@ -180,6 +180,15 @@ pub fn command_explosion(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<
     Ok(())
 }
 
+pub fn command_weapon(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {
+    let player = Player::local();
+    let ped = player.get_ped();
+    let weapon = args.read_str()?.clone();
+    let ammo = args.read::<u32>()?;
+    ped.give_weapon(format!("weapon_{}", weapon).as_str(), ammo, false, true);
+    Ok(())
+}
+
 pub struct ScriptCommand {
     tasks: TaskQueue,
     commands: HashMap<String, Rc<Box<dyn Fn(&mut ScriptEnv, &mut CommandArgs) -> Result<(), CommandExecutionError>>>>
@@ -213,6 +222,7 @@ impl Script for ScriptCommand {
         self.register_command("time", command_time);
         self.register_command("ts", command_timecycle);
         self.register_command("explode", command_explosion);
+        self.register_command("weapon", command_weapon);
     }
 
     fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {

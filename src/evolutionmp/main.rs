@@ -1,4 +1,4 @@
-#![feature(asm, set_stdio, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
+#![feature(asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -16,7 +16,7 @@ use std::panic::PanicInfo;
 use std::io::stdout;
 use backtrace::{Backtrace, BacktraceFmt, BacktraceFrame, SymbolName};
 use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE};
-use winapi::um::libloaderapi::DisableThreadLibraryCalls;
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary};
 use colored::{Color, Colorize};
 use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
@@ -25,6 +25,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::hash::Hashable;
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
 use winapi::um::winnt::{EXCEPTION_POINTERS, LONG};
+use winapi::um::processthreadsapi::GetCurrentThreadId;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -52,7 +53,8 @@ pub mod hash;
 #[cfg(target_os = "windows")]
 pub mod console;
 
-#[repr(C)]
+#[repr(u32)]
+#[derive(Debug)]
 pub enum DllCallReason {
     ProcessDetach, ProcessAttach, ThreadAttach, ThreadDetach
 }
@@ -181,27 +183,22 @@ macro_rules! info_message {
     };
 }
 
-#[no_mangle]
-pub extern fn set_io(print: Option<Box<dyn Write + Send>>, panic: Option<Box<dyn Write + Send>>) {
-    std::io::set_print(print);
-    std::io::set_panic(panic);
-}
-
 #[cfg(target_os = "windows")]
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, reserved: LPVOID) -> BOOL {
-    std::io::stdout();
     match reason {
         DllCallReason::ProcessAttach => {
             unsafe { DisableThreadLibraryCalls(instance) };
             setup_logger("client", true);
             attach(instance)
-        }
+        },
         DllCallReason::ProcessDetach => {
-            detach();
+            unsafe { FreeLibrary(instance) };
         }
-        _ => {},
+        other => {
+            crate::info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })
+        }
     }
     TRUE
 }

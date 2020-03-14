@@ -24,9 +24,9 @@ use std::cell::{Cell, RefCell};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicPtr};
 use std::sync::atomic::Ordering;
+use cgmath::Vector3;
 use crate::game::streaming::Resource;
 use crate::game::player::Player;
-use cgmath::Vector3;
 use crate::game::ped::Ped;
 use crate::game::vehicle::Vehicle;
 use crate::events::{NativeEvent, ScriptEvent, EventPool};
@@ -91,7 +91,7 @@ pub(crate) fn start(input: InputHook) {
     crate::scripts::init(&mut runtime);
 
     ScriptThreadRuntime::spawn(runtime);
-    HOOKS.replace(Some(HashMap::new()));
+    /*HOOKS.replace(Some(HashMap::new()));
 
     info!("Hooking natives");
 
@@ -100,7 +100,7 @@ pub(crate) fn start(input: InputHook) {
         let hash = label.joaat();
         crate::info!("Called GET_LABEL_TEXT for {} (0x{:08X})", label, hash.0);
         call_native_trampoline(0x7B5280EBA9840C72, context);
-    });
+    });*/
 
     //crate::events::init(mem);
 }
@@ -114,9 +114,7 @@ fn get_trampoline(hash: u64) -> NativeFunction {
 
 pub fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
     let trampoline = get_trampoline(hash);
-    unsafe {
-        trampoline(context);
-    }
+    trampoline(context);
 }
 
 pub fn hook_native(hash: u64, hook: fn(&mut NativeCallContext)) {

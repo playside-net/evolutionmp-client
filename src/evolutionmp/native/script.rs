@@ -114,8 +114,7 @@ pub struct ThreadVTable {
     run:    extern "C" fn(this: *mut (), ops: u32) -> ThreadState,
     tick:   extern "C" fn(this: *mut (), ops: u32) -> ThreadState,
     kill:   extern "C" fn(this: *mut ()),
-    do_run: extern "C" fn(this: *mut ()),
-    wut:    extern "C" fn(this: *mut ())
+    do_run: extern "C" fn(this: *mut ())
 }
 
 #[repr(C)]
@@ -188,8 +187,7 @@ impl ScriptThreadRuntime {
                     run: vtable_fn!(Self::run),
                     tick: vtable_fn!(Self::tick),
                     kill: vtable_fn!(Self::kill),
-                    do_run: vtable_fn!(Self::do_run),
-                    wut: vtable_fn!(Self::wut)
+                    do_run: vtable_fn!(Self::do_run)
                 }),
                 runtime
             };
