@@ -52,15 +52,14 @@ pub fn init(runtime: &mut Runtime) {
     crate::info!("Registering scripts");
     //network::init(runtime);
 
-    //runtime.register_script("console", ScriptConsole::new());
+    runtime.register_script("console", ScriptConsole::new());
     runtime.register_script("clean_world", ScriptCleanWorld::new());
-    //runtime.register_script("vehicle", ScriptVehicle::new());
-    //runtime.register_script("finger_pointing", ScriptFingerPointing::new());
-    //runtime.register_script("command", ScriptCommand::new());
-    //runtime.register_script("fishing", ScriptFishing::new());
-    //runtime.register_script("fly", ScriptFly::new());
-    //runtime.register_script("money", ScriptMoney::new());
-    //network::init(runtime);
+    runtime.register_script("vehicle", ScriptVehicle::new());
+    runtime.register_script("finger_pointing", ScriptFingerPointing::new());
+    runtime.register_script("command", ScriptCommand::new());
+    runtime.register_script("fishing", ScriptFishing::new());
+    runtime.register_script("fly", ScriptFly::new());
+    runtime.register_script("money", ScriptMoney::new());
 }
 
 pub fn command_teleport(env: &mut ScriptEnv, args: &mut CommandArgs) -> Result<(), CommandExecutionError> {

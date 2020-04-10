@@ -3,9 +3,10 @@ use crate::game::entity::Entity;
 use crate::game::Handle;
 use crate::native::pool::Handleable;
 use crate::hash::Hash;
-use cgmath::{Vector3, Array};
 use crate::native::NativeVector3;
+use cgmath::{Vector3, Array};
 
+#[derive(Debug)]
 pub struct Probe {
     handle: Handle
 }

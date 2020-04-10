@@ -95,6 +95,7 @@ pub fn set_dispatch_service(dispatch: Dispatch, enabled: bool) {
     invoke!((), 0xDC0F817884CDD856, dispatch as u32, enabled)
 }
 
+#[derive(Debug)]
 pub struct DispatchSpawnBlockingArea {
     handle: Handle
 }

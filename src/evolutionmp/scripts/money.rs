@@ -28,10 +28,6 @@ impl Script for ScriptMoney {
     }
 
     fn frame(&mut self, env: ScriptEnv, game_state: GameState) {
-        if game_state != GameState::Playing {
-            return;
-        }
-
         let player = Player::local();
         let ped = player.get_ped();
 

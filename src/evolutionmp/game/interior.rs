@@ -6,6 +6,7 @@ use cgmath::Vector3;
 use crate::native::NativeVector3;
 use crate::game::streaming::Resource;
 
+#[derive(Debug)]
 pub struct Interior {
     handle: Handle
 }

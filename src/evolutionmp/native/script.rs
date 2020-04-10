@@ -14,7 +14,7 @@ use std::alloc::Layout;
 use std::ops::{Deref, DerefMut};
 use winapi::um::processthreadsapi::GetCurrentThreadId;
 
-static mut ROOT_SCRIPT: *mut ScriptThreadRuntime = std::ptr::null_mut();
+static mut ROOT_SCRIPT: Option<Box<ScriptThreadRuntime>> = None;
 
 bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
 bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
@@ -28,34 +28,40 @@ bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, 
 bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, "C", fn(*mut u8, u32, u32) -> *mut u8);
 bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, "C", fn() -> ());
 bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, "C", fn() -> ());
+bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_no, "C", fn(*mut ScriptThread, u32) -> ThreadState);
 
 unsafe extern "C" fn script_post_init(p1: *mut u8, p2: u32, p3: u32) -> *mut u8 {
     let result = SCRIPT_POST_INIT(p1, p2, p3);
-    //crate::info!("Script post_init");
 
-    let mut script = &mut *ROOT_SCRIPT;
+    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
     script.spawn();
 
     result
 }
-unsafe extern "C" fn script_startup() {
-    crate::info!("Script startup");
 
-    let mut script = &mut *ROOT_SCRIPT;
-    script.spawn();
+unsafe extern "C" fn script_startup() {
+    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
+    if script.context.id == 0 {
+        script.spawn();
+    }
     SCRIPT_STARTUP();
 }
 
 unsafe extern "C" fn script_reset() {
-    crate::info!("Script reset");
-    let mut script = &mut *ROOT_SCRIPT;
+    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
     script.reset(script.context.script_hash, std::ptr::null(), 0);
-    SCRIPT_RESET();
+    //SCRIPT_RESET(); //Story mode only
+}
+
+unsafe extern "C" fn script_no(this: *mut ScriptThread, ops: u32) -> ThreadState {
+    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
+    script.run(0);
+    script.context.state
 }
 
 pub(crate) fn init(runtime: Runtime) {
     unsafe {
-        ROOT_SCRIPT = Box::leak(ScriptThreadRuntime::new(runtime)) as *mut _;
+        ROOT_SCRIPT = Some(ScriptThreadRuntime::new(runtime));
     }
 }
 
@@ -68,6 +74,7 @@ pub(crate) fn pre_init() {
     lazy_static::initialize(&SCRIPT_POST_INIT);
     lazy_static::initialize(&SCRIPT_STARTUP);
     lazy_static::initialize(&SCRIPT_RESET);
+    lazy_static::initialize(&SCRIPT_NO);
 
     lazy_static::initialize(&SCRIPT_THREAD_INIT);
     lazy_static::initialize(&SCRIPT_THREAD_KILL);
@@ -238,7 +245,6 @@ impl ScriptThread {
                 slot = 0;
                 for t in collection.iter() {
                     if t.context.id == 0 {
-                        crate::info!("found empty slot for out script: {}", slot);
                         break;
                     }
                     slot += 1;
@@ -271,7 +277,7 @@ macro_rules! vtable_fn {
 
 impl ScriptThreadRuntime {
     pub fn new(runtime: Runtime) -> Box<ScriptThreadRuntime> {
-        assert!(std::mem::size_of::<ScriptThread>() == 344, "script thread size is not 344 bytes");
+        assert_eq!(std::mem::size_of::<ScriptThread>(), 344, "script thread size is not 344 bytes");
         Box::new(ScriptThreadRuntime {
             parent: ScriptThread::new("runtime", ThreadVTable {
                 drop: vtable_fn!(Self::drop),
@@ -312,7 +318,6 @@ impl ScriptThreadRuntime {
             set1: 1,
             .. Default::default()
         };
-        crate::info!("resetting...");
         SCRIPT_THREAD_INIT(&mut **self);
         self.net_flag = 1;
         self.can_remove_blips_from_other_scripts = 1;

@@ -8,6 +8,7 @@ pub fn get_pool() -> BlipIterator {
     BlipIterator::new()
 }
 
+#[derive(Debug)]
 pub struct Blip {
     handle: Handle
 }

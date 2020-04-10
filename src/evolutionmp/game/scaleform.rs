@@ -5,6 +5,7 @@ use crate::native::pool::Handleable;
 use crate::game::streaming::Resource;
 use crate::runtime::ScriptEnv;
 
+#[derive(Debug)]
 pub struct Scaleform {
     handle: Handle
 }

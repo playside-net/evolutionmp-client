@@ -170,7 +170,7 @@ bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSpr
 
 pub(crate) fn pre_init() {
     script::pre_init();
-    streaming::pre_init();
+    //streaming::pre_init();
     pool::pre_init();
     vehicle::pre_init();
     lazy_static::initialize(&EXPANDED_RADAR);

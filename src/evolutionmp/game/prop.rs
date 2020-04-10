@@ -12,6 +12,7 @@ pub fn get_pool() -> &'static GenericPool<Prop> {
     crate::native::pool::PROP.as_ref().as_ref().expect("prop pool is not initialized")
 }
 
+#[derive(Debug)]
 pub struct Prop {
     handle: Handle
 }

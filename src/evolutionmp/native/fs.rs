@@ -97,6 +97,8 @@ extern "C" fn initial_mount() {
 
     INITIAL_MOUNT();
 
+    //super::pre_init();
+
     /*fn walk(device: &Device, path: &Path) {
         for f in device.entries(path) {
             let path = path.join(f.get_name());

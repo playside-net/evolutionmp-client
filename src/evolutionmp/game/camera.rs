@@ -140,6 +140,7 @@ impl GameplayCamera {
     }
 }
 
+#[derive(Debug)]
 pub struct Camera {
     handle: Handle
 }

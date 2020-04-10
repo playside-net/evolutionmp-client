@@ -2,6 +2,7 @@ use crate::invoke;
 use crate::game::{Handle, Rgba};
 use crate::game::streaming::{Texture, PedPhoto};
 
+#[derive(Debug)]
 pub struct Notification {
     handle: Handle
 }

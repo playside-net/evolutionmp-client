@@ -31,7 +31,6 @@ use crate::game::ped::Ped;
 use crate::game::vehicle::Vehicle;
 use crate::events::{NativeEvent, ScriptEvent, EventPool};
 use crate::game::ui::FrontendButtons;
-use crate::native::script::ScriptThreadRuntime;
 
 pub struct Runtime {
     user_input: InputHook,
@@ -177,6 +176,9 @@ impl ScriptContainer {
     }
 
     extern "system" fn fiber_loop(&mut self) {
+        /*while **GAME_STATE != GameState::Playing {
+            self.wait(0)
+        }*/
         let mut script = self.script.take().unwrap();
         script.prepare(ScriptEnv::new(self));
         while !self.terminated {

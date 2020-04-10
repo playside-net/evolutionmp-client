@@ -29,6 +29,7 @@ use winapi::um::processthreadsapi::GetCurrentThreadId;
 use winapi::ctypes::c_void;
 use winapi::um::memoryapi::VirtualQuery;
 use std::ffi::{CStr, CString};
+use std::sync::Mutex;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -92,7 +93,7 @@ unsafe fn print_address_info(addr: *mut c_void, line: u32, filename: Option<&Pat
             let name = widestring::WideCStr::from_ptr_with_nul(name.as_ptr(), len as usize).to_string_lossy();
             let offset = addr as u64 - mbi.AllocationBase as u64;
             if let Some(filename) = filename {
-                debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({} at {} line {})", name, offset, filename.display(), line, symbol_name)
+                debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({} in {}:{})", name, offset, symbol_name, filename.display(), line)
             } else {
                 debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({})", name, offset, symbol_name)
             }
@@ -106,8 +107,13 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let rec = &mut *info.ExceptionRecord;
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
-        //if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ {
+        if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ && code != 0x406D1388 {
+            lazy_static::lazy_static! {
+                static ref EXCEPTION_MUTEX: Mutex<()> = Mutex::new(());
+            };
+            //let _lock = EXCEPTION_MUTEX.lock().expect("Failed to lock exception mutex");
             error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
+            print_address_info(addr, 0, None, SymbolName::new(b"<unknown>\0"));
             let backtrace = Backtrace::new();
 
             for frame in backtrace.frames().iter()/*.skip_while(|f| f.symbol_address() != addr)*/ {
@@ -119,9 +125,10 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
                 }
             }
             //1 //EXCEPTION_EXECUTE_HANDLER
-        //} else {
+            0
+        } else {
             0 //EXCEPTION_CONTINUE_SEARCH
-        //}
+        }
     }
 }
 
@@ -155,9 +162,9 @@ fn attach(instance: HINSTANCE) {
 
             let input = InputHook::new();
 
-            info!("Input hooked.");
+            info!("Input hooked. Starting runtime...");
 
-            native::pre_init();
+            runtime::start(input);
 
             info!("Waiting for game being loaded...");
 
@@ -173,11 +180,8 @@ fn attach(instance: HINSTANCE) {
 
             info!("Initializing natives");
 
+            native::pre_init();
             native::init();
-
-            info!("Starting runtime");
-
-            runtime::start(input);
 
             info!("Waiting for game being initialized");
 

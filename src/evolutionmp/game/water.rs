@@ -40,6 +40,7 @@ pub fn probe_height(pos: Vector3<f32>, flags: i32) -> Option<f32> {
     invoke_option!(result, 0x2B3451FA1E3142E2, pos, flags, &mut result)
 }
 
+#[derive(Debug)]
 pub struct Rise {
     handle: Handle
 }

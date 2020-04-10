@@ -8,6 +8,7 @@ use crate::game::streaming::Model;
 use crate::runtime::ScriptEnv;
 use crate::native::pool::Handleable;
 
+#[derive(Debug)]
 pub struct Player {
     handle: Handle
 }

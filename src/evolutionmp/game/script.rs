@@ -2,6 +2,7 @@ use crate::invoke;
 use crate::game::Handle;
 use crate::native::pool::Handleable;
 
+#[derive(Debug)]
 pub struct ScriptThread {
     handle: Handle
 }
