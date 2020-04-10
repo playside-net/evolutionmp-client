@@ -1,4 +1,5 @@
 use std::ops::{Deref, DerefMut};
+use std::alloc::{Layout};
 
 #[repr(C)]
 pub struct RageVec<T> {
@@ -21,6 +22,12 @@ impl<T> RageVec<T> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    unsafe fn layout(capacity: usize) -> Layout {
+        let align = std::mem::align_of::<T>();
+        let size = std::mem::size_of::<T>() * capacity;
+        Layout::from_size_align_unchecked(size, align)
     }
 }
 

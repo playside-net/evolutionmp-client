@@ -4,6 +4,7 @@ use crate::hash::{Hashable, Hash};
 use crate::game::entity::Entity;
 use cgmath::Vector3;
 use crate::native::NativeVector3;
+use crate::game::streaming::Resource;
 
 pub struct Interior {
     handle: Handle
@@ -32,15 +33,15 @@ impl Interior {
         invoke!(Option<Interior>, 0xF0F77ADB9F67E79D, pos, ty.joaat())
     }
 
-    pub fn enable_props(&self, props: &str) {
-        invoke!((), 0x55E86AF2712B36A1, self.handle, props)
+    pub fn set_prop_enabled(&self, prop: &str, enabled: bool) {
+        if enabled {
+            invoke!((), 0x55E86AF2712B36A1, self.handle, prop)
+        } else {
+            invoke!((), 0x420BD37289EEE162, self.handle, prop)
+        }
     }
 
-    pub fn disable_props(&self, props: &str) {
-        invoke!((), 0x420BD37289EEE162, self.handle, props)
-    }
-
-    pub fn are_props_enabled(&self, props: &str) -> bool {
+    pub fn is_prop_enabled(&self, props: &str) -> bool {
         invoke!(bool, 0x35F7DD45E8C0A16D, self.handle, props)
     }
 
@@ -62,10 +63,6 @@ impl Interior {
 
     pub fn set_active(&self, active: bool) {
         invoke!((), 0xE37B76C387BE28ED, self.handle)
-    }
-
-    pub fn is_ready(&self) -> bool {
-        invoke!(bool, 0x6726BDCCC1932F0E, self.handle)
     }
 
     pub fn is_valid(&self) -> bool {
@@ -94,12 +91,18 @@ impl Interior {
     pub fn refresh(&self) {
         invoke!((), 0x41F37C3427C75AE0, self.handle)
     }
+}
 
-    pub fn pin(&self) {
+impl Resource for Interior {
+    fn is_loaded(&self) -> bool {
+        invoke!(bool, 0x6726BDCCC1932F0E, self.handle)
+    }
+
+    fn request(&self) {
         invoke!((), 0x2CA429C029CCF247, self.handle)
     }
 
-    pub fn unpin(&self) {
+    fn mark_unused(&mut self) {
         invoke!((), 0x261CCE7EED010641, self.handle)
     }
 }

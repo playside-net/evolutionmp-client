@@ -15,8 +15,8 @@ use std::io::prelude::*;
 use std::panic::PanicInfo;
 use std::io::stdout;
 use backtrace::{Backtrace, BacktraceFmt, BacktraceFrame, SymbolName};
-use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE};
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary};
+use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE, MAX_PATH};
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW};
 use colored::{Color, Colorize};
 use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
@@ -24,8 +24,11 @@ use log::{info, debug, error};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::hash::Hashable;
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
-use winapi::um::winnt::{EXCEPTION_POINTERS, LONG};
+use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, MEMORY_BASIC_INFORMATION, MAX_PACKAGE_NAME};
 use winapi::um::processthreadsapi::GetCurrentThreadId;
+use winapi::ctypes::c_void;
+use winapi::um::memoryapi::VirtualQuery;
+use std::ffi::{CStr, CString};
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -77,6 +80,25 @@ pub const LOG_PANIC: &'static str = "panic";
 bind_field_ip!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
 bind_field_ip!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bool);
 bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
+bind_field_ip!(HEAP_SIZE, "83 C8 01 48 8D 0D ? ? ? ? 41 B1 01 45 33 C0", 17, u32);
+
+unsafe fn print_address_info(addr: *mut c_void, line: u32, filename: Option<&Path>, symbol_name: SymbolName) {
+    let mut mbi = MEMORY_BASIC_INFORMATION::default();
+    let size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
+    if VirtualQuery(addr, &mut mbi, size) == size {
+        let mut name = [0; MAX_PATH];
+        let len = GetModuleFileNameW(mbi.AllocationBase.cast(), name.as_mut_ptr(), MAX_PATH as u32);
+        if len != 0 {
+            let name = widestring::WideCStr::from_ptr_with_nul(name.as_ptr(), len as usize).to_string_lossy();
+            let offset = addr as u64 - mbi.AllocationBase as u64;
+            if let Some(filename) = filename {
+                debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({} at {} line {})", name, offset, filename.display(), line, symbol_name)
+            } else {
+                debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({})", name, offset, symbol_name)
+            }
+        }
+    }
+}
 
 extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
     unsafe {
@@ -84,25 +106,23 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let rec = &mut *info.ExceptionRecord;
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
-        if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ {
+        //if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ {
             error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
             let backtrace = Backtrace::new();
 
-            for frame in backtrace.frames().iter().skip_while(|f| f.symbol_address() != addr) {
+            for frame in backtrace.frames().iter()/*.skip_while(|f| f.symbol_address() != addr)*/ {
                 for symbol in frame.symbols() {
                     let name = symbol.name().unwrap_or(SymbolName::new(b"<unknown>\0"));
                     let addr = symbol.addr().unwrap_or(std::ptr::null_mut());
                     let line = symbol.lineno().unwrap_or(0);
-                    if let Some(filename) = symbol.filename() {
-                        debug!(target: LOG_PANIC, "{:p}: {} file {} line {}", addr, name, filename.display(), line);
-                    } else {
-                        debug!(target: LOG_PANIC, "{:p}: {}", addr, name);
-                    }
+                    print_address_info(addr, line, symbol.filename(), name);
                 }
             }
-        }
+            //1 //EXCEPTION_EXECUTE_HANDLER
+        //} else {
+            0 //EXCEPTION_CONTINUE_SEARCH
+        //}
     }
-    0 //EXCEPTION_CONTINUE_SEARCH
 }
 
 #[cfg(target_os = "windows")]
@@ -127,11 +147,19 @@ fn attach(instance: HINSTANCE) {
             mem.find("72 1F E8 ? ? ? ? 8B 0D").next()
                 .expect("legals").nop(2);
 
+            lazy_static::initialize(&GAME_STATE);
+
+            //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
+
             native::fs::pre_init(&mem);
 
             let input = InputHook::new();
 
-            info!("Input hooked. Waiting for game being loaded...");
+            info!("Input hooked.");
+
+            native::pre_init();
+
+            info!("Waiting for game being loaded...");
 
             while !GAME_STATE.is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
@@ -197,7 +225,7 @@ pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, rese
             unsafe { FreeLibrary(instance) };
         }
         other => {
-            crate::info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })
+            //crate::info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })
         }
     }
     TRUE

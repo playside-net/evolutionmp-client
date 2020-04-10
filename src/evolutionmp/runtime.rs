@@ -89,8 +89,7 @@ pub(crate) fn start(input: InputHook) {
     let mut runtime = Runtime::new(input);
     info!("Initializing scripts");
     crate::scripts::init(&mut runtime);
-
-    ScriptThreadRuntime::spawn(runtime);
+    crate::native::script::init(runtime);
     /*HOOKS.replace(Some(HashMap::new()));
 
     info!("Hooking natives");

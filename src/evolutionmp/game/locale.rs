@@ -1,10 +1,10 @@
-use crate::{invoke, bind_fn_detour};
+use crate::{invoke, bind_fn_detour_ip};
 use crate::pattern::MemoryRegion;
 use crate::hash::{Hash, Hashable};
 use std::ffi::{CString, CStr};
 
-bind_fn_detour!(GET_TEXT, "48 8B CB 8B D0 E8 ? ? ? ? 48 85 C0 0F 95 C0", 5, get_text, "C", fn(*mut (), Hash) -> *const u8);
-bind_fn_detour!(GET_TEXT2, "48 85 C0 75 34 8B 0D", -5, get_text, "C", fn(*mut (), Hash) -> *const u8);
+bind_fn_detour_ip!(GET_TEXT, "48 8B CB 8B D0 E8 ? ? ? ? 48 85 C0 0F 95 C0", 5, get_text, "C", fn(*mut (), Hash) -> *const u8);
+bind_fn_detour_ip!(GET_TEXT2, "48 85 C0 75 34 8B 0D", -5, get_text, "C", fn(*mut (), Hash) -> *const u8);
 
 pub extern "C" fn get_text(text: *mut (), hash: Hash) -> *const u8 {
     let mut table = TRANSLATION_TABLE.lock().expect("translation table lock failed");

@@ -13,6 +13,7 @@ use cgmath::{Vector3, Array, Vector2};
 use crate::game::GameState;
 use crate::game::ui::LoadingPrompt;
 use crate::game::ped::{ParentalFeatures, AppearanceComponent, AppearanceVariation};
+use crate::game::interior::Interior;
 
 static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
 
@@ -72,6 +73,36 @@ impl Script for ScriptCleanWorld {
             texture: 0,
             palette: 2
         });
+        let night_club = Interior::from_pos(Vector3::new(-1604.664, -3012.583, -79.9999))
+            .unwrap();
+
+        env.wait_for_resource(&night_club);
+        let props = [
+            "Int01_ba_security_upgrade",
+            "Int01_ba_equipment_setup",
+            "Int01_ba_Style01﻿",
+            "Int01_ba_Style02﻿",
+            "Int01_ba_Style03",
+            "DJ_01_Lights_02",
+            "Int01_ba_style01_podium",
+            "Int01_ba_style02_podium",
+            "int01_ba_lights_screen",
+            "Int01_ba_Screen",
+            "Int01_ba_bar_content",
+            "Int01_ba_booze_01",
+            "Int01_ba_booze_02",
+            "Int01_ba_booze_03",
+            "Int01_ba_dj01",
+            "Int01_ba_lightgrid_01",
+            "Int01_ba_Clutter",
+            "Int01_ba_clubname_08",
+            "Int01_ba_dry_ice",
+            "Int01_ba_deliverytruck"
+        ];
+        for prop in props.iter() {
+            night_club.set_prop_enabled(prop, true);
+        }
+        night_club.refresh();
 
         self.cleanup();
 
@@ -191,9 +222,9 @@ impl ScriptCleanWorld {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 17] = [
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
     Control::Cover,
-    //Control::EnterCheatCode,
+    Control::EnterCheatCode,
     Control::FrontendSocialClub,
     Control::FrontendSocialClubSecondary,
     Control::SpecialAbilityPC,
@@ -210,7 +241,7 @@ pub(crate) const CONTROLS_TO_DISABLE: [Control; 17] = [
     Control::VehicleSlowMoUpDown
 ];
 
-pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [
+pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 762] = [
     "abigail1",
     "abigail2",
     "achievement_controller",
@@ -368,7 +399,7 @@ pub(crate) const SCRIPTS_TO_TERMINATE: [&str; 761] = [
     "cellphone_flashhand",
     "charactergoals",
     "charanimtest",
-    //"cheat_controller",
+    "cheat_controller",
     "chinese1",
     "chinese2",
     "chop",

@@ -8,10 +8,13 @@ use std::mem::ManuallyDrop;
 use std::os::raw::c_char;
 use std::mem::MaybeUninit;
 
-use crate::{bind_fn, bind_field_ip};
+use crate::{bind_fn, bind_field_ip, bind_fn_detour, bind_fn_detour_ip};
 use std::ffi::CStr;
 use std::alloc::Layout;
 use std::ops::{Deref, DerefMut};
+use winapi::um::processthreadsapi::GetCurrentThreadId;
+
+static mut ROOT_SCRIPT: *mut ScriptThreadRuntime = std::ptr::null_mut();
 
 bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
 bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
@@ -22,11 +25,49 @@ bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, "th
 bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, "thiscall", fn(*mut ScriptThread) -> ());
 bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, "thiscall", fn(*mut ScriptThread, u32) -> ThreadState);
 
+bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, "C", fn(*mut u8, u32, u32) -> *mut u8);
+bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, "C", fn() -> ());
+bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, "C", fn() -> ());
+
+unsafe extern "C" fn script_post_init(p1: *mut u8, p2: u32, p3: u32) -> *mut u8 {
+    let result = SCRIPT_POST_INIT(p1, p2, p3);
+    //crate::info!("Script post_init");
+
+    let mut script = &mut *ROOT_SCRIPT;
+    script.spawn();
+
+    result
+}
+unsafe extern "C" fn script_startup() {
+    crate::info!("Script startup");
+
+    let mut script = &mut *ROOT_SCRIPT;
+    script.spawn();
+    SCRIPT_STARTUP();
+}
+
+unsafe extern "C" fn script_reset() {
+    crate::info!("Script reset");
+    let mut script = &mut *ROOT_SCRIPT;
+    script.reset(script.context.script_hash, std::ptr::null(), 0);
+    SCRIPT_RESET();
+}
+
+pub(crate) fn init(runtime: Runtime) {
+    unsafe {
+        ROOT_SCRIPT = Box::leak(ScriptThreadRuntime::new(runtime)) as *mut _;
+    }
+}
+
 pub(crate) fn pre_init() {
     lazy_static::initialize(&THREAD_COLLECTION);
     lazy_static::initialize(&THREAD_ID);
     lazy_static::initialize(&THREAD_COUNT);
     lazy_static::initialize(&SCRIPT_MANAGER);
+
+    lazy_static::initialize(&SCRIPT_POST_INIT);
+    lazy_static::initialize(&SCRIPT_STARTUP);
+    lazy_static::initialize(&SCRIPT_RESET);
 
     lazy_static::initialize(&SCRIPT_THREAD_INIT);
     lazy_static::initialize(&SCRIPT_THREAD_KILL);
@@ -39,10 +80,17 @@ pub fn is_thread_pool_empty() -> bool {
 
 const ACTIVE_THREAD_TLS_OFFSET: usize = 0x830;
 
-fn get_active_thread() -> *mut *mut Thread {
+fn get_active_thread() -> &'static mut Thread {
     unsafe {
         let module_tls = *(__readgsqword(88) as *mut *mut u8);
-        module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut Thread>()
+        &mut **module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut Thread>()
+    }
+}
+
+fn set_active_thread(thread: &mut Thread) {
+    unsafe {
+        let module_tls = *(__readgsqword(88) as *mut *mut u8);
+        *module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut Thread>() = thread as *mut _;
     }
 }
 
@@ -132,10 +180,16 @@ pub struct ScriptThread {
     parent: Thread,
     script_name: [u8; 64],
     script_handler: *const (),
-    pad2: [u64; 5],
+    net_component: *const (),
+    pad2: [u8; 24],
+    net_id: u32,
+    pad3: u32,
     flag1: u8,
     net_flag: u8,
-    pad3: [u16; 11]
+    pad4: u16,
+    pad5: [u8; 12],
+    can_remove_blips_from_other_scripts: u8,
+    pad6: [u8; 7]
 }
 
 impl ScriptThread {
@@ -157,10 +211,48 @@ impl ScriptThread {
             },
             script_name,
             script_handler: std::ptr::null(),
-            pad2: [0; 5],
+            net_component: std::ptr::null(),
+            pad2: [0; 24],
             flag1: 0,
             net_flag: 0,
-            pad3: [0; 11]
+            pad4: 0,
+            pad5: [0; 12],
+            can_remove_blips_from_other_scripts: 0,
+            pad3: 0,
+            net_id: 0,
+            pad6: [0; 7]
+        }
+    }
+
+    pub fn spawn(&mut self) {
+        unsafe {
+            let mut collection = THREAD_COLLECTION.as_mut();
+            let mut slot = 0;
+            for t in collection.iter() {
+                if t.as_ref() as *const _ as u64 == self as *const _ as u64 {
+                    break;
+                }
+                slot += 1;
+            }
+            if slot == collection.len() {
+                slot = 0;
+                for t in collection.iter() {
+                    if t.context.id == 0 {
+                        crate::info!("found empty slot for out script: {}", slot);
+                        break;
+                    }
+                    slot += 1;
+                }
+            }
+            if slot == collection.len() {
+                return;
+            }
+            let thread_id = THREAD_ID.min(1);
+            self.context.id = thread_id;
+            self.context.script_hash = Hash(**THREAD_COUNT + 1);
+            *THREAD_COUNT.as_mut() += 1;
+            *THREAD_ID.as_mut() = thread_id + 1;
+            collection[slot as usize] = ManuallyDrop::new(std::mem::transmute(self));
         }
     }
 }
@@ -178,56 +270,36 @@ macro_rules! vtable_fn {
 }
 
 impl ScriptThreadRuntime {
-    pub fn spawn(runtime: Runtime) {
-        unsafe {
-            let mut thread = ScriptThreadRuntime {
-                parent: ScriptThread::new("runtime", ThreadVTable {
-                    drop: vtable_fn!(Self::drop),
-                    reset: vtable_fn!(Self::reset),
-                    run: vtable_fn!(Self::run),
-                    tick: vtable_fn!(Self::tick),
-                    kill: vtable_fn!(Self::kill),
-                    do_run: vtable_fn!(Self::do_run)
-                }),
-                runtime
-            };
-            let mut collection = THREAD_COLLECTION.as_mut();
-            let mut slot = collection.iter()
-                .enumerate()
-                .find_map(|(i, t)| {
-                    if t.context.id == 0 { Some(i) } else { None }
-                })
-                .unwrap_or(0);
-            let thread_id = THREAD_ID.min(1);
-            thread.reset(Hash(**THREAD_COUNT + 1), std::ptr::null(), 0);
-            thread.context.id = thread_id;
-            *THREAD_COUNT.as_mut() += 1;
-            *THREAD_ID.as_mut() = thread_id + 1;
-            collection[slot] = ManuallyDrop::new(std::mem::transmute(Box::new(thread)));
-        }
+    pub fn new(runtime: Runtime) -> Box<ScriptThreadRuntime> {
+        assert!(std::mem::size_of::<ScriptThread>() == 344, "script thread size is not 344 bytes");
+        Box::new(ScriptThreadRuntime {
+            parent: ScriptThread::new("runtime", ThreadVTable {
+                drop: vtable_fn!(Self::drop),
+                reset: vtable_fn!(Self::reset),
+                run: vtable_fn!(Self::run),
+                tick: vtable_fn!(Self::tick),
+                kill: vtable_fn!(Self::kill),
+                do_run: vtable_fn!(Self::do_run)
+            }),
+            runtime
+        })
     }
 
-    unsafe extern "C" fn drop(&mut self) {
-        std::ptr::drop_in_place(self as *mut _);
-        std::alloc::dealloc(self as *mut Self as *mut _, Layout::new::<Self>())
-    }
+    extern "C" fn drop(&mut self) {}
 
     extern "C" fn kill(&mut self) {
+        crate::info!("killing...");
         SCRIPT_THREAD_KILL(&mut **self)
     }
 
-    unsafe extern "C" fn run(&mut self, ops: u32) -> ThreadState {
-        if self.script_handler.is_null() {
-            SCRIPT_MANAGER.as_mut().attach(&mut **self);
-            self.net_flag = 1;
-        }
+    extern "C" fn run(&mut self, ops: u32) -> ThreadState {
         let state = self.context.state;
+        let prev_thread = get_active_thread();
+        set_active_thread(self);
         if state != ThreadState::Killed {
-            let prev_thread = &mut **get_active_thread();
-            *get_active_thread() = (self as *mut Self).cast();
             self.do_run();
-            *get_active_thread() = prev_thread;
         }
+        set_active_thread(prev_thread);
         self.context.state
     }
 
@@ -240,8 +312,16 @@ impl ScriptThreadRuntime {
             set1: 1,
             .. Default::default()
         };
+        crate::info!("resetting...");
         SCRIPT_THREAD_INIT(&mut **self);
+        self.net_flag = 1;
+        self.can_remove_blips_from_other_scripts = 1;
         self.sz_exit_message = b"Normal exit\0".as_ptr() as _;
+        if self.context.id == 0 {
+            self.context.id = **THREAD_ID;
+            unsafe { *THREAD_ID.as_mut() += 1; }
+        }
+        unsafe { SCRIPT_MANAGER.as_mut().attach(&mut **self); }
         self.context.state
     }
 
@@ -252,6 +332,11 @@ impl ScriptThreadRuntime {
     extern "C" fn do_run(&mut self) {
         self.runtime.frame();
     }
+}
+
+extern {
+    #[link_name = "llvm.returnaddress"]
+    fn return_address(param: i32) -> *const u8;
 }
 
 impl Deref for ScriptThreadRuntime {

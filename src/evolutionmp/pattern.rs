@@ -287,6 +287,15 @@ impl MemoryRegion {
     }
 
     pub unsafe fn detour(&self, replacement: *const ()) -> *const () {
+        let old = self.as_ptr() as *const ();
+        let detour = RawDetour::new(old, replacement).expect("detour creation failed");
+        detour.enable().expect("detour enabling failed");
+        let old = detour.trampoline() as *const _;
+        std::mem::forget(detour);
+        old
+    }
+
+    pub unsafe fn detour_ip(&self, replacement: *const ()) -> *const () {
         let old = self.get_call();
         let detour = RawDetour::new(old, replacement).expect("detour creation failed");
         detour.enable().expect("detour enabling failed");

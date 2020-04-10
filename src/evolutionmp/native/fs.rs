@@ -48,7 +48,7 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
     }
 }
 
-use crate::{bind_fn, bind_field, bind_fn_detour};
+use crate::{bind_fn, bind_field, bind_fn_detour_ip};
 use std::fs::File;
 use std::iter::once;
 
@@ -62,7 +62,7 @@ bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, "thiscal
 bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, "thiscall", fn(*mut RelativeDevice, RagePath, bool) -> ());
 bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, "thiscall", fn(*mut KeyState, *const u8) -> ());
 
-bind_fn_detour!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, "C", fn() -> ());
+bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, "C", fn() -> ());
 
 static mut DEVICE_VTABLE: *const u8 = std::ptr::null();
 static mut PACK_FILE_VTABLE: *const u8 = std::ptr::null();
@@ -96,8 +96,6 @@ extern "C" fn initial_mount() {
     crate::info!("Initial mount");
 
     INITIAL_MOUNT();
-
-    super::pre_init();
 
     /*fn walk(device: &Device, path: &Path) {
         for f in device.entries(path) {

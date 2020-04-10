@@ -1,4 +1,4 @@
-use crate::bind_fn_detour;
+use crate::bind_fn_detour_ip;
 use crate::pattern::MemoryRegion;
 use crate::native::{NativeCallContext, ThreadSafe};
 use crate::game::vehicle::Vehicle;
@@ -207,7 +207,7 @@ macro_rules! native_event {
     };
 }
 
-bind_fn_detour!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, "C", fn(*mut (), *mut Event) -> *mut ());
+bind_fn_detour_ip!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, "C", fn(*mut (), *mut Event) -> *mut ());
 
 pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut () {
     if !event.is_null() {

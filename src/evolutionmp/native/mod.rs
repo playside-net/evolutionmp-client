@@ -73,6 +73,20 @@ macro_rules! bind_fn_detour {
 }
 
 #[macro_export]
+macro_rules! bind_fn_detour_ip {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:ident,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+                let d = crate::native::MEM.find($pattern)
+                    .next().expect(concat!("failed to find call for ", stringify!($name)))
+                    .offset($offset).detour_ip($detour as _);
+                std::mem::transmute(d)
+            };
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! bind_fn {
     ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
@@ -88,10 +102,10 @@ macro_rules! bind_fn {
 
 #[macro_export]
 macro_rules! bind_fn_ip {
-    ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:expr,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         bind_fn_ip!($name,$pattern,$offset,$abi,fn($($arg),*) -> $ret,4);
     };
-    ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
+    ($name:ident,$pattern:literal,$offset:expr,$abi:literal,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let ptr = crate::native::MEM.find($pattern)
@@ -118,10 +132,10 @@ macro_rules! bind_field {
 
 #[macro_export]
 macro_rules! bind_field_ip {
-    ($name:ident,$pattern:literal,$offset:literal,$ty:ty) => {
+    ($name:ident,$pattern:literal,$offset:expr,$ty:ty) => {
         bind_field_ip!($name,$pattern,$offset,$ty,4);
     };
-    ($name:ident,$pattern:literal,$offset:literal,$ty:ty,$ptr_len:literal) => {
+    ($name:ident,$pattern:literal,$offset:expr,$ty:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
                 crate::native::MEM.find($pattern)
