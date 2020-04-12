@@ -1,4 +1,4 @@
-use crate::pattern::MemoryRegion;
+use crate::pattern::{MemoryRegion, RageBox};
 use std::os::raw::c_char;
 use std::os::windows::ffi::OsStrExt;
 use std::mem::ManuallyDrop;
@@ -6,13 +6,13 @@ use std::ffi::{CStr, CString, OsStr, OsString};
 use std::io::{Read, Error as IoError, Write, ErrorKind, Result as IoResult, Seek, SeekFrom, Error};
 use std::path::{PathBuf, Path};
 use std::ops::{Deref, DerefMut};
+use std::fmt::Formatter;
 use winapi::shared::minwindef::{FILETIME, DWORD};
 use winapi::um::winbase::{FILE_BEGIN, FILE_END, FILE_CURRENT};
 use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
+use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use alignas::AlignAs;
 use detour::RawDetour;
-use std::fmt::Formatter;
-use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use crate::launcher_dir;
 
 #[repr(C)]
@@ -48,7 +48,7 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
     }
 }
 
-use crate::{bind_fn, bind_field, bind_fn_detour_ip};
+use crate::{bind_fn, bind_field, bind_field_ip, bind_fn_detour_ip};
 use std::fs::File;
 use std::iter::once;
 
@@ -64,18 +64,10 @@ bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, "t
 
 bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, "C", fn() -> ());
 
-static mut DEVICE_VTABLE: *const u8 = std::ptr::null();
-static mut PACK_FILE_VTABLE: *const u8 = std::ptr::null();
-static mut RELATIVE_DEVICE_VTABLE: *const u8 = std::ptr::null();
-static mut ENCRYPTING_DEVICE_VTABLE: *const u8 = std::ptr::null();
-
-macro_rules! vtable {
-    ($field:ident,$name:literal,$pattern:literal,$offset:literal) => {
-        $field = crate::native::MEM.find($pattern)
-            .next().expect(concat!($name, "vtable"))
-            .offset($offset).read_ptr(4).as_ptr();
-    };
-}
+bind_field_ip!(DEVICE_VTABLE, "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15, DeviceVTable);
+bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15, DeviceVTable);
+bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, DeviceVTable);
+bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVTable);
 
 pub(crate) unsafe fn pre_init(mem: &MemoryRegion) {
     bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
@@ -86,68 +78,16 @@ pub(crate) unsafe fn pre_init(mem: &MemoryRegion) {
 
     lazy_static::initialize(&INITIAL_MOUNT);
 
-    vtable!(DEVICE_VTABLE, "Device", "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15);
-    vtable!(PACK_FILE_VTABLE, "PackFile", "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15);
-    vtable!(RELATIVE_DEVICE_VTABLE, "RelativeDevice", "48 85 C0 74 11 48 83 63 08 00 48", 13);
-    vtable!(ENCRYPTING_DEVICE_VTABLE, "EncryptingDevice", "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4);
+    lazy_static::initialize(&DEVICE_VTABLE);
+    lazy_static::initialize(&PACK_FILE_VTABLE);
+    lazy_static::initialize(&RELATIVE_DEVICE_VTABLE);
+    lazy_static::initialize(&ENCRYPTING_DEVICE_VTABLE);
 }
 
 extern "C" fn initial_mount() {
     crate::info!("Initial mount");
 
     INITIAL_MOUNT();
-
-    //super::pre_init();
-
-    /*fn walk(device: &Device, path: &Path) {
-        for f in device.entries(path) {
-            let path = path.join(f.get_name());
-            if f.is_directory() {
-                crate::info!("found dir: {}", path.display());
-                walk(device, &path);
-            } else {
-                crate::info!("found file: {} ({} bytes)", path.display(), f.get_size());
-                let mut d = Device::get(&path, true).unwrap();
-                let mut op = d.open(&path, false)
-                    .expect("device opening failed");
-                let mut output = File::create(launcher_dir().join(&path))
-                    .expect("output file creation failed");
-                std::io::copy(&mut op, &mut output);
-                let open = PackFile::open(&path, 3)
-                    .expect("pack file opening failed");
-            }
-        }
-    }*/
-
-    /*let path = PathBuf::from("platform:/models/farlods.ydd");
-
-    if let Some(mut device) = Device::get(&path, false) {
-        device.mount_global("kek:/", true);
-        let mut input = device.open("kek:/models/farlods.ydd", false)
-            .expect("device opening failed");
-        let mut output = std::fs::File::create(launcher_dir().join("farlods.ydd")).unwrap();
-        std::io::copy(&mut input, &mut output);
-
-        *//*crate::info!("{:?} len is {}", path, device.len(&path));
-        device.mount_global("temp:/", true);
-        info!("mounted as temp:/");*//*
-        *//*let mut pack_file = PackFile::open("platform:/levels/gta5/_citye/downtown_01/dt1_07.rpf", 3)
-            .expect("pack file opening failed");
-        crate::info!("opened pack file: {}", pack_file.get_name());
-        pack_file.mount("kek:/");
-        let mut dev = Device::get("kek:/", true)
-            .expect("device getting failed");
-        walk(&dev, Path::new("/"));*//*
-        *//*let mut input = device.open(&path, false)
-            .expect("device opening failed");*//*
-
-    }*/
-
-    /*let mut d = RelativeDevice::new();
-    d.set_path("C:/dlc.rpf", true, None);
-    crate::info!("dlc pack: {}", d.get_name());*/
-    //walk(&d, Path::new("/"));
-    //d.mount("kek:/", true).unmount();
 }
 
 #[repr(C)]
@@ -189,7 +129,7 @@ struct ResourceFlags {
 }
 
 #[repr(C)]
-struct DeviceVTable {
+pub struct DeviceVTable {
     destructor:         extern "thiscall" fn(this: *mut Device),
     open:               extern "thiscall" fn(this: *mut Device, file_name: RagePath, read_only: bool) -> u64,
     open_bulk:          extern "thiscall" fn(this: *mut Device, file_name: RagePath, ptr: *const u64) -> u64,
@@ -241,7 +181,7 @@ struct DeviceVTable {
 
 #[repr(C)]
 pub struct Device {
-    v_table: ManuallyDrop<Box<DeviceVTable>>
+    v_table: RageBox<DeviceVTable>
 }
 
 impl Device {
@@ -465,7 +405,7 @@ impl PackFile {
         unsafe {
             let mut pack_file = PackFile {
                 device: Device {
-                    v_table: std::mem::transmute(PACK_FILE_VTABLE)
+                    v_table: PACK_FILE_VTABLE.cloned()
                 },
                 inner: [0; PACK_FILE_SIZE]
             };
@@ -509,11 +449,12 @@ pub struct RelativeDevice {
 
 impl RelativeDevice {
     pub fn new() -> RelativeDevice {
+        assert!(!RELATIVE_DEVICE_VTABLE.is_null(), "RELATIVE_DEVICE_VTABLE is null");
         let mut inner = [0; RELATIVE_DEVICE_SIZE];
         inner[256] = b'\0';
         RelativeDevice {
             device: Device {
-                v_table: unsafe { std::mem::transmute(RELATIVE_DEVICE_VTABLE) }
+                v_table: RELATIVE_DEVICE_VTABLE.cloned()
             },
             inner
         }
@@ -542,14 +483,14 @@ pub struct MountLock<D> where D: Deref<Target=Device> {
     mount_point: RagePath
 }
 
-/*impl<D> MountLock<D> where D: Deref<Target=Device> {
+impl<D> MountLock<D> where D: Deref<Target=Device> {
     pub fn unmount(self) -> D {
         unsafe {
-            (UNMOUNT.unwrap())(self.mount_point)
+            UNMOUNT(self.mount_point)
         }
         ManuallyDrop::into_inner(self.device)
     }
-}*/
+}
 
 impl Deref for RelativeDevice {
     type Target = Device;
@@ -597,7 +538,7 @@ pub struct EncryptingDevice {
 impl EncryptingDevice {
     pub fn new(key: [u8; 32]) -> EncryptingDevice {
         let device = Device {
-            v_table: unsafe { std::mem::transmute(ENCRYPTING_DEVICE_VTABLE) }
+            v_table: ENCRYPTING_DEVICE_VTABLE.cloned()
         };
         EncryptingDevice {
             device,

@@ -176,16 +176,20 @@ pub(crate) fn pre_init() {
     lazy_static::initialize(&EXPANDED_RADAR);
     lazy_static::initialize(&REVEAL_FULL_MAP);
     lazy_static::initialize(&CURSOR_SPRITE);
+    lazy_static::initialize(&SET_VECTOR_RESULTS);
 }
 
 pub(crate) fn init() {
     lazy_static::initialize(&NATIVES);
-    lazy_static::initialize(&SET_VECTOR_RESULTS);
     vehicle::init();
 }
 
+pub fn get_handler_opt(hash: u64) -> Option<NativeFunction> {
+    NATIVES.get_handler(hash)
+}
+
 pub fn get_handler(hash: u64) -> NativeFunction {
-    NATIVES.get_handler(hash).expect(&format!("Missing native handler for 0x{:016X}", hash))
+    get_handler_opt(hash).expect(&format!("Missing native handler for 0x{:016X}", hash))
 }
 
 #[repr(C, packed(1))]
@@ -433,10 +437,14 @@ pub struct NativeCallContext {
 
 impl NativeCallContext {
     pub fn new() -> NativeCallContext {
+        Self::new_allocated(Box::new([0; 32]), Box::new([0; 3]), 0)
+    }
+
+    pub fn new_allocated(args: Box<[u64; 32]>, returns: Box<[u64; 3]>, arg_count: u32) -> NativeCallContext {
         NativeCallContext {
-            returns: Box::new([0; 3]),
-            arg_count: 0,
-            args: Box::new([0; 32]),
+            returns,
+            arg_count,
+            args,
             data_count: 0,
             data: [0; 48]
         }

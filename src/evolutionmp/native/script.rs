@@ -33,23 +33,26 @@ bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, scrip
 unsafe extern "C" fn script_post_init(p1: *mut u8, p2: u32, p3: u32) -> *mut u8 {
     let result = SCRIPT_POST_INIT(p1, p2, p3);
 
-    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
-    script.spawn();
+    if let Some(script) = ROOT_SCRIPT.as_mut() {
+        script.spawn();
+    }
 
     result
 }
 
 unsafe extern "C" fn script_startup() {
-    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
-    if script.context.id == 0 {
-        script.spawn();
+    if let Some(script) = ROOT_SCRIPT.as_mut() {
+        if script.context.id == 0 {
+            script.spawn();
+        }
     }
     SCRIPT_STARTUP();
 }
 
 unsafe extern "C" fn script_reset() {
-    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
-    script.reset(script.context.script_hash, std::ptr::null(), 0);
+    if let Some(script) = ROOT_SCRIPT.as_mut() {
+        script.reset(script.context.script_hash, std::ptr::null(), 0);
+    }
     //SCRIPT_RESET(); //Story mode only
 }
 

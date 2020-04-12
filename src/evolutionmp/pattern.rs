@@ -1,4 +1,4 @@
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64};
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64, PAGE_READONLY};
 use winapi::um::memoryapi::VirtualProtect;
 use winapi::um::libloaderapi::GetModuleHandleA;
 use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
@@ -93,9 +93,7 @@ impl Iterator for RegionIterator {
     fn next(&mut self) -> Option<Self::Item> {
         let pattern_len = self.pattern.len();
         while self.size >= pattern_len {
-            /*let readable = region::query_range(self.base, pattern_len)
-                .unwrap().iter().all(|reg| reg.protection.contains(Protection::Read));*/
-            if /*readable &&*/ self.pattern.matches(self.base) {
+            if self.pattern.matches(self.base) {
                 let region = MemoryRegion {
                     base: self.base,
                     size: self.size
@@ -137,6 +135,12 @@ impl<T> RageBox<T> {
 
     pub unsafe fn as_mut(&self) -> &mut T {
         unsafe { &mut *self.ptr }
+    }
+
+    pub fn cloned(&self) -> RageBox<T> {
+        RageBox {
+            ptr: self.ptr
+        }
     }
 }
 
@@ -180,19 +184,6 @@ impl MemoryRegion {
         self.find(Pattern {
             nibbles: str.as_ref().as_bytes().iter().map(|b|Some(*b)).collect::<_>()
         })
-    }
-
-    pub fn find_await<P>(&self, pattern: P, sleep_ms: u64, timeout_ms: u64) -> Option<MemoryRegion> where P: Into<Pattern> + Copy {
-        let start = Instant::now();
-        loop {
-            if (Instant::now() - start) >= Duration::from_millis(timeout_ms) {
-                break None;
-            }
-            if let Some(region) = self.find(pattern).next() {
-                break Some(region);
-            }
-            std::thread::sleep(Duration::from_millis(sleep_ms));
-        }
     }
 
     pub fn contains(&self, address: *mut u8) -> bool {

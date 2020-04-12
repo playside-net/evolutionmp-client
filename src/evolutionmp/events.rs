@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use detour::RawDetour;
 use std::ffi::CStr;
 use std::mem::ManuallyDrop;
+use jni_dynamic::objects::JObject;
 
 #[repr(C)]
 struct EventVTable {
@@ -50,7 +51,8 @@ pub enum ScriptEvent {
     ConsoleInput(String),
     ConsoleOutput(String),
     NativeEvent(NativeEvent),
-    UserInput(InputEvent)
+    UserInput(InputEvent),
+    JavaEvent(JObject<'static>)
 }
 
 pub struct EventPool {

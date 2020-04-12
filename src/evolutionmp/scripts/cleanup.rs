@@ -73,7 +73,7 @@ impl Script for ScriptCleanWorld {
             texture: 0,
             palette: 2
         });
-        let night_club = Interior::from_pos(Vector3::new(-1604.664, -3012.583, -79.9999))
+        /*let night_club = Interior::from_pos(Vector3::new(-1604.664, -3012.583, -79.9999))
             .unwrap();
 
         env.wait_for_resource(&night_club);
@@ -102,7 +102,7 @@ impl Script for ScriptCleanWorld {
         for prop in props.iter() {
             night_club.set_prop_enabled(prop, true);
         }
-        night_club.refresh();
+        night_club.refresh();*/
 
         self.cleanup();
 

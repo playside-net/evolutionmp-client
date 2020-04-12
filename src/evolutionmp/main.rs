@@ -8,6 +8,7 @@ use crate::pattern::MemoryRegion;
 use crate::game::entity::Entity;
 use crate::win::input::InputHook;
 use crate::game::GameState;
+use crate::hash::Hashable;
 use std::ptr::null_mut;
 use std::time::Duration;
 use std::path::{Path, PathBuf};
@@ -21,15 +22,14 @@ use colored::{Color, Colorize};
 use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
 use log::{info, debug, error};
-use std::sync::atomic::{AtomicPtr, Ordering};
-use crate::hash::Hashable;
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
 use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, MEMORY_BASIC_INFORMATION, MAX_PACKAGE_NAME};
 use winapi::um::processthreadsapi::GetCurrentThreadId;
 use winapi::ctypes::c_void;
 use winapi::um::memoryapi::VirtualQuery;
 use std::ffi::{CStr, CString};
-use std::sync::Mutex;
+use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM};
+use std::sync::Arc;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -51,6 +51,8 @@ pub mod process;
 pub mod registry;
 #[cfg(target_os = "windows")]
 pub mod scripts;
+#[cfg(target_os = "windows")]
+pub mod jni;
 
 pub mod network;
 pub mod hash;
@@ -108,10 +110,6 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
         if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ && code != 0x406D1388 {
-            lazy_static::lazy_static! {
-                static ref EXCEPTION_MUTEX: Mutex<()> = Mutex::new(());
-            };
-            //let _lock = EXCEPTION_MUTEX.lock().expect("Failed to lock exception mutex");
             error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
             print_address_info(addr, 0, None, SymbolName::new(b"<unknown>\0"));
             let backtrace = Backtrace::new();
@@ -124,47 +122,87 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
                     print_address_info(addr, line, symbol.filename(), name);
                 }
             }
-            //1 //EXCEPTION_EXECUTE_HANDLER
-            0
-        } else {
-            0 //EXCEPTION_CONTINUE_SEARCH
         }
+        0 //EXCEPTION_CONTINUE_SEARCH
     }
+}
+
+fn add_dll_directory(java_exe: &Path) {
+    let java_libs_root = java_exe.parent().unwrap().parent().unwrap();
+    let old_path = std::env::var("PATH").unwrap();
+    std::env::set_var("PATH", format!("{}\\{}", old_path, java_libs_root.display()));
 }
 
 #[cfg(target_os = "windows")]
 fn attach(instance: HINSTANCE) {
     unsafe {
-        std::thread::spawn(move || {
-            info!("Injection successful");
+        console::attach();
+        info!("Injection successful");
 
-            if AddVectoredExceptionHandler(0, Some(except)).is_null() {
-                panic!("Unable to set exception handler");
+        if AddVectoredExceptionHandler(0, Some(except)).is_null() {
+            panic!("Unable to set exception handler");
+        }
+
+        let mem = MemoryRegion::image();
+
+        info!("Applying patches...");
+
+        //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
+        mem.find_str("platform:/movies").next() //platform:/movies/rockstar_logos.bik
+            .expect("movie").nop(16); //Disable movie
+
+        mem.find("70 6C 61 74 66 6F 72 6D 3A").next()
+            .expect("logos").write_bytes(&[0xC3]);
+
+        mem.find("72 1F E8 ? ? ? ? 8B 0D").next()
+            .expect("legals").nop(2);
+
+        lazy_static::initialize(&GAME_STATE);
+
+        //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
+
+        native::fs::pre_init(&mem);
+        native::pre_init();
+
+        info!("Searching for script candidates...");
+
+        let mut script_candidates = Vec::new();
+
+        if let Ok(entries) = launcher_dir().join("scripts").read_dir() {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    if let Ok(ty) = entry.file_type() {
+                        let name = entry.file_name();
+                        let name = name.to_string_lossy();
+                        if ty.is_file() && name.ends_with(".jar") {
+                            script_candidates.push(name.to_string());
+                        }
+                    }
+                }
             }
+        }
 
-            let mem = MemoryRegion::image();
+        info!("Found {} potential scripts", script_candidates.len());
 
-            //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-            mem.find_str("platform:/movies").next() //platform:/movies/rockstar_logos.bik
-                .expect("movie").nop(16); //Disable movie
+        info!("Spawning main thread...");
 
-            mem.find("70 6C 61 74 66 6F 72 6D 3A").next()
-                .expect("logos").write_bytes(&[0xC3]);
-
-            mem.find("72 1F E8 ? ? ? ? 8B 0D").next()
-                .expect("legals").nop(2);
-
-            lazy_static::initialize(&GAME_STATE);
-
-            //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
-
-            native::fs::pre_init(&mem);
-
+        std::thread::spawn(move || {
+            info!("Hooking user input...");
             let input = InputHook::new();
+            console::attach();
 
-            info!("Input hooked. Starting runtime...");
+            let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
+            add_dll_directory(&dll_path);
+            let args = InitArgsBuilder::new()
+                .version(JNIVersion::V8)
+                .option(&format!("-Duser.dir={}", launcher_dir().display()))
+                .build().expect("failed to build jvm args");
+            info!("Initializing VM...");
+            let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
 
-            runtime::start(input);
+            info!("Starting runtime...");
+
+            runtime::start(input, script_candidates, vm);
 
             info!("Waiting for game being loaded...");
 
@@ -172,15 +210,12 @@ fn attach(instance: HINSTANCE) {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            console::attach();
-
             info!("Initializing game hooks");
 
             game::init();
 
             info!("Initializing natives");
 
-            native::pre_init();
             native::init();
 
             info!("Waiting for game being initialized");

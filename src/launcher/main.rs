@@ -71,7 +71,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
             }
         }
     };
-    std::mem::drop(proc);
+    drop(proc);
 
     println!("Launcher process exited with code: {}", process.wait().unwrap().code().unwrap());
 }
