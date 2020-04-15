@@ -1,21 +1,99 @@
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64, PAGE_READONLY};
-use winapi::um::memoryapi::VirtualProtect;
-use winapi::um::libloaderapi::GetModuleHandleA;
-use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
 use std::any::Any;
 use std::ptr::null_mut;
 use std::time::{Duration, Instant};
 use std::mem::ManuallyDrop;
-use detour::RawDetour;
 use std::ptr::replace;
-use region::Protection;
 use std::ops::{Deref, DerefMut};
+use std::collections::HashMap;
+use std::fs::File;
+use std::sync::Mutex;
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64, PAGE_READONLY};
+use winapi::um::memoryapi::VirtualProtect;
+use winapi::um::libloaderapi::GetModuleHandleA;
+use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
+use detour::RawDetour;
+use serde_derive::{Serialize, Deserialize};
+use crate::launcher_dir;
+use std::path::{Path, PathBuf};
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
 pub const XOR_32_64: u8 = 0x31;
 
-#[derive(Debug, Clone)]
+lazy_static::lazy_static! {
+    pub static ref CACHE: PatternCache = PatternCache::new();
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PatternCache {
+    inner: Mutex<HashMap<Pattern, Vec<u64>>>
+}
+
+impl PatternCache {
+    fn new() -> PatternCache {
+        PatternCache {
+            inner: Mutex::new(HashMap::new())
+        }
+    }
+
+    fn get_file(&self) -> PathBuf {
+        launcher_dir().join("hints.dat")
+    }
+
+    fn get(&self, pattern: &Pattern, occurrence: usize) -> Option<MemoryRegion> {
+        let mut cache = self.inner.lock().unwrap();
+        if let Some(entry) = cache.get(pattern) {
+            if let Some(offset) = entry.get(occurrence).cloned() {
+                let mem = &crate::native::MEM;
+                let base = mem.base as u64 + offset;
+                let size = mem.size as u64 - offset;
+                return Some(MemoryRegion {
+                    base: base as _,
+                    size: size as _
+                });
+            }
+        }
+        None
+    }
+
+    fn set(&self, pattern: &Pattern, region: &MemoryRegion) {
+        let mut cache = self.inner.lock().unwrap();
+        let mem = &crate::native::MEM;
+        let offset = region.base as u64 - mem.base as u64;
+        if let Some(mut entry) = cache.get_mut(pattern) {
+            entry.push(offset);
+        } else {
+            cache.insert(pattern.clone(), vec![offset]);
+        }
+    }
+
+    pub(crate) fn load(&self) {
+        let mut file = self.get_file();
+        if file.exists() {
+            crate::info!("Loading hints...");
+            let mut file = File::open(&file)
+                .expect("error opening mem hints");
+            let hints = bincode::deserialize_from::<_, HashMap<Pattern, Vec<u64>>>(&mut file)
+                .expect("error reading mem hints");
+            let mut cache = self.inner.lock().unwrap();
+            *cache = hints;
+        }
+    }
+
+    pub(crate) fn save(&self) {
+        let mut file = self.get_file();
+        if !file.exists() {
+            crate::info!("Saving hints...");
+            let mut file = File::create(&file)
+                .expect("error creating mem hints");
+            let mut cache = self.inner.lock().unwrap();
+            bincode::serialize_into(&mut file, &mut *cache)
+                .expect("error writing mem hints");
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, PartialEq, Eq, Hash)]
 pub struct Pattern {
     nibbles: Vec<Option<u8>>
 }
@@ -73,7 +151,8 @@ impl<S> From<S> for Pattern where S: AsRef<str> {
 pub struct RegionIterator {
     pattern: Pattern,
     base: *mut u8,
-    size: usize
+    size: usize,
+    occurrence: usize
 }
 
 impl RegionIterator {
@@ -82,7 +161,8 @@ impl RegionIterator {
         RegionIterator {
             pattern,
             base: region.base,
-            size: region.size
+            size: region.size,
+            occurrence: 0
         }
     }
 }
@@ -91,6 +171,9 @@ impl Iterator for RegionIterator {
     type Item = MemoryRegion;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(cached) = CACHE.get(&self.pattern, self.occurrence) {
+            return Some(cached);
+        }
         let pattern_len = self.pattern.len();
         while self.size >= pattern_len {
             if self.pattern.matches(self.base) {
@@ -100,6 +183,8 @@ impl Iterator for RegionIterator {
                 };
                 self.base = unsafe { self.base.add(pattern_len) };
                 self.size -= pattern_len;
+                self.occurrence += 1;
+                CACHE.set(&self.pattern, &region);
                 return Some(region)
             } else {
                 self.base = unsafe { self.base.add(1) };
