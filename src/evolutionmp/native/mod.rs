@@ -54,6 +54,12 @@ impl<T> std::ops::Deref for ThreadSafe<T> {
     }
 }
 
+impl<T> std::ops::DerefMut for ThreadSafe<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.t
+    }
+}
+
 lazy_static! {
     pub static ref MEM: MemoryRegion = MemoryRegion::image();
 }
@@ -173,6 +179,7 @@ pub(crate) fn pre_init() {
     //streaming::pre_init();
     pool::pre_init();
     vehicle::pre_init();
+    crate::game::ui::pre_init();
     lazy_static::initialize(&EXPANDED_RADAR);
     lazy_static::initialize(&REVEAL_FULL_MAP);
     lazy_static::initialize(&CURSOR_SPRITE);

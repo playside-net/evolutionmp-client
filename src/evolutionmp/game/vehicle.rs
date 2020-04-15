@@ -3,11 +3,10 @@ use crate::{invoke, impl_handle};
 use crate::game::entity::Entity;
 use crate::game;
 use crate::game::ped::Ped;
-use crate::game::streaming::Model;
+use crate::game::streaming::{Model, Resource};
 use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
-use crate::runtime::ScriptEnv;
 use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
 use crate::pattern::RageBox;
@@ -117,15 +116,20 @@ pub struct MissionTrain {
 }
 
 impl MissionTrain {
-    pub fn new(env: &mut ScriptEnv, model: u8, pos: Vector3<f32>, direction: bool) -> Option<MissionTrain> {
-        env.wait_for_resource(&Model::from("freight"));
-        env.wait_for_resource(&Model::from("freightcar"));
-        env.wait_for_resource(&Model::from("freightgrain"));
-        env.wait_for_resource(&Model::from("freightcont1"));
-        env.wait_for_resource(&Model::from("freightcont2"));
-        env.wait_for_resource(&Model::from("freighttrailer"));
-        env.wait_for_resource(&Model::from("tankercar"));
-        env.wait_for_resource(&Model::from("metrotrain"));
+    pub fn new(model: u8, pos: Vector3<f32>, direction: bool) -> Option<MissionTrain> {
+        let models = vec![
+            Model::from("freight"),
+            Model::from("freightcar"),
+            Model::from("freightgrain"),
+            Model::from("freightcont1"),
+            Model::from("freightcont2"),
+            Model::from("freighttrailer"),
+            Model::from("tankercar"),
+            Model::from("metrotrain")
+        ];
+        for model in models.iter() {
+            model.request_and_wait();
+        }
         let vehicle = invoke!(Option<Vehicle>, 0x63C6CCA8E68AE8C8, model as u32, pos, direction)?;
         Some(MissionTrain { vehicle })
     }
@@ -165,10 +169,10 @@ pub struct Vehicle {
 }
 
 impl Vehicle {
-    pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: Hashable {
+    pub fn new<H>(model: H, pos: Vector3<f32>, heading: f32, is_network: bool, this_script_check: bool) -> Option<Vehicle> where H: Hashable {
         let model = Model::from(model);
         if model.is_in_cd_image() && model.is_valid() && model.is_vehicle() {
-            env.wait_for_resource(&model);
+            model.request_and_wait();
             invoke!(Option<Vehicle>, 0xAF35D0D2583051B0, model.joaat(), pos, heading, is_network, this_script_check)
         } else {
             None

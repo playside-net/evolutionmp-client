@@ -17,10 +17,12 @@ pub extern "C" fn get_text(text: *mut (), hash: Hash) -> *const u8 {
     result
 }
 
-pub fn init() {
+pub fn pre_init() {
     lazy_static::initialize(&GET_TEXT);
     lazy_static::initialize(&GET_TEXT2);
+}
 
+pub fn init() {
     set_translation("PM_PAUSE_HDR", "Evolution MP");
     set_translation("FE_THDR_GTAO", "Evolution MP");
 }

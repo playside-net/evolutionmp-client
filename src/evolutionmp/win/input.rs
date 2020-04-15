@@ -141,39 +141,33 @@ pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lp
     CallWindowProcW(WND_PROC, hwnd, msg, wparam, lparam)
 }
 
-pub struct InputHook {
-    receiver: Receiver<InputEvent>
-}
 
-impl InputHook {
-    pub unsafe fn new() -> InputHook {
-        let (sender, receiver) = channel::<InputEvent>();
-        EVENT_POOL = Some(sender);
-        std::thread::spawn(move || {
-            let mut handle: HWND = std::ptr::null_mut();
-            let window = CString::new("grcWindow").unwrap();
-            while handle.is_null() {
-                handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
-                std::thread::sleep(Duration::from_millis(100));
+pub unsafe fn hook() {
+    let (sender, receiver) = channel::<InputEvent>();
+    EVENT_POOL = Some(sender);
+    std::thread::spawn(move || {
+        let mut handle: HWND = std::ptr::null_mut();
+        let window = CString::new("grcWindow").unwrap();
+        while handle.is_null() {
+            handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        WND_PROC = std::mem::transmute(SetWindowLongPtrW(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
+    });
+    std::thread::spawn(move || {
+        while let Ok(event) = receiver.recv() {
+            let mut loaded_scripts = crate::native::script::LOADED_SCRIPTS.lock().unwrap();
+            for script in loaded_scripts.iter_mut() {
+                script.input(event.clone());
             }
-            WND_PROC = std::mem::transmute(SetWindowLongPtrW(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
-        });
-        InputHook {
-            receiver
         }
-    }
-
-    pub fn next_event(&mut self) -> Result<InputEvent, TryRecvError> {
-        self.receiver.try_recv()
-    }
+    });
 }
 
-impl std::ops::Drop for InputHook {
-    fn drop(&mut self) {
-        unsafe {
-            let window = CString::new("grcWindow").unwrap();
-            let handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
-            SetWindowLongPtrW(handle, GWLP_WNDPROC, std::mem::transmute(WND_PROC.unwrap()));
-        }
+pub unsafe fn unhook() {
+    if let Some(proc) = WND_PROC {
+        let window = CString::new("grcWindow").unwrap();
+        let handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
+        SetWindowLongPtrW(handle, GWLP_WNDPROC, std::mem::transmute(proc));
     }
 }

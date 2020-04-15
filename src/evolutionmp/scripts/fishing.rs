@@ -3,7 +3,7 @@ use std::time::Instant;
 use std::time::Duration;
 use std::cmp::Ordering::Equal;
 use cgmath::{Vector3, Zero, Array, Vector2, MetricSpace};
-use super::{ScriptEnv, Script};
+use super::Script;
 use crate::game;
 use crate::game::player::Player;
 use crate::game::ped::{PedBone, Ped};
@@ -11,7 +11,7 @@ use crate::game::entity::Entity;
 use crate::game::{Rgba, Rgb, GameState};
 use crate::game::controls::{Group as ControlGroup, Control};
 use crate::events::ScriptEvent;
-use crate::game::streaming::{AnimDict, Ipl};
+use crate::game::streaming::{AnimDict, Ipl, Resource};
 use crate::game::prop::Prop;
 use crate::native::pool::Pool;
 use crate::hash::{Hashable, Hash};
@@ -25,7 +25,7 @@ pub struct ScriptFishing {
 }
 
 impl Script for ScriptFishing {
-    fn prepare(&mut self, mut env: ScriptEnv) {
+    fn prepare(&mut self) {
         fn set_door_locked(name: &str, position: Vector3<f32>, locked: bool) {
             Door::new(name)
                 .set_locked(position, locked, Vector3::new(0.0, 50.0, 0.0))
@@ -41,10 +41,10 @@ impl Script for ScriptFishing {
         set_door_locked("v_ilev_bank4door02", Vector3::new(-111.39079, 6463.931, 32.2215), false);
 
         let maze_arena = Ipl::new("SP1_10_real_interior");
-        env.wait_for_resource(&maze_arena);
+        maze_arena.request_and_wait();
     }
 
-    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
+    fn frame(&mut self, game_state: GameState) {
         let distance = 10.0;
         let player = Player::local();
         let ped = player.get_ped();
@@ -100,13 +100,11 @@ impl Script for ScriptFishing {
         let probe = game::water::probe(start, end);
         if let Some(pos) = probe {
             if let Some(catch_time) = self.catch_time {
-                crate::scripts::console::lock_controls();
+                //crate::scripts::console::lock_controls();
                 if Instant::now() > catch_time {
-                    env.log("~g~Вы поймали рыбу!");
-                    self.stop_catching(&mut env, &ped);
+                    self.stop_catching(&ped);
                 } else if ped.is_in_water() {
-                    env.log("~r~Вы упали в воду : C");
-                    self.stop_catching(&mut env, &ped);
+                    self.stop_catching(&ped);
                 }
             } else if ped.get_in_vehicle(false).is_none() && !ped.is_in_water() {
                 game::ui::show_help("Press ~INPUT_CONTEXT~ to start fishing", false, true, None);
@@ -114,12 +112,12 @@ impl Script for ScriptFishing {
                 if game::controls::is_just_pressed(ControlGroup::Move, Control::Context) {
                     self.catch_time = Some(Instant::now() + Duration::from_secs(15));
                     let hand = ped.get_bone(PedBone::SkelLHand).unwrap();
-                    let rod = Prop::new(&mut env, "prop_fishing_rod_01", Vector3::zero(), false, false, false).unwrap();
+                    let rod = Prop::new("prop_fishing_rod_01", Vector3::zero(), false, false, false).unwrap();
                     hand.attach(&rod, Vector3::new(0.13, 0.1, 0.01), Vector3::new(180.0, 90.0, 70.0));
                     self.prop = Some(rod);
                     ped.set_position_freezed(true);
                     let dict = AnimDict::new("amb@world_human_stand_fishing@idle_a");
-                    env.wait_for_resource(&dict);
+                    dict.request_and_wait();
                     ped.get_tasks().play_animation(&dict, "idle_a", 8.0, -8.0, -1, 0x110001, -1.0);
                 }
             }
@@ -139,7 +137,7 @@ impl ScriptFishing {
         }
     }
 
-    fn stop_catching(&mut self, env: &mut ScriptEnv, ped: &Ped) {
+    fn stop_catching(&mut self, ped: &Ped) {
         ped.set_position_freezed(false);
         ped.get_tasks().clear_immediately();
         self.catch_time = None;

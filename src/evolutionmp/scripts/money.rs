@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use cgmath::{Vector3, Zero, Array, MetricSpace, Vector2};
-use crate::runtime::{Script, ScriptEnv};
+use crate::runtime::Script;
 use crate::events::ScriptEvent;
 use crate::game;
 use crate::game::{GameState, Rgba};
@@ -24,10 +24,10 @@ impl ScriptMoney {
 }
 
 impl Script for ScriptMoney {
-    fn prepare(&mut self, env: ScriptEnv) {
+    fn prepare(&mut self) {
     }
 
-    fn frame(&mut self, env: ScriptEnv, game_state: GameState) {
+    fn frame(&mut self, game_state: GameState) {
         let player = Player::local();
         let ped = player.get_ped();
 

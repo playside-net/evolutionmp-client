@@ -3,7 +3,7 @@ use crate::native::alloc::RageVec;
 use crate::scripts::vehicle::ScriptVehicle;
 use crate::hash::{Hash, Hashable};
 use crate::win::thread::__readgsqword;
-use crate::runtime::{Script, ScriptContainer, Runtime};
+use crate::runtime::Script;
 use std::mem::ManuallyDrop;
 use std::os::raw::c_char;
 use std::mem::MaybeUninit;
@@ -13,8 +13,23 @@ use std::ffi::CStr;
 use std::alloc::Layout;
 use std::ops::{Deref, DerefMut};
 use winapi::um::processthreadsapi::GetCurrentThreadId;
+use std::sync::Mutex;
+use crate::events::ScriptEvent;
+use std::collections::VecDeque;
+use crate::win::input::InputEvent;
+use crate::native::ThreadSafe;
+use crate::game::GameState;
 
-static mut ROOT_SCRIPT: Option<Box<ScriptThreadRuntime>> = None;
+lazy_static::lazy_static! {
+    pub static ref LOADED_SCRIPTS: Mutex<Vec<ScriptThreadRuntime>> = Mutex::new(Vec::new());
+}
+
+pub fn run<S>(name: &str, script: S) where S: Script + 'static {
+    let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
+    let mut script = ScriptThreadRuntime::new(name, Box::new(script));
+    script.spawn();
+    loaded_scripts.push(script);
+}
 
 bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
 bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
@@ -33,7 +48,9 @@ bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, scrip
 unsafe extern "C" fn script_post_init(p1: *mut u8, p2: u32, p3: u32) -> *mut u8 {
     let result = SCRIPT_POST_INIT(p1, p2, p3);
 
-    if let Some(script) = ROOT_SCRIPT.as_mut() {
+    let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
+
+    for script in loaded_scripts.iter_mut() {
         script.spawn();
     }
 
@@ -41,7 +58,9 @@ unsafe extern "C" fn script_post_init(p1: *mut u8, p2: u32, p3: u32) -> *mut u8 
 }
 
 unsafe extern "C" fn script_startup() {
-    if let Some(script) = ROOT_SCRIPT.as_mut() {
+    let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
+
+    for script in loaded_scripts.iter_mut() {
         if script.context.id == 0 {
             script.spawn();
         }
@@ -50,22 +69,20 @@ unsafe extern "C" fn script_startup() {
 }
 
 unsafe extern "C" fn script_reset() {
-    if let Some(script) = ROOT_SCRIPT.as_mut() {
+    let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
+
+    for script in loaded_scripts.iter_mut() {
         script.reset(script.context.script_hash, std::ptr::null(), 0);
     }
     //SCRIPT_RESET(); //Story mode only
 }
 
 unsafe extern "C" fn script_no(this: *mut ScriptThread, ops: u32) -> ThreadState {
-    let mut script = ROOT_SCRIPT.as_mut().expect("runtime not initialized");
-    script.run(0);
-    script.context.state
-}
-
-pub(crate) fn init(runtime: Runtime) {
-    unsafe {
-        ROOT_SCRIPT = Some(ScriptThreadRuntime::new(runtime));
+    let loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
+    if loaded_scripts.iter().any(|s| s.context.id == (&*this).context.id) {
+        (&mut *this.cast::<ScriptThreadRuntime>()).run(0);
     }
+    (&*this).context.state
 }
 
 pub(crate) fn pre_init() {
@@ -268,8 +285,10 @@ impl ScriptThread {
 
 #[repr(C)]
 pub struct ScriptThreadRuntime {
-    parent: ScriptThread,
-    runtime: Runtime
+    parent: ThreadSafe<ScriptThread>,
+    init: bool,
+    script: ThreadSafe<Box<dyn Script>>,
+    event_pool: VecDeque<ScriptEvent>
 }
 
 macro_rules! vtable_fn {
@@ -279,25 +298,26 @@ macro_rules! vtable_fn {
 }
 
 impl ScriptThreadRuntime {
-    pub fn new(runtime: Runtime) -> Box<ScriptThreadRuntime> {
+    pub fn new(name: &str, script: Box<dyn Script>) -> ScriptThreadRuntime {
         assert_eq!(std::mem::size_of::<ScriptThread>(), 344, "script thread size is not 344 bytes");
-        Box::new(ScriptThreadRuntime {
-            parent: ScriptThread::new("runtime", ThreadVTable {
+        ScriptThreadRuntime {
+            parent: ThreadSafe::new(ScriptThread::new(&format!("emp:{}", name), ThreadVTable {
                 drop: vtable_fn!(Self::drop),
                 reset: vtable_fn!(Self::reset),
                 run: vtable_fn!(Self::run),
                 tick: vtable_fn!(Self::tick),
                 kill: vtable_fn!(Self::kill),
                 do_run: vtable_fn!(Self::do_run)
-            }),
-            runtime
-        })
+            })),
+            init: false,
+            script: ThreadSafe::new(script),
+            event_pool: VecDeque::new()
+        }
     }
 
     extern "C" fn drop(&mut self) {}
 
     extern "C" fn kill(&mut self) {
-        crate::info!("killing...");
         SCRIPT_THREAD_KILL(&mut **self)
     }
 
@@ -338,7 +358,22 @@ impl ScriptThreadRuntime {
     }
 
     extern "C" fn do_run(&mut self) {
-        self.runtime.frame();
+        let game_state = **crate::GAME_STATE;
+        if game_state == GameState::Playing {
+            if !self.init {
+                self.init = true;
+                self.script.prepare()
+            }
+            while let Some(event) = self.event_pool.pop_front() {
+                self.script.event(&event, &mut VecDeque::with_capacity(0));
+            }
+            crate::info!("ticking frame for script {:?}", crate::game::script::ScriptThread::active().map(|t|t.get_name().to_owned()));
+            self.script.frame(game_state);
+        }
+    }
+
+    pub fn input(&mut self, input: InputEvent) {
+        self.event_pool.push_back(ScriptEvent::UserInput(input));
     }
 }
 

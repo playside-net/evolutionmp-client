@@ -49,10 +49,8 @@ impl std::cmp::PartialEq for Event {
 
 pub enum ScriptEvent {
     ConsoleInput(String),
-    ConsoleOutput(String),
     NativeEvent(NativeEvent),
-    UserInput(InputEvent),
-    JavaEvent(JObject<'static>)
+    UserInput(InputEvent)
 }
 
 pub struct EventPool {

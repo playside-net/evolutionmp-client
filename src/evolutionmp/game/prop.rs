@@ -1,9 +1,8 @@
 use crate::{invoke,invoke_option, impl_handle};
 use crate::game::{Handle, Rgb};
-use crate::runtime::ScriptEnv;
 use crate::game::entity::Entity;
 use crate::hash::Hashable;
-use crate::game::streaming::Model;
+use crate::game::streaming::{Model, Resource};
 use crate::native::pool::GenericPool;
 use cgmath::Vector3;
 use std::mem::ManuallyDrop;
@@ -18,10 +17,10 @@ pub struct Prop {
 }
 
 impl Prop {
-    pub fn new<H>(env: &mut ScriptEnv, model: H, pos: Vector3<f32>, is_network: bool, this_script_check: bool, dynamic: bool) -> Option<Prop> where H: Hashable {
+    pub fn new<H>(model: H, pos: Vector3<f32>, is_network: bool, this_script_check: bool, dynamic: bool) -> Option<Prop> where H: Hashable {
         let model = Model::from(model);
         if model.is_in_cd_image() && model.is_valid() {
-            env.wait_for_resource(&model);
+            model.request_and_wait();
             invoke!(Option<Prop>, 0x509D5878EB39E842, model.joaat(), pos, is_network, this_script_check, dynamic)
         } else {
             None

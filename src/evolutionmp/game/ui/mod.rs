@@ -1,7 +1,6 @@
 use crate::{invoke, native};
 use crate::game::{Rgba, Handle};
 use cgmath::{Vector2, Vector3};
-use crate::runtime::ScriptEnv;
 use crate::game::controls::{Group, Control};
 use crate::pattern::{MemoryRegion, RET, NOP, XOR_32_64};
 use std::sync::atomic::AtomicBool;
@@ -20,9 +19,11 @@ use crate::bind_fn;
 
 bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
 
-pub fn init() {
+pub fn pre_init() {
     lazy_static::initialize(&GET_WARN_RESULT);
+}
 
+pub fn init() {
     unsafe {
         let no_slowmo = crate::native::MEM.find("38 51 64 74 19")
             .next().expect("no_slowmo");
@@ -295,7 +296,7 @@ fn end_text_command_width(unknown: bool) -> f32 {
     invoke!(f32, 0x85F061DA64ED2F67, unknown)
 }
 
-pub fn prompt(env: &mut ScriptEnv, title: &str, placeholder: &str, max_length: u32) -> Option<String> {
+pub fn prompt(title: &str, placeholder: &str, max_length: u32) -> Option<String> {
     super::locale::set_translation("FMMC_KEY_TIP10", title);
     invoke!((), 0x00DC833F2568DBF6, 1u32, "FMMC_KEY_TIP10", "", placeholder, "", "", "", max_length);
     loop {
@@ -308,19 +309,19 @@ pub fn prompt(env: &mut ScriptEnv, title: &str, placeholder: &str, max_length: u
                 break None;
             },
             _ => {
-                env.wait(0);
+                super::script::wait(1);
             }
         }
     }
 }
 
-pub fn warn(env: &mut ScriptEnv, title: &str, line1: &str, line2: &str, buttons: FrontendButtons, background: bool) -> FrontendButtons {
+pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, background: bool) -> FrontendButtons {
     super::locale::set_translation("WNMC_TITLE", title);
     super::locale::set_translation("WNMC_LINE1", line1);
     super::locale::set_translation("WNMC_LINE2", line2);
     let buttons = buttons as u32;
     loop {
-        env.wait(0);
+        super::script::wait(1);
         invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, true);
         let result = GET_WARN_RESULT(true, 0);
         if result != FrontendButtons::None {

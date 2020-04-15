@@ -1,7 +1,6 @@
 use crate::invoke;
 use crate::native;
 use crate::hash::{Hash, Hashable};
-use crate::runtime::ScriptEnv;
 use crate::native::{NativeStackValue, NativeStackReader, NativeStackWriter};
 use crate::game::Handle;
 use crate::game::ped::Ped;
@@ -13,6 +12,13 @@ pub trait Resource {
     fn is_loaded(&self) -> bool;
     fn request(&self);
     fn mark_unused(&mut self);
+
+    fn request_and_wait(&self) {
+        self.request();
+        while !self.is_loaded() {
+            crate::game::script::wait(1);
+        }
+    }
 }
 
 #[derive(Clone)]

@@ -6,7 +6,6 @@ extern crate backtrace;
 
 use crate::pattern::MemoryRegion;
 use crate::game::entity::Entity;
-use crate::win::input::InputHook;
 use crate::game::GameState;
 use crate::hash::Hashable;
 use std::ptr::null_mut;
@@ -136,12 +135,13 @@ fn add_dll_directory(java_exe: &Path) {
 #[cfg(target_os = "windows")]
 fn attach(instance: HINSTANCE) {
     unsafe {
-        console::attach();
-        info!("Injection successful");
-
         if AddVectoredExceptionHandler(0, Some(except)).is_null() {
             panic!("Unable to set exception handler");
         }
+        console::attach();
+        info!("Injection successful");
+
+        crate::pattern::CACHE.load();
 
         let mem = MemoryRegion::image();
 
@@ -163,6 +163,8 @@ fn attach(instance: HINSTANCE) {
 
         native::fs::pre_init(&mem);
         native::pre_init();
+
+        crate::pattern::CACHE.save();
 
         info!("Searching for script candidates...");
 
@@ -187,22 +189,23 @@ fn attach(instance: HINSTANCE) {
         info!("Spawning main thread...");
 
         std::thread::spawn(move || {
-            info!("Hooking user input...");
-            let input = InputHook::new();
-            console::attach();
-
             let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
             add_dll_directory(&dll_path);
             let args = InitArgsBuilder::new()
                 .version(JNIVersion::V8)
+                .option(&format!("-XX:ErrorFile={}/hs_err_pid_%p.log", launcher_dir().join("crash-reports").display()))
                 .option(&format!("-Duser.dir={}", launcher_dir().display()))
                 .build().expect("failed to build jvm args");
-            info!("Initializing VM...");
+            info!("Initializing VM... working dir is {:?}", std::env::current_dir());
             let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
 
             info!("Starting runtime...");
 
-            runtime::start(input, script_candidates, vm);
+            runtime::start(script_candidates, vm);
+
+            info!("Hooking user input...");
+            crate::win::input::hook();
+            console::attach();
 
             info!("Waiting for game being loaded...");
 
@@ -229,7 +232,9 @@ fn attach(instance: HINSTANCE) {
 
 #[cfg(target_os = "windows")]
 fn detach() {
-
+    unsafe {
+        crate::win::input::unhook();
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -262,6 +267,7 @@ pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, rese
         },
         DllCallReason::ProcessDetach => {
             unsafe { FreeLibrary(instance) };
+            detach();
         }
         other => {
             //crate::info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })

@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 use cgmath::{Vector2, Array};
-use super::{ScriptEnv, Script};
+use super::Script;
 use crate::game;
 use crate::game::player::Player;
-use crate::game::streaming::AnimDict;
+use crate::game::streaming::{AnimDict, Resource};
 use crate::game::camera::{Camera, GameplayCamera};
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
@@ -25,10 +25,10 @@ impl ScriptFingerPointing {
 }
 
 impl Script for ScriptFingerPointing {
-    fn prepare(&mut self, mut env: ScriptEnv) {
+    fn prepare(&mut self) {
     }
 
-    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
+    fn frame(&mut self, game_state: GameState) {
         let player = Player::local().get_ped();
         let tasks = player.get_tasks().get_network();
 
@@ -47,7 +47,7 @@ impl Script for ScriptFingerPointing {
             if !self.active {
                 self.active = true;
                 let dict = AnimDict::new("anim@mp_point");
-                env.wait_for_resource(&dict);
+                dict.request_and_wait();
                 player.set_config_flag(36, true);
                 tasks.do_move("task_mp_pointing", 0.5, false, &dict, 24);
             }

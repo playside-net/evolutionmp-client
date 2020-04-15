@@ -3,7 +3,6 @@ use crate::game::{Handle, Rgba};
 use cgmath::{Vector2, Vector3};
 use crate::native::pool::Handleable;
 use crate::game::streaming::Resource;
-use crate::runtime::ScriptEnv;
 
 #[derive(Debug)]
 pub struct Scaleform {
@@ -13,9 +12,9 @@ pub struct Scaleform {
 crate::impl_handle!(Scaleform);
 
 impl Scaleform {
-    pub fn new(env: &mut ScriptEnv, id: &str) -> Option<Scaleform> {
+    pub fn new(id: &str) -> Option<Scaleform> {
         let scaleform = invoke!(Option<Scaleform>, 0x11FE353CF9733E6F, id)?;
-        env.wait_for_resource(&scaleform);
+        scaleform.request_and_wait();
         Some(scaleform)
     }
 

@@ -1,7 +1,7 @@
 use crate::hash::{Hash, Hashable};
 use crate::pattern::MemoryRegion;
 use crate::{GameState, GAME_STATE, launcher_dir};
-use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton, InputHook};
+use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton};
 use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe, NativeFunction};
 use crate::hash::joaat;
 use crate::win::thread::Fiber;
@@ -37,57 +37,6 @@ use jni_dynamic::objects::{JClass, JString, JObject, JByteBuffer, JValue};
 use jni_dynamic::strings::JNIStr;
 use jni_dynamic::errors::ErrorKind;
 
-static mut ACTIVE_SCRIPT: *mut ScriptContainer = std::ptr::null_mut();
-
-pub struct Runtime {
-    user_input: InputHook,
-    main_fiber: Option<Fiber>,
-    scripts: Vec<ScriptContainer>,
-    event_pool: Option<EventPool>
-}
-
-impl Runtime {
-    fn new(input: InputHook) -> Runtime {
-        Runtime {
-            user_input: input,
-            scripts: Vec::new(),
-            main_fiber: None,
-            event_pool: Some(EventPool::new())
-        }
-    }
-
-    pub(crate) fn frame(&mut self) {
-        if self.main_fiber.is_none() {
-            self.main_fiber = Some(Fiber::convert_thread().expect("cannot convert frame thread to fiber"));
-        }
-        while let Some(event) = self.user_input.next_event().ok() {
-            let mut event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
-            event_pool.push_input(ScriptEvent::UserInput(event));
-        }
-        if let Ok(mut native_events) = crate::events::EVENTS.try_borrow_mut() {
-            if let Some(native_events) = native_events.as_mut() {
-                let event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
-                while let Some(event) = native_events.pop_front() {
-                    event_pool.push_input(ScriptEvent::NativeEvent(event));
-                }
-            }
-        }
-        for s in &mut self.scripts {
-            s.main_fiber = self.main_fiber.take();
-            s.event_pool = self.event_pool.take();
-            s.try_resume();
-            self.main_fiber = s.main_fiber.take();
-            self.event_pool = s.event_pool.take();
-        }
-        let event_pool = self.event_pool.as_mut().expect("missing runtime event pool");
-        event_pool.swap();
-    }
-
-    pub(crate) fn register_script<N, S>(&mut self, name: N, script: S) where N: Into<String>, S: Script + 'static {
-        self.scripts.push(ScriptContainer::new(name, script));
-    }
-}
-
 static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
 
 pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
@@ -110,10 +59,9 @@ fn attach_thread() -> AttachGuard<'static> {
     unsafe { VM.as_ref().expect("VM not initialized").attach_current_thread().expect("attach failed") }
 }
 
-pub(crate) fn start(input: InputHook, script_candidates: Vec<String>, vm: Arc<JavaVM>) {
-    let mut runtime = Runtime::new(input);
+pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
     info!("Initializing scripts");
-    crate::scripts::init(&mut runtime);
+    crate::scripts::init();
 
     unsafe { VM = Some(vm) };
 
@@ -181,13 +129,11 @@ pub(crate) fn start(input: InputHook, script_candidates: Vec<String>, vm: Arc<Ja
         other => other.expect("Error invoking main function").i().unwrap(),
     };
 
-    std::mem::forget(env); //Do not detach current thread
+    std::mem::forget(env);
 
     for id in 0..count {
-        runtime.register_script(&format!("vm:{}", id), ScriptJava { id })
+        crate::native::script::run(&format!("vm:{}", id), ScriptJava { id })
     }
-
-    crate::native::script::init(runtime);
 
     /*HOOKS.replace(Some(HashMap::new()));
 
@@ -217,21 +163,16 @@ impl ScriptJava {
 }
 
 impl Script for ScriptJava {
-    fn prepare(&mut self, env: ScriptEnv) {
+    fn prepare(&mut self) {
         let env = attach_thread();
         let script = self.get_java_object();
         env.call_method(script, "prepare", "()V", args![]).expect("error calling `prepare` on vm script");
     }
 
-    fn frame(&mut self, env: ScriptEnv, game_state: GameState) {
+    fn frame(&mut self, game_state: GameState) {
         let env = attach_thread();
         let script = self.get_java_object();
-        match env.call_method(script, "frame", "()V", args![]) {
-            Err(e) if matches!(e.kind(), ErrorKind::JavaException) => {
-                panic!("{}", get_last_exception(&env));
-            },
-            other => other.expect("error calling `frame` on vm script")
-        };
+        env.call_method(script, "frame", "()V", args![]).expect("error calling `frame` on vm script");
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
@@ -271,7 +212,6 @@ impl Script for ScriptJava {
                     _ => return false
                 }
             },
-            ScriptEvent::JavaEvent(event) => *event,
             _ => return false
         };
         env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
@@ -293,15 +233,11 @@ unsafe extern "C" fn get_string<'a>(_env: &'a JNIEnv, args: JObject) -> JString<
 }
 
 unsafe extern "C" fn wait(_env: &JNIEnv, _script: JObject, millis: u64) {
-    if !ACTIVE_SCRIPT.is_null() {
-        (&mut *ACTIVE_SCRIPT).wait(millis);
-    }
+    crate::game::script::wait(millis);
 }
 
 unsafe extern "C" fn propagate(_env: &JNIEnv, _script: JObject, event: JObject<'static>) {
-    if !ACTIVE_SCRIPT.is_null() {
-        (&mut *ACTIVE_SCRIPT).propagate(ScriptEvent::JavaEvent(event));
-    }
+    unimplemented!()
 }
 
 unsafe extern "C" fn info(_env: &JNIEnv, _class: JClass, line: JObject) {
@@ -358,10 +294,8 @@ pub fn hook_native(hash: u64, hook: fn(&mut NativeCallContext)) {
     }
 }
 
-unsafe impl std::marker::Send for ScriptContainer {}
-
 pub struct TaskQueue {
-    tasks: VecDeque<Box<dyn FnMut(&mut ScriptEnv)>>
+    tasks: VecDeque<Box<dyn FnMut()>>
 }
 
 impl TaskQueue {
@@ -371,13 +305,13 @@ impl TaskQueue {
         }
     }
 
-    pub fn push<F>(&mut self, task: F) where F: FnMut(&mut ScriptEnv) + 'static {
+    pub fn push<F>(&mut self, task: F) where F: FnMut() + 'static {
         self.tasks.push_back(Box::new(task))
     }
 
-    pub fn process(&mut self, env: &mut ScriptEnv) {
+    pub fn process(&mut self) {
         while let Some(mut task) = self.tasks.pop_front() {
-            task(env);
+            task();
         }
     }
 }
@@ -393,64 +327,6 @@ pub struct ScriptContainer {
     event_pool: Option<EventPool>
 }
 
-impl ScriptContainer {
-    pub fn new<N, S>(name: N, script: S) -> ScriptContainer where N: Into<String>, S: Script + 'static {
-        ScriptContainer {
-            name: name.into(),
-            fiber: None,
-            main_fiber: None,
-            wake_at: Instant::now(),
-            terminated: false,
-            script: Some(Box::new(script)),
-            event_pool: None
-        }
-    }
-
-    extern "system" fn fiber_loop(&mut self) {
-        /*while **GAME_STATE != GameState::Playing {
-            self.wait(0)
-        }*/
-        let mut script = self.script.take().unwrap();
-        script.prepare(ScriptEnv::new(self));
-        while !self.terminated {
-            self.process_input(&mut script);
-            script.frame(ScriptEnv::new(self), *GAME_STATE.as_ref());
-            self.wait(0)
-        }
-        self.script = Some(script);
-    }
-
-    fn process_input(&mut self, script: &mut Box<dyn Script>) {
-        let event_pool = self.event_pool.as_mut().expect("missing script event pool");
-        let mut output = VecDeque::new();
-        event_pool.iterate(|e| script.event(e, &mut output));
-        event_pool.output.extend(output.into_iter());
-    }
-
-    fn try_resume(&mut self) {
-        if Instant::now() >= self.wake_at {
-            unsafe { ACTIVE_SCRIPT = self as *mut Self; }
-            if let Some(fiber) = &self.fiber {
-                fiber.make_current();
-            } else {
-                self.fiber = Some(Fiber::new(0, self, ScriptContainer::fiber_loop));
-            }
-            unsafe { ACTIVE_SCRIPT = std::ptr::null_mut(); }
-        }
-    }
-
-    pub fn wait(&mut self, millis: u64) {
-        unsafe { ACTIVE_SCRIPT = std::ptr::null_mut(); }
-        self.wake_at = Instant::now() + Duration::from_millis(millis);
-        self.main_fiber.as_mut().expect("missing main fiber").make_current();
-    }
-
-    pub fn propagate(&mut self, event: ScriptEvent) {
-        let event_pool = self.event_pool.as_mut().expect("missing script event pool");
-        event_pool.output.push_back(event);
-    }
-}
-
 impl std::ops::Drop for ScriptContainer {
     fn drop(&mut self) {
         if let Some(fiber) = self.fiber.as_mut() {
@@ -460,49 +336,9 @@ impl std::ops::Drop for ScriptContainer {
 }
 
 pub trait Script {
-    fn prepare(&mut self, env: ScriptEnv);
-    fn frame(&mut self, env: ScriptEnv, game_state: GameState);
+    fn prepare(&mut self);
+    fn frame(&mut self, game_state: GameState);
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool;
 }
 
-pub struct ScriptEnv<'a> {
-    container: &'a mut ScriptContainer
-}
-
-impl<'a> ScriptEnv<'a> {
-    fn new(container: &'a mut ScriptContainer) -> ScriptEnv<'a> {
-        ScriptEnv { container }
-    }
-
-    pub fn wait(&mut self, millis: u64) {
-        self.container.wait(millis)
-    }
-
-    pub fn event(&mut self, event: ScriptEvent) {
-        let mut event_pool = self.container.event_pool.as_mut().expect("missing env event pool");
-        event_pool.push_output(event);
-    }
-
-    pub fn error<L>(&mut self, line: L) where L: Into<String> {
-        self.event(ScriptEvent::ConsoleOutput(format!("~r~{}", line.into())));
-    }
-
-    pub fn log<L>(&mut self, line: L) where L: Into<String> {
-        self.event(ScriptEvent::ConsoleOutput(line.into()));
-    }
-
-    pub fn prompt(&mut self, title: &str, placeholder: &str, max_length: u32) -> Option<String> {
-        crate::game::ui::prompt(self, title, placeholder, max_length)
-    }
-
-    pub fn warn(&mut self, title: &str, line1: &str, line2: &str, buttons: FrontendButtons, background: bool) -> FrontendButtons {
-        crate::game::ui::warn(self, title, line1, line2, buttons, background)
-    }
-
-    pub fn wait_for_resource(&mut self, resource: &dyn Resource) {
-        resource.request();
-        while !resource.is_loaded() {
-            self.wait(0);
-        }
-    }
-}
+pub struct ScriptEnv {}

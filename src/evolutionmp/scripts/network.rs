@@ -1,4 +1,4 @@
-use crate::runtime::{Script, ScriptEnv, Runtime};
+use crate::runtime::Script;
 use crate::network::{Message, PORT, VehicleData, VehicleColor};
 use crate::events::ScriptEvent;
 use crate::game::{self, Handle, GameState};
@@ -23,10 +23,10 @@ fn get_remote_address() -> SocketAddr {
     SocketAddr::V4(SocketAddrV4::new(REMOTE_IP, PORT))
 }
 
-pub fn init(runtime: &mut Runtime) {
+pub fn init() {
     match Socket::bind_any() {
         Ok(socket) => {
-            runtime.register_script("network", ScriptNetwork::new(socket));
+            crate::native::script::run("network", ScriptNetwork::new(socket))
         },
         Err(e) => {
             crate::error!("Local server binding failed: {:?}", e)
@@ -45,14 +45,14 @@ pub struct ScriptNetwork {
 }
 
 impl Script for ScriptNetwork {
-    fn prepare(&mut self, mut env: ScriptEnv) {
+    fn prepare(&mut self) {
         self.send_reliable_sequenced(&Message::Handshake {
             socialclub: super::game::player::get_social_club().to_owned(),
             pid: std::process::id()
         }, Some(0))
     }
 
-    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
+    fn frame(&mut self, game_state: GameState) {
         while let Some(event) = (self.receiver)() {
             match event {
                 SocketEvent::Packet(packet) => {
@@ -60,7 +60,7 @@ impl Script for ScriptNetwork {
                     if address.ip() == IpAddr::V4(REMOTE_IP) {
                         match bincode::deserialize(packet.payload()) {
                             Ok(message) => {
-                                self.on_message(&mut env, message)
+                                self.on_message(message)
                             },
                             Err(e) => {
                                 eprintln!("Received broken message from server: {:?}", e);
@@ -70,7 +70,7 @@ impl Script for ScriptNetwork {
                 }
                 SocketEvent::Timeout(address) => {
                     if address.ip() == IpAddr::V4(REMOTE_IP) {
-                        self.on_timeout(&mut env)
+                        self.on_timeout()
                     }
                 },
                 _ => {}
@@ -98,7 +98,7 @@ impl Script for ScriptNetwork {
                 //fake.set_heading(orig.get_heading());
                 orig.copy_damage_to(fake);
             } else {
-                self.fake = Vehicle::new(&mut env, orig.get_model(),
+                self.fake = Vehicle::new(orig.get_model(),
                                          orig.get_position_by_offset(Vector3::new(0.0, 5.0, 0.0)),
                                          orig.get_heading(), false, false);
             }
@@ -191,17 +191,17 @@ impl ScriptNetwork {
 
     fn on_connect(&mut self) {}
 
-    fn on_timeout(&mut self, env: &mut ScriptEnv) {
+    fn on_timeout(&mut self) {
         println!("Timed out");
     }
 
-    fn on_message(&mut self, env: &mut ScriptEnv, message: Message) {
+    fn on_message(&mut self, message: Message) {
         match message {
             Message::Disconnect { reason } => {},
             Message::LoggedIn { id } => {
                 self.session_id = Some(id);
             }
-            Message::Chat { message } => env.log(message),
+            //Message::Chat { message } => env.log(message),
             _ => {}
         }
     }
@@ -271,8 +271,8 @@ struct SyncedPlayer {
 }
 
 impl SyncedVehicle {
-    fn new(env: &mut ScriptEnv, id: Uuid, model: Hash, data: VehicleData) -> Option<SyncedVehicle> {
-        let handle = Vehicle::new(env, Model::from(model), data.position, data.heading, false, false)?;
+    fn new(id: Uuid, model: Hash, data: VehicleData) -> Option<SyncedVehicle> {
+        let handle = Vehicle::new(Model::from(model), data.position, data.heading, false, false)?;
         handle.set_position_freezed(true);
         game::streaming::request_collision_at(data.position);
         handle.set_position_no_offset(data.position, Vector3::new(false, false, false));

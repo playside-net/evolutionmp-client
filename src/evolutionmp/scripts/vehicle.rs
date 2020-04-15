@@ -1,4 +1,4 @@
-use crate::runtime::{TaskQueue, Script, ScriptEnv};
+use crate::runtime::Script;
 use crate::events::ScriptEvent;
 use crate::win::input::{InputEvent, KeyboardEvent};
 use crate::game;
@@ -15,19 +15,17 @@ use std::collections::VecDeque;
 use crate::game::ui::Font;
 
 pub struct ScriptVehicle {
-    tasks: TaskQueue,
     scaleform: Option<Scaleform>
 }
 
 impl ScriptVehicle {
     pub fn new() -> ScriptVehicle {
         ScriptVehicle {
-            tasks: TaskQueue::new(),
             scaleform: None
         }
     }
 
-    fn try_enter_vehicle(&self, ped: &Ped, env: &mut ScriptEnv) -> bool {
+    fn try_enter_vehicle(&self, ped: &Ped) -> bool {
         if !ped.is_in_any_vehicle(false) {
             if let Some(vehicle) = ped.get_entering_vehicle() {
                 let model = VehicleModel::from_vehicle(&vehicle);
@@ -41,7 +39,7 @@ impl ScriptVehicle {
         false
     }
 
-    fn try_leave_vehicle(&self, ped: &Ped, env: &mut ScriptEnv) -> bool {
+    fn try_leave_vehicle(&self, ped: &Ped) -> bool {
         if ped.is_in_any_vehicle(false) {
             let vehicle = ped.get_using_vehicle().unwrap();
             ped.get_tasks().leave_vehicle(&vehicle, 1);
@@ -52,16 +50,15 @@ impl ScriptVehicle {
 }
 
 impl Script for ScriptVehicle {
-    fn prepare(&mut self, mut env: ScriptEnv) {
-        /*let scaleform = Scaleform::new(&mut env, "BINOCULARS").unwrap();
+    fn prepare(&mut self) {
+        /*let scaleform = Scaleform::new("BINOCULARS").unwrap();
         scaleform.invoke::<()>("SET_CAM_LOGO", &[ScaleformArg::I32(0)]);
         self.scaleform = Some(scaleform);*/
         game::audio::set_mobile_radio_enabled(true);
     }
 
-    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
+    fn frame(&mut self, game_state: GameState) {
         use crate::game::controls;
-        let console = crate::scripts::console::is_open();
 
         let player = Player::local();
         let ped = player.get_ped();
@@ -88,11 +85,11 @@ impl Script for ScriptVehicle {
         if ped.exists() {
             if controls::is_just_pressed(Group::Move, Control::Enter) {
                 controls::disable_action(Group::Move, Control::Enter, true);
-                self.try_enter_vehicle(&ped, &mut env);
+                self.try_enter_vehicle(&ped);
             }
             if controls::is_just_pressed(Group::Move, Control::VehicleExit) {
                 controls::disable_action(Group::Move, Control::VehicleExit, true);
-                self.try_leave_vehicle(&ped, &mut env);
+                self.try_leave_vehicle(&ped);
             }
         }
     }

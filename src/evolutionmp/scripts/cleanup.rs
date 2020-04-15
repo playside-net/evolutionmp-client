@@ -1,6 +1,6 @@
 use crate::events::ScriptEvent;
 use crate::win::input::{InputEvent, KeyboardEvent};
-use crate::runtime::{TaskQueue, ScriptEnv, Script};
+use crate::runtime::Script;
 use crate::game;
 use crate::game::player::Player;
 use crate::game::entity::Entity;
@@ -18,7 +18,6 @@ use crate::game::interior::Interior;
 static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
 
 pub struct ScriptCleanWorld {
-    tasks: TaskQueue,
     last_cleanup: Instant,
     loaded: bool
 }
@@ -26,7 +25,6 @@ pub struct ScriptCleanWorld {
 impl ScriptCleanWorld {
     pub fn new() -> ScriptCleanWorld {
         ScriptCleanWorld {
-            tasks: TaskQueue::new(),
             last_cleanup: Instant::now(),
             loaded: false
         }
@@ -34,7 +32,7 @@ impl ScriptCleanWorld {
 }
 
 impl Script for ScriptCleanWorld {
-    fn prepare(&mut self, mut env: ScriptEnv) {
+    fn prepare(&mut self) {
         game::misc::set_stunt_jumps_can_trigger(false);
 
         game::gameplay::set_freemode_map_behavior(true);
@@ -57,7 +55,7 @@ impl Script for ScriptCleanWorld {
         game::streaming::load_scene(pos);
 
         let player = Player::local();
-        player.set_model(&mut env, "mp_m_freemode_01");
+        //player.set_model("mp_m_freemode_01");
         let ped = player.get_ped();
         ped.set_position_no_offset(pos, Vector3::new(false, false, false));
         ped.get_tasks().clear_immediately();
@@ -110,9 +108,7 @@ impl Script for ScriptCleanWorld {
         game::ui::hide_loading_prompt();
     }
 
-    fn frame(&mut self, mut env: ScriptEnv, game_state: GameState) {
-        self.tasks.process(&mut env);
-
+    fn frame(&mut self, game_state: GameState) {
         self.disable_controls();
         game::streaming::stop_player_switch();
 

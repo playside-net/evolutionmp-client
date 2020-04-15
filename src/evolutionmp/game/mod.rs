@@ -90,6 +90,11 @@ impl GameState {
     }
 }
 
+pub fn pre_init() {
+    locale::pre_init();
+    ui::pre_init();
+}
+
 pub fn init() {
     locale::init();
     ui::init();
