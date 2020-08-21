@@ -47,6 +47,7 @@ impl std::cmp::PartialEq for Event {
     }
 }
 
+#[derive(Debug)]
 pub enum ScriptEvent {
     ConsoleInput(String),
     NativeEvent(NativeEvent),

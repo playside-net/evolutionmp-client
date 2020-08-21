@@ -31,6 +31,7 @@ pub(crate) static BRAKE_POWER: VehicleField<f32> = VehicleField::predefined(0x9A
 pub(crate) static THROTTLE_POWER: VehicleField<f32> = VehicleField::predefined(0x99C);
 pub(crate) static HELICOPTER_BLADES_SPEED: VehicleField<f32> = VehicleField::predefined(0x1AA8);
 pub(crate) static TRAIN_TRACK_NODE: VehicleField<i32> = VehicleField::predefined(0x14C0);
+pub(crate) static INTERIOR_LIGHT: VehicleField<i32> = VehicleField::predefined(0x929);
 
 fn find_nearest_native(natives: &HashMap<u64, *const ()>, address: *const ()) -> Option<(u64, *const ())> {
     natives.iter().min_by(|(_, f1), (_, f2)| {

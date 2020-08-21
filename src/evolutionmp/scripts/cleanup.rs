@@ -5,17 +5,27 @@ use crate::game;
 use crate::game::player::Player;
 use crate::game::entity::Entity;
 use crate::game::controls::{Control, Group as ControlGroup};
-use crate::game::streaming::Model;
+use crate::game::streaming::{Model, Resource};
 use crate::game::vehicle::{Vehicle, Dispatch};
 use std::time::Instant;
 use std::collections::VecDeque;
 use cgmath::{Vector3, Array, Vector2};
 use crate::game::GameState;
 use crate::game::ui::LoadingPrompt;
-use crate::game::ped::{ParentalFeatures, AppearanceComponent, AppearanceVariation};
+use crate::game::ped::{ParentalFeatures, AppearanceComponent, AppearanceVariation, Ped};
 use crate::game::interior::Interior;
+use crate::native::pool::Handleable;
+use crate::hash::Hashable;
 
-static AUDIO_FLAGS: [&'static str; 5] = ["LoadMPData", "DisableBarks", "DisableFlightMusic", "PoliceScannerDisabled", "OnlyAllowScriptTriggerPoliceScanner"];
+static AUDIO_FLAGS: [(&'static str, bool); 7] = [
+    ("LoadMPData", true),
+    ("DisableBarks", true),
+    ("DisableFlightMusic", true),
+    ("PoliceScannerDisabled", true),
+    ("OnlyAllowScriptTriggerPoliceScanner", true),
+    ("PlayMenuMusic", false),
+    ("ActivateSwitchWheelAudio", false)
+];
 
 pub struct ScriptCleanWorld {
     last_cleanup: Instant,
@@ -33,32 +43,26 @@ impl ScriptCleanWorld {
 
 impl Script for ScriptCleanWorld {
     fn prepare(&mut self) {
-        game::misc::set_stunt_jumps_can_trigger(false);
+        let ped = Ped::local();
+        let pos = Vector3::new(-1030.0, -2730.0, 13.46);
+        game::streaming::load_scene(pos);
+        //ped.set_model("mp_m_freemode_01");
+        crate::invoke!((), 0x621873ECE1178967, ped.get_handle(), pos);
 
+        game::misc::set_stunt_jumps_can_trigger(false);
         game::gameplay::set_freemode_map_behavior(true);
-        game::dlc::load_mp_maps();
+        //game::dlc::load_mp_maps();
 
         game::clock::pause(true);
 
-        self.terminate_script("selector", true);
-        self.terminate_script("replay_controller", true);
-        self.terminate_all_scripts(true);
+        //self.terminate_script("selector", true);
+        //self.terminate_script("replay_controller", true);
+        //self.terminate_all_scripts(true);
 
-        for flag in AUDIO_FLAGS.iter() {
-            game::audio::set_flag(flag, true);
+        for (flag, enabled) in AUDIO_FLAGS.iter() {
+            game::audio::set_flag(flag, *enabled);
         }
-        game::audio::set_flag("PlayMenuMusic", false);
-        game::audio::set_flag("ActivateSwitchWheelAudio", false);
 
-        let pos = Vector3::new(-1030.0, -2730.0, 13.46);
-
-        game::streaming::load_scene(pos);
-
-        let player = Player::local();
-        //player.set_model("mp_m_freemode_01");
-        let ped = player.get_ped();
-        ped.set_position_no_offset(pos, Vector3::new(false, false, false));
-        ped.get_tasks().clear_immediately();
         let pf = ped.get_parental_features();
         pf.set(ParentalFeatures {
             face_shape: Vector3::new(14, 17, 0),
@@ -71,56 +75,21 @@ impl Script for ScriptCleanWorld {
             texture: 0,
             palette: 2
         });
-        /*let night_club = Interior::from_pos(Vector3::new(-1604.664, -3012.583, -79.9999))
-            .unwrap();
 
-        env.wait_for_resource(&night_club);
-        let props = [
-            "Int01_ba_security_upgrade",
-            "Int01_ba_equipment_setup",
-            "Int01_ba_Style01﻿",
-            "Int01_ba_Style02﻿",
-            "Int01_ba_Style03",
-            "DJ_01_Lights_02",
-            "Int01_ba_style01_podium",
-            "Int01_ba_style02_podium",
-            "int01_ba_lights_screen",
-            "Int01_ba_Screen",
-            "Int01_ba_bar_content",
-            "Int01_ba_booze_01",
-            "Int01_ba_booze_02",
-            "Int01_ba_booze_03",
-            "Int01_ba_dj01",
-            "Int01_ba_lightgrid_01",
-            "Int01_ba_Clutter",
-            "Int01_ba_clubname_08",
-            "Int01_ba_dry_ice",
-            "Int01_ba_deliverytruck"
-        ];
-        for prop in props.iter() {
-            night_club.set_prop_enabled(prop, true);
-        }
-        night_club.refresh();*/
-
-        self.cleanup();
+        //self.cleanup();
 
         game::script::shutdown_loading_screen();
         game::ui::hide_loading_prompt();
+        game::camera::fade_in(5000);
     }
 
     fn frame(&mut self, game_state: GameState) {
         self.disable_controls();
         game::streaming::stop_player_switch();
 
-        let player = Player::local();
-        let ped = player.get_ped();
+        let ped = Ped::local();
 
         self.cleanup();
-
-        if !self.loaded && game_state == GameState::Playing {
-            self.loaded = true;
-            game::camera::fade_in(5000);
-        }
 
         game::ped::set_density_multiplier_this_frame(0.0);
         game::ped::set_scenario_density_multiplier_this_frame(0.0);
@@ -175,7 +144,7 @@ impl ScriptCleanWorld {
         game::vehicle::set_random_trains(false);
         game::vehicle::set_far_draw(false);
         game::vehicle::set_distant_visible(false);
-        //game::vehicle::delete_all_trains();
+        game::vehicle::delete_all_trains();
         game::vehicle::set_parked_count(-1);
         game::vehicle::set_low_priority_generators_active(false);
         let range = Vector3::from_value(9999.0);

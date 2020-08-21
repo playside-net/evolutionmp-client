@@ -36,6 +36,7 @@ use jni_dynamic::{JavaVM, InitArgs, InitArgsBuilder, JNIVersion, NativeMethod, J
 use jni_dynamic::objects::{JClass, JString, JObject, JByteBuffer, JValue};
 use jni_dynamic::strings::JNIStr;
 use jni_dynamic::errors::ErrorKind;
+use crate::native::pool::Pool;
 
 static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
 
@@ -60,8 +61,6 @@ fn attach_thread() -> AttachGuard<'static> {
 }
 
 pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
-    info!("Initializing scripts");
-    crate::scripts::init();
 
     unsafe { VM = Some(vm) };
 
@@ -93,8 +92,32 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
 
     macro_rules! natives {
         ($env:expr,$class_name:literal,$($native:expr),*) => {{
-            let class = env.find_class($class_name).expect("Unable to find class");
+            let class = match env.find_class($class_name) {
+                Err(e) if matches!(e.kind(), ErrorKind::JavaException) => {
+                    panic!("Unable to find class: {}", get_last_exception(&$env))
+                },
+                other => other.expect("Unable to find class")
+            };
             $env.register_natives(class, vec![$($native),*]).unwrap();
+        }};
+    }
+
+    macro_rules! pool {
+        ($env:expr,$pool:expr,$class:literal) => {{
+            extern "C" fn capacity(_env: &JNIEnv, _class: JClass) -> u32 {
+                $pool.capacity()
+            }
+            extern "C" fn is_valid(_env: &JNIEnv, _class: JClass, index: u32) -> bool {
+                $pool.is_valid(index)
+            }
+            extern "C" fn get_address(_env: &JNIEnv, _class: JClass, index: u32) -> u64 {
+                $pool.get_address(index) as u64
+            }
+            natives!($env, $class,
+                NativeMethod::new("capacity", "()I", capacity as _),
+                NativeMethod::new("isValid", "(I)Z", is_valid as _),
+                NativeMethod::new("getAddress", "(I)J", get_address as _)
+            );
         }};
     }
 
@@ -108,13 +131,55 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
         NativeMethod::new("invoke", "(JLjava/nio/LongBuffer;Ljava/nio/LongBuffer;)V", invoke as _)
     );
     natives!(env, "mp/evolution/script/Script",
-        NativeMethod::new("yield", "(J)V", wait as _),
+        //NativeMethod::new("yield", "(J)V", wait as _),
         NativeMethod::new("propagate", "(Lmp/evolution/script/event/ScriptEvent;)V", propagate as _)
     );
     natives!(env, "mp/evolution/script/ScriptPrintStream",
         NativeMethod::new("info", "(Ljava/lang/String;)V", info as _),
         NativeMethod::new("error", "(Ljava/lang/String;)V", error as _)
     );
+    natives!(env, "mp/evolution/game/entity/pool/Pool",
+        NativeMethod::new("isGlobalFull", "()Z", crate::native::pool::is_global_full as _),
+        NativeMethod::new("requestHandle", "(J)I", crate::native::pool::request_handle as _),
+        NativeMethod::new("getPosition", "(JJ)J", crate::native::pool::get_entity_pos as _)
+    );
+
+    extern "C" fn is_vehicle_interior_light(_env: &JNIEnv, obj: JObject) -> bool {
+        use crate::native::pool::Handleable;
+        let handle = i32::from_java_field(&attach_thread(), obj, "handle");
+        Vehicle::from_handle(handle as u32).unwrap().is_interior_light()
+    }
+
+    macro_rules! getter  {
+        ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => {{
+            extern "C" fn get(_env: &JNIEnv, obj: JObject) -> $ty {
+                use crate::native::pool::Handleable;
+                let handle = i32::from_java_field(&attach_thread(), obj, "handle");
+                $handle::from_handle(handle as u32).unwrap().$name()
+            }
+            NativeMethod::new($vm_name, $vm_sig, get as _)
+        }};
+    }
+
+    macro_rules! setter  {
+        ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => {{
+            extern "C" fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
+                use crate::native::pool::Handleable;
+                let handle = i32::from_java_field(&attach_thread(), obj, "handle");
+                $handle::from_handle(handle as u32).unwrap().$name(value)
+            }
+            NativeMethod::new($vm_name, $vm_sig, set as _)
+        }};
+    }
+
+    natives!(env, "mp/evolution/game/entity/vehicle/Vehicle",
+        NativeMethod::new("isInteriorLight", "()Z", is_vehicle_interior_light as _)
+        //getter!(Vehicle, bool, "isInteriorLight", "()Z", is_interior_light),
+        //getter!(Vehicle, f32, "getCurrentGear", "()F", get_current_gear),
+    );
+    pool!(env, crate::game::vehicle::get_pool(), "mp/evolution/game/entity/vehicle/VehiclePool");
+    pool!(env, crate::game::prop::get_pool(), "mp/evolution/game/entity/prop/PropPool");
+    pool!(env, crate::game::ped::get_pool(), "mp/evolution/game/entity/ped/PedPool");
 
     let launcher_dir = launcher_dir().to_string_lossy().to_java_object(&env);
     let arr = script_candidates.to_java_object(&env);
@@ -131,8 +196,9 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
 
     std::mem::forget(env);
 
+    let mut java_scripts = JAVA_SCRIPTS.lock().unwrap();
     for id in 0..count {
-        crate::native::script::run(&format!("vm:{}", id), ScriptJava { id })
+        java_scripts.push(id);
     }
 
     /*HOOKS.replace(Some(HashMap::new()));
@@ -149,15 +215,21 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
     //crate::events::init(mem);
 }
 
-pub struct ScriptJava {
-    id: i32
+lazy_static::lazy_static! {
+    pub static ref JAVA_SCRIPTS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
 }
 
+pub struct ScriptJava;
+
 impl ScriptJava {
-    fn get_java_object<'a>(&self) -> JObject<'a> {
+    pub fn new() -> ScriptJava {
+        ScriptJava
+    }
+
+    fn get_java_object<'a>(&self, id: i32) -> JObject<'a> {
         let env = attach_thread();
         let main_class = env.find_class("mp/evolution/runtime/Runtime").unwrap();
-        env.call_static_method(main_class, "getContainer", "(I)Lmp/evolution/script/ScriptContainer;", args![self.id])
+        env.call_static_method(main_class, "getContainer", "(I)Lmp/evolution/script/ScriptContainer;", args![id])
             .unwrap().l().unwrap()
     }
 }
@@ -165,19 +237,25 @@ impl ScriptJava {
 impl Script for ScriptJava {
     fn prepare(&mut self) {
         let env = attach_thread();
-        let script = self.get_java_object();
-        env.call_method(script, "prepare", "()V", args![]).expect("error calling `prepare` on vm script");
+        for id in JAVA_SCRIPTS.lock().unwrap().iter() {
+            let script = self.get_java_object(*id);
+            env.call_method(script, "prepare", "()V", args![]).expect("error calling `prepare` on vm script");
+        }
     }
 
     fn frame(&mut self, game_state: GameState) {
-        let env = attach_thread();
-        let script = self.get_java_object();
-        env.call_method(script, "frame", "()V", args![]).expect("error calling `frame` on vm script");
+        if game_state == GameState::Playing {
+            let env = attach_thread();
+
+            for id in JAVA_SCRIPTS.lock().unwrap().iter() {
+                let script = self.get_java_object(*id);
+                env.call_method(script, "frame", "()V", args![]).expect("error calling `frame` on vm script");
+            }
+        }
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
         let env = attach_thread();
-        let script = self.get_java_object();
         let event = match event {
             ScriptEvent::UserInput(event) => {
                 match event {
@@ -214,7 +292,12 @@ impl Script for ScriptJava {
             },
             _ => return false
         };
-        env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
+        let mut result = false;
+        for id in JAVA_SCRIPTS.lock().unwrap().iter() {
+            let script = self.get_java_object(*id);
+            result |= env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
+        }
+        result
     }
 }
 
@@ -263,7 +346,9 @@ unsafe extern "C" fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObj
             Box::from_raw(result as _),
             arg_count
         );
+        crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
         handler(&mut context);
+        crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
         std::mem::forget(context);
     } else {
         env.throw_new("Ljava/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
@@ -312,25 +397,6 @@ impl TaskQueue {
     pub fn process(&mut self) {
         while let Some(mut task) = self.tasks.pop_front() {
             task();
-        }
-    }
-}
-
-#[repr(C)]
-pub struct ScriptContainer {
-    name: String,
-    fiber: Option<Fiber>,
-    main_fiber: Option<Fiber>,
-    script: Option<Box<dyn Script>>,
-    wake_at: Instant,
-    terminated: bool,
-    event_pool: Option<EventPool>
-}
-
-impl std::ops::Drop for ScriptContainer {
-    fn drop(&mut self) {
-        if let Some(fiber) = self.fiber.as_mut() {
-            fiber.delete();
         }
     }
 }

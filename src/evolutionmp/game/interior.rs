@@ -63,7 +63,7 @@ impl Interior {
     }
 
     pub fn set_active(&self, active: bool) {
-        invoke!((), 0xE37B76C387BE28ED, self.handle)
+        invoke!((), 0xE37B76C387BE28ED, self.handle, active)
     }
 
     pub fn is_valid(&self) -> bool {

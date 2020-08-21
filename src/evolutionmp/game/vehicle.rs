@@ -7,7 +7,7 @@ use crate::game::streaming::{Model, Resource};
 use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
-use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE};
+use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE, INTERIOR_LIGHT};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
 use crate::pattern::RageBox;
 use std::time::Duration;
@@ -73,21 +73,21 @@ pub fn remove_vehicles_from_generators_in_area(start: Vector3<f32>, end: Vector3
 
 #[repr(u32)]
 pub enum Dispatch {
-    PoliceAutomobile = 1,
-    PoliceHelicopter = 2,
-    FireDepartment = 3,
-    SwatAutomobile = 4,
-    AmbulanceDepartment = 5,
-    PoliceRiders = 6,
-    PoliceVehicleRequest = 7,
-    PoliceRoadBlock = 8,
-    PoliceAutomobileWaitPulledOver = 9,
-    PoliceAutomobileWaitCruising = 10,
-    Gangs = 11,
-    SwatHelicopter = 12,
-    PoliceBoat = 13,
-    ArmyVehicle = 14,
-    BikerBackup = 15
+    PoliceAutomobile,
+    PoliceHelicopter,
+    FireDepartment,
+    SwatAutomobile,
+    AmbulanceDepartment,
+    PoliceRiders,
+    PoliceVehicleRequest,
+    PoliceRoadBlock,
+    PoliceAutomobileWaitPulledOver,
+    PoliceAutomobileWaitCruising,
+    Gangs,
+    SwatHelicopter,
+    PoliceBoat,
+    ArmyVehicle,
+    BikerBackup
 }
 
 pub fn set_dispatch_service(dispatch: Dispatch, enabled: bool) {
@@ -295,7 +295,7 @@ impl Vehicle {
     }
 
     pub fn get_passenger(&self, seat: i32) -> Option<Ped> {
-        invoke!(Option<Ped>, 0xBB40DD2270B65366, self.handle)
+        invoke!(Option<Ped>, 0xBB40DD2270B65366, self.handle, seat)
     }
 
     pub fn get_max_passengers(&self) -> u32 {
@@ -414,6 +414,11 @@ impl Vehicle {
 
     pub fn get_last_ped_in_seat(&self, seat: i32) -> Option<Ped> {
         invoke!(Option<Ped>, 0x83F969AA1EE2A664, self.handle, seat)
+    }
+
+    pub fn is_interior_light(&self) -> bool {
+        let flag = INTERIOR_LIGHT.get(self);
+        (flag & 0b01000000) > 0
     }
 
     pub fn set_interior_light(&self, enabled: bool) {

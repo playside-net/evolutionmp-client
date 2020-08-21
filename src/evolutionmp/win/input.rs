@@ -10,6 +10,7 @@ use std::ffi::CString;
 use std::time::{Duration, Instant};
 use std::ptr::null_mut;
 use widestring::WideCStr;
+use crate::events::ScriptEvent;
 
 static mut EVENT_POOL: Option<Sender<InputEvent>> = None;
 static mut WND_PROC: WNDPROC = None;
@@ -156,9 +157,9 @@ pub unsafe fn hook() {
     });
     std::thread::spawn(move || {
         while let Ok(event) = receiver.recv() {
-            let mut loaded_scripts = crate::native::script::LOADED_SCRIPTS.lock().unwrap();
-            for script in loaded_scripts.iter_mut() {
-                script.input(event.clone());
+            let mut event_senders = crate::native::script::EVENT_SENDERS.lock().unwrap();
+            for sender in event_senders.iter_mut() {
+                sender.send(ScriptEvent::UserInput(event.clone())).expect("event sending failed");
             }
         }
     });

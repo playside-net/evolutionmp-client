@@ -14,6 +14,8 @@ use std::cell::Cell;
 
 use crate::{bind_fn, bind_fn_ip, bind_field_ip};
 use cgmath::{Vector3, MetricSpace, Zero, Array};
+use jni_dynamic::JNIEnv;
+use jni_dynamic::objects::JClass;
 
 bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, "C", fn(Handle) -> *mut u8);
 bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, "C", fn(Handle) -> *mut u8);
@@ -39,6 +41,19 @@ pub(crate) fn pre_init() {
     lazy_static::initialize(&GLOBAL);
     lazy_static::initialize(&VEHICLE);
     lazy_static::initialize(&PICKUP);
+}
+
+pub extern "C" fn is_global_full(_env: &JNIEnv, _class: JClass) -> bool {
+    let global = GLOBAL.as_ref().as_ref().expect("global pool is not initialized");
+    global.is_full()
+}
+
+pub extern "C" fn request_handle(_env: &JNIEnv, _class: JClass, address: u64) -> u32 {
+    ENTITY_ADD_TO_POOL(address as _)
+}
+
+pub extern "C" fn get_entity_pos(_env: &JNIEnv, _class: JClass, address: u64, buffer: u64) {
+    ENTITY_POS(address as _, buffer as _);
 }
 
 pub type GetHandleAddress = extern "C" fn(Handle) -> *mut u8;

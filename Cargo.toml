@@ -44,3 +44,6 @@ path = "src/server/main.rs"
 name = "evolutionmp"
 path = "src/evolutionmp/main.rs"
 crate_type = ["rlib", "cdylib"]
+
+[profile.dev]
+opt-level = 1

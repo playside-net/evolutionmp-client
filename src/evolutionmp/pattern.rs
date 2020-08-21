@@ -7,14 +7,17 @@ use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
 use std::fs::File;
 use std::sync::Mutex;
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64, PAGE_READONLY};
-use winapi::um::memoryapi::VirtualProtect;
-use winapi::um::libloaderapi::GetModuleHandleA;
-use winapi::shared::minwindef::{DWORD, TRUE, HMODULE};
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64, PAGE_READONLY, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_NOACCESS, MEM_IMAGE};
+use winapi::um::memoryapi::{VirtualProtect, VirtualQueryEx, VirtualProtectEx, ReadProcessMemory, VirtualQuery};
+use winapi::um::libloaderapi::{GetModuleHandleA, GetModuleFileNameW};
+use winapi::shared::minwindef::{DWORD, TRUE, HMODULE, MAX_PATH};
 use detour::RawDetour;
 use serde_derive::{Serialize, Deserialize};
 use crate::launcher_dir;
 use std::path::{Path, PathBuf};
+use winapi::um::sysinfoapi::{SYSTEM_INFO, GetSystemInfo};
+use winapi::um::processthreadsapi::GetCurrentProcess;
+use winapi::um::errhandlingapi::GetLastError;
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
@@ -116,16 +119,73 @@ impl Pattern {
         self.nibbles.len()
     }
 
-    pub fn matches(&self, start: *mut u8) -> bool {
-        for (i, n) in self.nibbles.iter().enumerate() {
-            if let Some(n) = n {
-                let o = unsafe { start.add(i).read() };
-                if o != *n {
-                    return false;
+    pub fn scan(&self, buf: &[u8]) -> Option<usize> {
+        let pattern_len = self.nibbles.len();
+        for i in 0..(buf.len() - pattern_len) {
+            let mut found = true;
+            for j in 0..pattern_len {
+                if let Some(m) = self.nibbles[j] {
+                    if m != buf[i + j] {
+                        found = false;
+                        break;
+                    }
                 }
             }
+            if found {
+                return Some(i);
+            }
         }
-        true
+        None
+    }
+
+    pub unsafe fn find(&self, region: &MemoryRegion) -> Option<MemoryRegion> {
+        crate::info!("Searching for pattern {}", self);
+        let mut sys_info = SYSTEM_INFO::default();
+        GetSystemInfo(&mut sys_info);
+        let end = sys_info.lpMaximumApplicationAddress;
+        let mut current_chunk = std::ptr::null_mut();
+        let mut bytes_read = 0;
+
+        while current_chunk < end {
+            let mut mbi = MEMORY_BASIC_INFORMATION::default();
+            let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
+
+            let process = GetCurrentProcess();
+            let hr = GetLastError();
+            if VirtualQuery(current_chunk, &mut mbi, mbi_size) == 0 {
+                return None;
+            }
+
+            if mbi.State == MEM_COMMIT && mbi.Protect != PAGE_NOACCESS && mbi.Type == MEM_IMAGE {
+                let mut name = [0; MAX_PATH];
+                let len = GetModuleFileNameW(mbi.AllocationBase.cast(), name.as_mut_ptr(), MAX_PATH as u32);
+                if len != 0 {
+                    let name = widestring::WideCStr::from_ptr_with_nul(name.as_ptr(), len as usize).to_string_lossy();
+                    crate::info!("Reading chunk of size {} and type MEM_IMAGE in module {}", mbi.RegionSize, name);
+                } else {
+                    crate::info!("Reading chunk of size {} and type MEM_IMAGE", mbi.RegionSize);
+                }
+                let mut buffer = Vec::with_capacity(mbi.RegionSize);
+                buffer.extend(std::iter::repeat(0u8).take(mbi.RegionSize));
+                let mut old_protect = 0;
+                if VirtualProtect(mbi.BaseAddress, mbi.RegionSize, PAGE_EXECUTE_READWRITE, &mut old_protect) == TRUE {
+                    ReadProcessMemory(process, mbi.BaseAddress, buffer.as_mut_ptr().cast(), mbi.RegionSize, &mut bytes_read);
+                    VirtualProtect(mbi.BaseAddress, mbi.RegionSize, old_protect, &mut old_protect);
+                    if let Some(index) = self.scan(&buffer[0..bytes_read]) {
+                        let base = current_chunk.add(index).cast();
+                        let offset = base as u64 - mbi.AllocationBase as u64;
+                        crate::info!("Found pattern {} at address {:p} offset {:X}", self, base, offset);
+                        return Some(MemoryRegion {
+                            base,
+                            size: bytes_read - index
+                        });
+                    }
+                }
+            }
+            current_chunk = current_chunk.add(mbi.RegionSize);
+        }
+
+        None
     }
 }
 
@@ -133,7 +193,7 @@ impl std::fmt::Display for Pattern {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for b in &self.nibbles {
             if let Some(b) = b {
-                f.pad(&format!("{:016X} ", *b))?;
+                f.pad(&format!("{:02X} ", *b))?;
             } else {
                 f.pad("? ")?;
             }
@@ -145,52 +205,6 @@ impl std::fmt::Display for Pattern {
 impl<S> From<S> for Pattern where S: AsRef<str> {
     fn from(s: S) -> Self {
         Pattern::compile(s.as_ref())
-    }
-}
-
-pub struct RegionIterator {
-    pattern: Pattern,
-    base: *mut u8,
-    size: usize,
-    occurrence: usize
-}
-
-impl RegionIterator {
-    pub fn new<P>(pattern: P, region: &MemoryRegion) -> RegionIterator where P: Into<Pattern> {
-        let pattern = pattern.into();
-        RegionIterator {
-            pattern,
-            base: region.base,
-            size: region.size,
-            occurrence: 0
-        }
-    }
-}
-
-impl Iterator for RegionIterator {
-    type Item = MemoryRegion;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(cached) = CACHE.get(&self.pattern, self.occurrence) {
-            return Some(cached);
-        }
-        let pattern_len = self.pattern.len();
-        while self.size >= pattern_len {
-            if self.pattern.matches(self.base) {
-                let region = MemoryRegion {
-                    base: self.base,
-                    size: self.size
-                };
-                self.base = unsafe { self.base.add(pattern_len) };
-                self.size -= pattern_len;
-                self.occurrence += 1;
-                CACHE.set(&self.pattern, &region);
-                return Some(region)
-            } else {
-                self.base = unsafe { self.base.add(1) };
-            }
-        }
-        None
     }
 }
 
@@ -261,11 +275,11 @@ impl MemoryRegion {
         Self::with_size(|header| header.SizeOfCode)
     }
 
-    pub fn find<P>(&self, pattern: P) -> RegionIterator where P: Into<Pattern> {
-        RegionIterator::new(pattern, &self)
+    pub fn find<P>(&self, pattern: P) -> Option<MemoryRegion> where P: Into<Pattern> {
+        unsafe { pattern.into().find(self) }
     }
 
-    pub fn find_str<S>(&self, str: S) -> RegionIterator where S: AsRef<str> {
+    pub fn find_str<S>(&self, str: S) -> Option<MemoryRegion> where S: AsRef<str> {
         self.find(Pattern {
             nibbles: str.as_ref().as_bytes().iter().map(|b|Some(*b)).collect::<_>()
         })
@@ -306,7 +320,7 @@ impl MemoryRegion {
     pub unsafe fn write_bytes(&self, bytes: &[u8]) -> bool {
         self.write(bytes.len(), |w| {
             for (i, b) in bytes.iter().enumerate() {
-                w.add(i).write(*b)
+                w.add(i).write_unaligned(*b)
             }
         })
     }

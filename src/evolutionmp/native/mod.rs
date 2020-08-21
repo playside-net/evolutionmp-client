@@ -7,16 +7,17 @@ use crate::game::entity::Entity;
 use std::collections::HashMap;
 use std::ffi::{CString, CStr};
 use std::cell::{Cell, RefCell};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicI32, AtomicU64, Ordering};
 use std::ops::Deref;
 use std::ptr::null_mut;
 use std::marker::PhantomData;
-use std::sync::atomic::AtomicI32;
 use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
 use byteorder::WriteBytesExt;
 use std::os::raw::c_char;
 use std::mem::ManuallyDrop;
 use detour::RawDetour;
+use crate::{LOG_PANIC, print_address_info};
+use backtrace::{SymbolName, Backtrace};
 
 pub mod vehicle;
 pub mod pool;
@@ -25,6 +26,8 @@ pub mod fs;
 pub mod alloc;
 pub mod script;
 pub mod streaming;
+pub mod grc;
+pub mod assets;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -33,6 +36,7 @@ pub struct TypeInfo {
     decorated: [c_char; 1]
 }
 
+#[repr(transparent)]
 pub struct ThreadSafe<T> {
     t: T
 }
@@ -70,7 +74,7 @@ macro_rules! bind_fn_detour {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let d = crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to find call for ", stringify!($name)))
+                .expect(concat!("failed to find call for ", stringify!($name)))
                     .offset($offset).detour($detour as _);
                 std::mem::transmute(d)
             };
@@ -84,7 +88,7 @@ macro_rules! bind_fn_detour_ip {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let d = crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to find call for ", stringify!($name)))
+                .expect(concat!("failed to find call for ", stringify!($name)))
                     .offset($offset).detour_ip($detour as _);
                 std::mem::transmute(d)
             };
@@ -98,7 +102,7 @@ macro_rules! bind_fn {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let ptr = crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind call for ", stringify!($name)))
+                .expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).as_ptr();
                 std::mem::transmute(ptr)
             };
@@ -115,7 +119,7 @@ macro_rules! bind_fn_ip {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let ptr = crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind call for ", stringify!($name)))
+                    .expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).read_ptr($ptr_len).as_ptr();
                 std::mem::transmute(ptr)
             };
@@ -129,7 +133,7 @@ macro_rules! bind_field {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
                 crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind field for ", stringify!($name)))
+                .expect(concat!("failed to bind field for ", stringify!($name)))
                     .offset($offset).get_box()
             };
         }
@@ -145,7 +149,7 @@ macro_rules! bind_field_ip {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
                 crate::native::MEM.find($pattern)
-                    .next().expect(concat!("failed to bind field for ", stringify!($name)))
+                    .expect(concat!("failed to bind field for ", stringify!($name)))
                     .offset($offset).read_ptr($ptr_len).get_box()
             };
         }
@@ -169,6 +173,7 @@ lazy_static! {
 }
 
 bind_fn!(SET_VECTOR_RESULTS, "83 79 18 ? 48 8B D1 74 4A FF 4A 18", 0, "C", fn(*mut NativeCallContext) -> ());
+bind_fn!(GET_SCRIPT_ENTITY, "44 8B C1 49 8B 41 08 41 C1 F8 08 41 38 0C 00", -12, "C", fn(u32) -> *mut ());
 
 bind_field!(EXPANDED_RADAR, "33 C0 0F 57 C0 ? 0D", 7, bool);
 bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
@@ -209,7 +214,6 @@ impl PtrXorU64 {
     fn get(&self) -> u64 {
         let addr = self as *const Self as u64;
         let mask = (addr ^ self.next) as u32 as u64;
-        //crate::info!("xoring:  {:016X} ^ {:016X} = {:08X} ; result: {:016X}", addr, self.next, mask, ((mask << 32) | mask) ^ self.prev);
         (((mask << 32) | mask) ^ self.prev) as _
     }
 }
@@ -288,6 +292,7 @@ impl<'a> Iterator for NativeGroupIterator<'a> {
         if index < self.group.len() {
             self.index += 1;
             let hash = self.group.get_hash(index);
+            //crate::info!("Native: 0x{:016X}", hash);
             let handler = self.group.handlers[index];
             Some((hash, handler))
         } else {
@@ -510,23 +515,20 @@ impl Natives {
     }
 }
 
+pub(crate) static CURRENT_NATIVE: AtomicU64 = AtomicU64::new(0);
+
 #[macro_export]
 macro_rules! invoke {
-    ($ret: ty, $hash: literal) => {{
-        lazy_static! {
-            static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
-        }
-        let mut context = $crate::native::NativeCallContext::new();
-        HANDLER(&mut context);
-        context.get_result::<$ret>()
-    }};
-    ($ret: ty, $hash: literal, $($arg: expr),*) => {{
+    ($ret: ty, $hash: literal $(, $arg: expr)*) => {{
         lazy_static! {
             static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
         }
         let mut context = $crate::native::NativeCallContext::new();
         $(context.push_arg($arg);)*
+        use std::sync::atomic::Ordering;
+        $crate::native::CURRENT_NATIVE.store($hash, Ordering::SeqCst);
         HANDLER(&mut context);
+        $crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
         context.get_result::<$ret>()
     }};
 }

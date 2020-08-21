@@ -6,7 +6,7 @@ use crate::game::vehicle::Vehicle;
 use crate::{invoke, invoke_option};
 use crate::native::pool::{Handleable, Pool, GenericPool};
 use crate::hash::Hashable;
-use crate::game::streaming::{AnimDict, PedPhoto};
+use crate::game::streaming::{AnimDict, PedPhoto, Model, Resource};
 use crate::native::{NativeStackValue, NativeVector3};
 use cgmath::{Vector3, MetricSpace, Zero};
 
@@ -86,6 +86,18 @@ impl Ped {
 
     pub fn set_position_keep_vehicle(&self, pos: Vector3<f32>) {
         invoke!((), 0x9AFEFF481A85AB2E, self.handle, pos)
+    }
+
+    pub fn set_model<H>(&self, model: H) -> bool where H: Hashable {
+        let model = Model::from(model);
+        if model.is_in_cd_image() && model.is_valid() {
+            model.request_and_wait();
+            invoke!((), 0x00A1CADD00108836, self.handle, model.joaat());
+            self.set_default_component_variation();
+            true
+        } else {
+            false
+        }
     }
 
     pub fn get_waypoint_distance(&self) -> f32 {

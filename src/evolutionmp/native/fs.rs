@@ -51,6 +51,8 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
 use crate::{bind_fn, bind_field, bind_field_ip, bind_fn_detour_ip};
 use std::fs::File;
 use std::iter::once;
+use std::sync::Arc;
+use jni_dynamic::{JavaVM, JNIVersion, InitArgsBuilder};
 
 bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, "C", fn(RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
 bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, "C", fn(RagePath, *const Device, bool) -> bool);
@@ -69,13 +71,7 @@ bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05",
 bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, DeviceVTable);
 bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVTable);
 
-pub(crate) unsafe fn pre_init(mem: &MemoryRegion) {
-    bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
-    unsafe { *DEVICE_LIMIT.as_mut() *= 5 };
-    mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8")
-        .next().expect("no relative device sorting")
-        .add(12).nop(5);
-
+pub(crate) unsafe fn pre_init() {
     lazy_static::initialize(&INITIAL_MOUNT);
 
     lazy_static::initialize(&DEVICE_VTABLE);

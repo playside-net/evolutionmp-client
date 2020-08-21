@@ -16,7 +16,7 @@ pub trait Resource {
     fn request_and_wait(&self) {
         self.request();
         while !self.is_loaded() {
-            crate::game::script::wait(1);
+            super::script::wait(1);
         }
     }
 }

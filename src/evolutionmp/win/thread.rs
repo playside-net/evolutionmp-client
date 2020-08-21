@@ -169,7 +169,7 @@ unsafe impl std::marker::Send for Fiber {}
 #[inline]
 pub unsafe fn __readgsqword(offset: DWORD) -> u64 {
     let out: u64;
-    asm!("mov $0, gs:[$1]"
+    llvm_asm!("mov $0, gs:[$1]"
     : "=r"(out)
     : "ri"(offset)
     :

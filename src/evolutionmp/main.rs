@@ -1,4 +1,4 @@
-#![feature(asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
+#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -29,6 +29,7 @@ use winapi::um::memoryapi::VirtualQuery;
 use std::ffi::{CStr, CString};
 use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -53,7 +54,6 @@ pub mod scripts;
 #[cfg(target_os = "windows")]
 pub mod jni;
 
-pub mod network;
 pub mod hash;
 #[cfg(target_os = "windows")]
 pub mod console;
@@ -69,6 +69,14 @@ pub const LOG_PANIC: &'static str = "panic";
 
 //bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, "C", fn() -> ());
 //bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, "C", fn(u32) -> bool);
+bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, "C", fn(u8) -> u32);
+
+unsafe fn load_game_now(u: u8) -> u32 {
+    crate::info!("called load_game_now({})", u);
+    let r = LOAD_GAME_NOW(u);
+    crate::info!("result: {}", r);
+    r
+}
 
 /*extern "C" fn run_init_state() {
     RUN_INIT_STATE()
@@ -109,7 +117,12 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
         if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ && code != 0x406D1388 {
-            error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
+            let native = crate::native::CURRENT_NATIVE.load(Ordering::SeqCst);
+            if native != 0 {
+                error!(target: LOG_PANIC, "Error occurred while invoking native `0x{:016X}` (address: {:p}, code: 0x{:X})", native, addr, code);
+            } else {
+                error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
+            }
             print_address_info(addr, 0, None, SymbolName::new(b"<unknown>\0"));
             let backtrace = Backtrace::new();
 
@@ -141,54 +154,68 @@ fn attach(instance: HINSTANCE) {
         console::attach();
         info!("Injection successful");
 
-        crate::pattern::CACHE.load();
+        //crate::pattern::CACHE.load();
 
         let mem = MemoryRegion::image();
 
         info!("Applying patches...");
 
         //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-        mem.find_str("platform:/movies").next() //platform:/movies/rockstar_logos.bik
-            .expect("movie").nop(16); //Disable movie
-
-        mem.find("70 6C 61 74 66 6F 72 6D 3A").next()
-            .expect("logos").write_bytes(&[0xC3]);
-
-        mem.find("72 1F E8 ? ? ? ? 8B 0D").next()
-            .expect("legals").nop(2);
+        mem.find_str("platform:/movies").expect("movie") //platform:/movies/rockstar_logos.bik
+            .nop(16); //Disable movie
+        mem.find("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
+            .nop(2);
+        let focus_pause = mem.find("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
+        focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
+        focus_pause.nop(7);
+        bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
+        unsafe { *DEVICE_LIMIT.as_mut() *= 5 };
+        mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
+            .add(12).nop(5);
+        mem.find("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
+            .add(8).nop(6);
 
         lazy_static::initialize(&GAME_STATE);
+        lazy_static::initialize(&LOAD_GAME_NOW);
 
         //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
 
-        native::fs::pre_init(&mem);
+        native::fs::pre_init();
         native::pre_init();
 
-        crate::pattern::CACHE.save();
+        info!("Initializing game hooks {:?}", **GAME_STATE);
 
-        info!("Searching for script candidates...");
+        game::init();
 
-        let mut script_candidates = Vec::new();
+        std::thread::spawn(move || {
+            console::attach();
 
-        if let Ok(entries) = launcher_dir().join("scripts").read_dir() {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    if let Ok(ty) = entry.file_type() {
-                        let name = entry.file_name();
-                        let name = name.to_string_lossy();
-                        if ty.is_file() && name.ends_with(".jar") {
-                            script_candidates.push(name.to_string());
+            info!("Initializing core scripts");
+            crate::scripts::init();
+
+            crate::info!("Searching for script candidates...");
+
+            let mut script_candidates = Vec::new();
+
+            if let Ok(entries) = launcher_dir().join("scripts").read_dir() {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        if let Ok(ty) = entry.file_type() {
+                            let name = entry.file_name();
+                            let name = name.to_string_lossy();
+                            if ty.is_file() && name.ends_with(".jar") {
+                                script_candidates.push(name.to_string());
+                            }
                         }
                     }
                 }
             }
-        }
 
-        info!("Found {} potential scripts", script_candidates.len());
+            crate::info!("Found {} potential vm scripts", script_candidates.len());
 
-        info!("Spawning main thread...");
+            info!("Spawning main thread...");
 
-        std::thread::spawn(move || {
+            //crate::pattern::CACHE.save();
             let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
             add_dll_directory(&dll_path);
             let args = InitArgsBuilder::new()
@@ -196,36 +223,26 @@ fn attach(instance: HINSTANCE) {
                 .option(&format!("-XX:ErrorFile={}/hs_err_pid_%p.log", launcher_dir().join("crash-reports").display()))
                 .option(&format!("-Duser.dir={}", launcher_dir().display()))
                 .build().expect("failed to build jvm args");
-            info!("Initializing VM... working dir is {:?}", std::env::current_dir());
+            crate::info!("Initializing VM... working dir is {:?}", std::env::current_dir());
             let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
-
-            info!("Starting runtime...");
-
-            runtime::start(script_candidates, vm);
 
             info!("Hooking user input...");
             crate::win::input::hook();
             console::attach();
 
-            info!("Waiting for game being loaded...");
+            info!("Waiting game initialization");
 
             while !GAME_STATE.is_loaded() {
                 std::thread::sleep(Duration::from_millis(50));
             }
 
-            info!("Initializing game hooks");
-
-            game::init();
-
             info!("Initializing natives");
 
             native::init();
 
-            info!("Waiting for game being initialized");
+            info!("Loading done. Starting runtime...");
 
-            while native::script::is_thread_pool_empty() {
-                std::thread::sleep(Duration::from_millis(50));
-            }
+            crate::runtime::start(script_candidates, vm);
         });
     }
 }

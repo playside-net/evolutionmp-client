@@ -66,7 +66,5 @@ pub fn get_all_threads() -> Vec<ScriptThread> {
 }
 
 pub fn wait(millis: u64) {
-    crate::info!("waiting {} ms for script {:?}", millis, ScriptThread::active().map(|t| t.get_name().to_owned()));
-    crate::info!("{:?}", Backtrace::new());
     invoke!((), 0x4EDE34FBADD967A6, millis)
 }

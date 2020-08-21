@@ -1,4 +1,4 @@
-use crate::{invoke, native};
+use crate::{invoke, native, print_address_info};
 use crate::game::{Rgba, Handle};
 use cgmath::{Vector2, Vector3};
 use crate::game::controls::{Group, Control};
@@ -16,6 +16,7 @@ pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
 
 use crate::bind_fn;
+use backtrace::SymbolName;
 
 bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
 
@@ -26,7 +27,7 @@ pub fn pre_init() {
 pub fn init() {
     unsafe {
         let no_slowmo = crate::native::MEM.find("38 51 64 74 19")
-            .next().expect("no_slowmo");
+            .expect("no_slowmo");
 
         no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
 
@@ -309,7 +310,7 @@ pub fn prompt(title: &str, placeholder: &str, max_length: u32) -> Option<String>
                 break None;
             },
             _ => {
-                super::script::wait(1);
+                super::script::wait(0);
             }
         }
     }
@@ -321,7 +322,7 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
     super::locale::set_translation("WNMC_LINE2", line2);
     let buttons = buttons as u32;
     loop {
-        super::script::wait(1);
+        super::script::wait(0);
         invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, true);
         let result = GET_WARN_RESULT(true, 0);
         if result != FrontendButtons::None {
@@ -669,7 +670,7 @@ impl TextInput {
         for i in to..len {
             new_input.push(old_input[i])
         }
-        std::mem::replace(self.get_input_mut(), new_input);
+        let _ = std::mem::replace(self.get_input_mut(), new_input);
         self.selection = from..from;
         self.last_selection_changed = Instant::now();
     }
