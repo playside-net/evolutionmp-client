@@ -25,9 +25,6 @@ impl ScriptFingerPointing {
 }
 
 impl Script for ScriptFingerPointing {
-    fn prepare(&mut self) {
-    }
-
     fn frame(&mut self, game_state: GameState) {
         let player = Player::local().get_ped();
         let tasks = player.get_tasks().get_network();

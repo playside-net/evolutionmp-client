@@ -25,25 +25,6 @@ pub struct ScriptFishing {
 }
 
 impl Script for ScriptFishing {
-    fn prepare(&mut self) {
-        fn set_door_locked(name: &str, position: Vector3<f32>, locked: bool) {
-            Door::new(name)
-                .set_locked(position, locked, Vector3::new(0.0, 50.0, 0.0))
-        }
-        set_door_locked("hei_prop_hei_bankdoor_new", Vector3::new(232.6054, 214.1584, 106.4049), true);
-        set_door_locked("hei_prop_hei_bankdoor_new", Vector3::new(231.5123, 216.5177, 106.4049), true);
-        set_door_locked("v_ilev_trevtraildr", Vector3::new(1973.0499, 3815.5686, 33.7879), true);
-        set_door_locked("v_ilev_bk_door", Vector3::new(256.9125, 206.8366, 109.2830), false);
-        set_door_locked("v_ilev_bk_door", Vector3::new(265.6144, 217.7971, 109.2830), false);
-        set_door_locked("v_ilev_shrfdoor", Vector3::new(1855.5922, 3683.8213, 34.8928), false);
-        set_door_locked("v_ilev_shrf2door", Vector3::new(-442.73795, 6015.3564, 32.2838), false);
-        set_door_locked("v_ilev_shrf2door", Vector3::new(-444.43552, 6017.0537, 32.3005), false);
-        set_door_locked("v_ilev_bank4door02", Vector3::new(-111.39079, 6463.931, 32.2215), false);
-
-        let maze_arena = Ipl::new("SP1_10_real_interior");
-        maze_arena.request_and_wait();
-    }
-
     fn frame(&mut self, game_state: GameState) {
         let distance = 10.0;
         let player = Player::local();

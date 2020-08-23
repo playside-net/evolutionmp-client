@@ -25,6 +25,7 @@ pub fn pre_init() {
 pub fn init() {
     set_translation("PM_PAUSE_HDR", "Evolution MP");
     set_translation("LOADING_SPLAYER_L", "Loading Evolution MP");
+    set_translation("LOADING_MPLAYER_L", "Loading Evolution MP");
 }
 
 use std::sync::Mutex;

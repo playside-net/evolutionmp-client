@@ -30,6 +30,7 @@ use std::ffi::{CStr, CString};
 use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use iced_x86::{Decoder, DecoderOptions, NasmFormatter, Formatter, Instruction, FlowControl, Code, CodeSize};
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -66,17 +67,6 @@ pub enum DllCallReason {
 
 pub const LOG_ROOT: &'static str = "root";
 pub const LOG_PANIC: &'static str = "panic";
-
-//bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, "C", fn() -> ());
-//bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, "C", fn(u32) -> bool);
-bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, "C", fn(u8) -> u32);
-
-unsafe fn load_game_now(u: u8) -> u32 {
-    crate::info!("called load_game_now({})", u);
-    let r = LOAD_GAME_NOW(u);
-    crate::info!("result: {}", r);
-    r
-}
 
 /*extern "C" fn run_init_state() {
     RUN_INIT_STATE()
@@ -145,6 +135,51 @@ fn add_dll_directory(java_exe: &Path) {
     std::env::set_var("PATH", format!("{}\\{}", old_path, java_libs_root.display()));
 }
 
+pub(crate) unsafe fn disassemble_mem(mem: &MemoryRegion) {
+    let bytes = mem.as_bytes();
+    crate::info!("mem: {:p}", mem.as_ptr());
+    disassemble(bytes, bytes.as_ptr() as u64);
+}
+
+pub(crate) fn disassemble(bytes: &[u8], ip: u64) {
+    let mut decoder = Decoder::new(64, bytes, DecoderOptions::NONE);
+    decoder.set_ip(ip);
+    let mut formatter = NasmFormatter::new();
+    formatter.options_mut().set_digit_separator("`");
+    formatter.options_mut().set_first_operand_char_index(10);
+
+    let mut output = String::new();
+    let mut instruction = Instruction::default();
+
+    while decoder.can_decode() {
+        decoder.decode_out(&mut instruction);
+        if instruction.code() == Code::Iretw {
+            break;
+        }
+
+        if instruction.code() == Code::Jo_rel8_32 && instruction.code_size() == CodeSize::Code32 { //32 bit jmp
+            break;
+        }
+
+        output.clear();
+        formatter.format(&instruction, &mut output);
+
+        let mut line = format!("{:016X} ", instruction.ip());
+        let start_index = (instruction.ip() - ip) as usize;
+        let instr_bytes = &bytes[start_index..start_index + instruction.len()];
+        for b in instr_bytes.iter() {
+            line.push_str(&format!("{:02X}", b));
+        }
+        if instr_bytes.len() < 10 {
+            for _ in 0..10 - instr_bytes.len() {
+                line.push_str("  ");
+            }
+        }
+        line.push_str(&output);
+        crate::info!("{}", line);
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn attach(instance: HINSTANCE) {
     unsafe {
@@ -161,10 +196,10 @@ fn attach(instance: HINSTANCE) {
         info!("Applying patches...");
 
         //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-        mem.find_str("platform:/movies").expect("movie") //platform:/movies/rockstar_logos.bik
-            .nop(16); //Disable movie
-        mem.find("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
-            .nop(2);
+        mem.find_str("platform:/movies").expect("movie")
+            .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie
+        /*mem.find("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
+            .nop(2);*/
         let focus_pause = mem.find("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
         focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
         focus_pause.nop(7);
@@ -176,15 +211,17 @@ fn attach(instance: HINSTANCE) {
             .add(8).nop(6);
 
         lazy_static::initialize(&GAME_STATE);
-        lazy_static::initialize(&LOAD_GAME_NOW);
 
         //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
 
+        info!("Initializing FS");
         native::fs::pre_init();
+
+        info!("Initializing natives");
         native::pre_init();
 
-        info!("Initializing game hooks {:?}", **GAME_STATE);
-
+        info!("Initializing game hooks");
+        crate::game::pre_init();
         game::init();
 
         std::thread::spawn(move || {
@@ -193,56 +230,11 @@ fn attach(instance: HINSTANCE) {
             info!("Initializing core scripts");
             crate::scripts::init();
 
-            crate::info!("Searching for script candidates...");
-
-            let mut script_candidates = Vec::new();
-
-            if let Ok(entries) = launcher_dir().join("scripts").read_dir() {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        if let Ok(ty) = entry.file_type() {
-                            let name = entry.file_name();
-                            let name = name.to_string_lossy();
-                            if ty.is_file() && name.ends_with(".jar") {
-                                script_candidates.push(name.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-
-            crate::info!("Found {} potential vm scripts", script_candidates.len());
-
-            info!("Spawning main thread...");
-
             //crate::pattern::CACHE.save();
-            let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
-            add_dll_directory(&dll_path);
-            let args = InitArgsBuilder::new()
-                .version(JNIVersion::V8)
-                .option(&format!("-XX:ErrorFile={}/hs_err_pid_%p.log", launcher_dir().join("crash-reports").display()))
-                .option(&format!("-Duser.dir={}", launcher_dir().display()))
-                .build().expect("failed to build jvm args");
-            crate::info!("Initializing VM... working dir is {:?}", std::env::current_dir());
-            let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
 
             info!("Hooking user input...");
             crate::win::input::hook();
             console::attach();
-
-            info!("Waiting game initialization");
-
-            while !GAME_STATE.is_loaded() {
-                std::thread::sleep(Duration::from_millis(50));
-            }
-
-            info!("Initializing natives");
-
-            native::init();
-
-            info!("Loading done. Starting runtime...");
-
-            crate::runtime::start(script_candidates, vm);
         });
     }
 }

@@ -184,7 +184,6 @@ pub(crate) fn pre_init() {
     //streaming::pre_init();
     pool::pre_init();
     vehicle::pre_init();
-    crate::game::ui::pre_init();
     lazy_static::initialize(&EXPANDED_RADAR);
     lazy_static::initialize(&REVEAL_FULL_MAP);
     lazy_static::initialize(&CURSOR_SPRITE);

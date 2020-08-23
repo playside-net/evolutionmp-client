@@ -1,7 +1,12 @@
-use crate::pattern::MemoryRegion;
-use crate::native::NativeStackValue;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use serde_derive::{Serialize, Deserialize};
+use jni_dynamic::{InitArgsBuilder, JavaVM, JNIVersion};
+use serde_derive::{Deserialize, Serialize};
+
+use crate::{add_dll_directory, bind_fn_detour_ip, launcher_dir};
+use crate::native::NativeStackValue;
+use crate::pattern::MemoryRegion;
 
 pub mod audio;
 pub mod entity;
@@ -45,7 +50,7 @@ pub struct Rgba {
     pub r: u8,
     pub g: u8,
     pub b: u8,
-    pub a: u8
+    pub a: u8,
 }
 
 impl Rgba {
@@ -62,7 +67,7 @@ impl Rgba {
 pub struct Rgb {
     pub r: u8,
     pub g: u8,
-    pub b: u8
+    pub b: u8,
 }
 
 impl Rgb {
@@ -78,7 +83,7 @@ pub enum GameState {
     Intro,
     Legals = 3,
     MainMenu = 5,
-    LoadingSpMp = 6
+    LoadingSpMp = 6,
 }
 
 impl GameState {
@@ -90,12 +95,77 @@ impl GameState {
     }
 }
 
+//bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, "C", fn() -> ());
+//bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, "C", fn(u32) -> bool);
+bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, "C", fn(u8) -> u32);
+
 pub fn pre_init() {
     locale::pre_init();
     ui::pre_init();
+    lazy_static::initialize(&LOAD_GAME_NOW);
 }
 
 pub fn init() {
     locale::init();
     ui::init();
+}
+
+lazy_static! {
+    static ref LOADED: AtomicBool = AtomicBool::new(false);
+}
+
+pub fn is_loaded() -> bool {
+    LOADED.load(Ordering::SeqCst)
+}
+
+unsafe fn load_game_now(u: u8) -> u32 {
+    crate::info!("Initializing natives...");
+    crate::native::init();
+    crate::info!("Loading game...");
+    let r = LOAD_GAME_NOW(u);
+    done_loading_game();
+    LOADED.store(true, Ordering::SeqCst);
+    r
+}
+
+fn done_loading_game() {
+    dlc::load_mp_maps();
+
+    crate::info!("Searching for script candidates...");
+
+    let mut script_candidates = Vec::new();
+
+    if let Ok(entries) = launcher_dir().join("scripts").read_dir() {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                if let Ok(ty) = entry.file_type() {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    if ty.is_file() && name.ends_with(".jar") {
+                        script_candidates.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    crate::info!("Found {} potential vm scripts", script_candidates.len());
+
+    let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
+    add_dll_directory(&dll_path);
+    let args = InitArgsBuilder::new()
+        .version(JNIVersion::V8)
+        .option(&format!("-XX:ErrorFile={}/hs_err_pid_%p.log", launcher_dir().join("crash-reports").display()))
+        .option(&format!("-Duser.dir={}", launcher_dir().display()))
+        .build().expect("failed to build jvm args");
+    crate::info!("Initializing VM... working dir is {:?}", std::env::current_dir());
+
+    crate::info!("Starting VM...");
+    let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
+    crate::runtime::start(script_candidates, vm);
+
+    crate::info!("Shutting down loading screen...");
+
+    script::shutdown_loading_screen();
+    camera::fade_in(5000);
 }

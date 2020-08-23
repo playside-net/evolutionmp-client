@@ -4,7 +4,6 @@ use crate::native::pool;
 use crate::game::entity::Entity;
 use crate::game::ped::Ped;
 use crate::hash::Hashable;
-use crate::game::streaming::{Model, Resource};
 use crate::native::pool::Handleable;
 
 #[derive(Debug)]
@@ -51,19 +50,6 @@ impl Player {
 
     pub fn get_name<'a>(&self) -> &'a str {
         invoke!(&str, 0x6D0DE6A7B5DA71F8, self.handle)
-    }
-
-    pub fn set_model<H>(&self, model: H) -> bool where H: Hashable {
-        let model = Model::from(model);
-        if model.is_in_cd_image() && model.is_valid() {
-            model.request_and_wait();
-            invoke!((), 0x00A1CADD00108836, self.handle, model.joaat());
-            let ped = self.get_ped();
-            ped.set_default_component_variation();
-            true
-        } else {
-            false
-        }
     }
 
     pub fn is_invincible(&self) -> bool {

@@ -219,11 +219,11 @@ lazy_static::lazy_static! {
     pub static ref JAVA_SCRIPTS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
 }
 
-pub struct ScriptJava;
+pub struct ScriptJava {}
 
 impl ScriptJava {
     pub fn new() -> ScriptJava {
-        ScriptJava
+        ScriptJava {}
     }
 
     fn get_java_object<'a>(&self, id: i32) -> JObject<'a> {
@@ -235,19 +235,12 @@ impl ScriptJava {
 }
 
 impl Script for ScriptJava {
-    fn prepare(&mut self) {
-        let env = attach_thread();
-        for id in JAVA_SCRIPTS.lock().unwrap().iter() {
-            let script = self.get_java_object(*id);
-            env.call_method(script, "prepare", "()V", args![]).expect("error calling `prepare` on vm script");
-        }
-    }
-
     fn frame(&mut self, game_state: GameState) {
-        if game_state == GameState::Playing {
+        if crate::game::is_loaded() {
             let env = attach_thread();
+            let scripts = JAVA_SCRIPTS.lock().unwrap();
 
-            for id in JAVA_SCRIPTS.lock().unwrap().iter() {
+            for id in scripts.iter() {
                 let script = self.get_java_object(*id);
                 env.call_method(script, "frame", "()V", args![]).expect("error calling `frame` on vm script");
             }
@@ -255,49 +248,53 @@ impl Script for ScriptJava {
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
-        let env = attach_thread();
-        let event = match event {
-            ScriptEvent::UserInput(event) => {
-                match event {
-                    InputEvent::Keyboard(event) => {
-                        match event {
-                            KeyboardEvent::Key {
-                                key,
-                                repeats,
-                                scan_code,
-                                is_extended,
-                                alt ,
-                                shift,
-                                control,
-                                was_down_before,
-                                is_up
-                            } => {
-                                env.new_object("mp/evolution/script/event/ScriptEventKeyboardKey", "(ISBZZZZZZ)V", args![
+        if crate::game::is_loaded() {
+            let env = attach_thread();
+            let event = match event {
+                ScriptEvent::UserInput(event) => {
+                    match event {
+                        InputEvent::Keyboard(event) => {
+                            match event {
+                                KeyboardEvent::Key {
+                                    key,
+                                    repeats,
+                                    scan_code,
+                                    is_extended,
+                                    alt,
+                                    shift,
+                                    control,
+                                    was_down_before,
+                                    is_up
+                                } => {
+                                    env.new_object("mp/evolution/script/event/ScriptEventKeyboardKey", "(ISBZZZZZZ)V", args![
                                     *key, *repeats as i16, *scan_code as i8, *is_extended, *alt,
                                     *shift, *control, *was_down_before, *is_up
                                 ]).unwrap()
-                            },
-                            KeyboardEvent::Char(c) => {
-                                env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(C)V", args![
+                                },
+                                KeyboardEvent::Char(c) => {
+                                    env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(C)V", args![
                                     *c as u16
                                 ]).unwrap()
-                            },
-                        }
-                    },/*
+                                },
+                            }
+                        },/*
                     InputEvent::Mouse(event) => {
 
                     },*/
-                    _ => return false
-                }
-            },
-            _ => return false
-        };
-        let mut result = false;
-        for id in JAVA_SCRIPTS.lock().unwrap().iter() {
-            let script = self.get_java_object(*id);
-            result |= env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
+                        _ => return false
+                    }
+                },
+                _ => return false
+            };
+            let mut result = false;
+            for id in JAVA_SCRIPTS.lock().unwrap().iter() {
+                let script = self.get_java_object(*id);
+                result |= env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
+            }
+            result
+        } else {
+            false
         }
-        result
     }
 }
 
@@ -402,7 +399,6 @@ impl TaskQueue {
 }
 
 pub trait Script {
-    fn prepare(&mut self);
     fn frame(&mut self, game_state: GameState);
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool;
 }

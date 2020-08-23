@@ -46,6 +46,7 @@ bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_
 bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, "C", fn() -> ());
 bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, "C", fn() -> ());
 bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_no, "C", fn(&'static mut ScriptThread, u32) -> RageThreadState);
+bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_access, "C", fn(&'static mut ScriptThread, *mut ()) -> bool);
 
 unsafe extern "C" fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u8 {
     let result = SCRIPT_POST_INIT(name, p2, p3);
@@ -90,6 +91,11 @@ unsafe extern "C" fn script_no(script: &'static mut ScriptThread, ops: u32) -> R
     script.context.state
 }
 
+unsafe extern "C" fn script_access(script: &'static mut ScriptThread, unk: *mut ()) -> bool {
+    crate::info!("Script {} asked for access to {:p}", script.get_name().to_string_lossy(), unk);
+    true
+}
+
 pub(crate) fn pre_init() {
     lazy_static::initialize(&THREAD_COLLECTION);
     lazy_static::initialize(&THREAD_ID);
@@ -100,6 +106,7 @@ pub(crate) fn pre_init() {
     lazy_static::initialize(&SCRIPT_STARTUP);
     lazy_static::initialize(&SCRIPT_RESET);
     lazy_static::initialize(&SCRIPT_NO);
+    lazy_static::initialize(&SCRIPT_ACCESS);
 
     lazy_static::initialize(&SCRIPT_THREAD_INIT);
     lazy_static::initialize(&SCRIPT_THREAD_KILL);
@@ -303,8 +310,7 @@ impl ScriptThread {
 pub struct ScriptThreadRuntime {
     parent: ThreadSafe<ScriptThread>,
     script: ThreadSafe<Box<dyn Script>>,
-    receiver: Receiver<ScriptEvent>,
-    init: bool
+    receiver: Receiver<ScriptEvent>
 }
 
 macro_rules! vtable_fn {
@@ -326,7 +332,6 @@ impl ScriptThreadRuntime {
                 kill: vtable_fn!(Self::kill),
                 frame: vtable_fn!(Self::frame)
             })),
-            init: false,
             script: ThreadSafe::new(script),
             receiver
         })
@@ -373,10 +378,6 @@ impl ScriptThreadRuntime {
     }
 
     extern "C" fn frame(&mut self) {
-        if !self.init {
-            self.init = true;
-            self.script.prepare()
-        }
         self.script.frame(**crate::GAME_STATE);
         while let Ok(event) = self.receiver.try_recv() {
             self.script.event(&event, &mut VecDeque::with_capacity(0));

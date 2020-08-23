@@ -248,8 +248,8 @@ unsafe impl<T> Sync for RageBox<T> {}
 
 #[derive(Clone)]
 pub struct MemoryRegion {
-    base: *mut u8,
-    size: usize
+    pub base: *mut u8,
+    pub size: usize
 }
 
 impl MemoryRegion {
@@ -294,6 +294,10 @@ impl MemoryRegion {
             base: self.base.add(offset),
             size: self.size - offset
         }
+    }
+
+    pub unsafe fn as_bytes(&self) -> &[u8] {
+        std::slice::from_raw_parts(self.base as _, self.size)
     }
 
     pub unsafe fn read_ptr(&self, offset: usize) -> MemoryRegion {

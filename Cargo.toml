@@ -32,6 +32,7 @@ clipboard = "0.5.0"
 alignas = "*"
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
 region = "*"
+iced-x86 = "1.8.0"
 
 [[bin]]
 name = "launcher"
