@@ -94,14 +94,15 @@ pub enum NativeEvent {
         pos: Vector3<f32>,
         heading: f32,
         is_network: bool,
-        this_script_check: bool
+        net_mission: bool
     },
     NewPed {
+        ty: u32,
         model: Hash,
         pos: Vector3<f32>,
         heading: f32,
         is_network: bool,
-        this_script_check: bool
+        net_mission: bool
     },
     TaskEnterVehicle {
         ped: Ped,
@@ -137,18 +138,19 @@ impl NativeEvent {
             pos: args.read(),
             heading: args.read(),
             is_network: args.read(),
-            this_script_check: args.read(),
+            net_mission: args.read(),
         }
     }
 
     pub fn new_ped(context: &mut NativeCallContext) -> NativeEvent {
         let mut args = context.get_args();
         NativeEvent::NewPed {
+            ty: args.read(),
             model: args.read(),
             pos: args.read(),
             heading: args.read(),
             is_network: args.read(),
-            this_script_check: args.read(),
+            net_mission: args.read(),
         }
     }
 
@@ -192,6 +194,7 @@ impl NativeEvent {
 pub(crate) static EVENTS: ThreadSafe<RefCell<Option<VecDeque<NativeEvent>>>> = ThreadSafe::new(RefCell::new(None));
 
 pub fn push_native_event(event: NativeEvent) {
+    crate::info!("Got native event: {:?}", event);
     if let Ok(mut events) = EVENTS.try_borrow_mut() {
         if let Some(events) = events.as_mut() {
             events.push_back(event);
@@ -201,9 +204,9 @@ pub fn push_native_event(event: NativeEvent) {
 
 macro_rules! native_event {
     ($hash:literal, $constructor:ident) => {
-        crate::runtime::hook_native($hash, |context| {
+        crate::native::hook($hash, |context| {
             crate::events::push_native_event(NativeEvent::$constructor(context));
-            crate::runtime::call_native_trampoline($hash, context);
+            crate::native::call_trampoline($hash, context);
         });
     };
 }
@@ -229,12 +232,12 @@ pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut (
 pub fn init() {
     EVENTS.replace(Some(VecDeque::new()));
 
-    lazy_static::initialize(&CALL_EVENT);
+    //lazy_static::initialize(&CALL_EVENT);
 
     native_event!(0xAF35D0D2583051B0, new_vehicle);
     native_event!(0xD49F9B0955C367DE, new_ped);
     native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
     native_event!(0xD3DBCE61A490BE02, task_leave_vehicle);
     native_event!(0xFE43368D2AA4F2FC, set_waypoint);
-    native_event!(0x1D408577D440E81E, set_time_scale);
+    //native_event!(0x1D408577D440E81E, set_time_scale);
 }

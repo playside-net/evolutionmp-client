@@ -45,16 +45,19 @@ impl ScriptCleanWorld {
 
 impl Script for ScriptCleanWorld {
     fn frame(&mut self, game_state: GameState) {
-        let ped = Ped::local();
 
         if !self.loaded {
             self.loaded = true;
+
+            crate::invoke!((), 0x77B5F9A36BF96710, false);
+
+            let ped = Ped::local();
             let pos = Vector3::new(-1030.0, -2730.0, 13.46);
             game::streaming::load_scene(pos);
             crate::invoke!((), 0x621873ECE1178967, ped.get_handle(), pos);
 
             game::misc::set_stunt_jumps_can_trigger(false);
-            game::gameplay::set_freemode_map_behavior(true);
+            //game::gameplay::lower_map_prop_density(true);
             game::clock::pause(true);
 
             for (flag, enabled) in AUDIO_FLAGS.iter() {
@@ -83,6 +86,7 @@ impl Script for ScriptCleanWorld {
 
         self.disable_controls();
         game::streaming::stop_player_switch();
+        game::gameplay::set_time_scale(1.0);
 
         self.cleanup();
 
@@ -110,6 +114,8 @@ impl Script for ScriptCleanWorld {
         if game::misc::is_cutscene_active() {
             game::misc::cancel_cutscene();
         }
+
+        let ped = Ped::local();
 
         let has_special_ability = if let Some(vehicle) = ped.get_in_vehicle(false) {
             vehicle.has_jumping_ability() || vehicle.has_kers_boost() || vehicle.has_rocket_boost()
@@ -171,6 +177,8 @@ impl ScriptCleanWorld {
 pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
     Control::Cover,
     Control::EnterCheatCode,
+    //Control::FrontendPause,
+    //Control::FrontendPauseAlternate,
     Control::FrontendSocialClub,
     Control::FrontendSocialClubSecondary,
     Control::SpecialAbilityPC,

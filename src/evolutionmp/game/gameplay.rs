@@ -1,7 +1,7 @@
 use crate::invoke;
 
-pub fn set_freemode_map_behavior(freemode_behavior: bool) {
-    invoke!((), 0x9BAE5AD2508DF078, freemode_behavior)
+pub fn lower_map_prop_density(lower: bool) {
+    invoke!((), 0x9BAE5AD2508DF078, lower)
 }
 
 pub fn set_time_scale(scale: f32) {

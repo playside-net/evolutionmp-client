@@ -7,7 +7,7 @@ use crate::game::streaming::{Model, Resource};
 use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
-use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE, INTERIOR_LIGHT};
+use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE, LIGHTS, FUEL_LEVEL, ENGINE_TEMPERATURE, OIL_LEVEL, OIL_VOLUME, DASHBOARD_SPEED, HANDBRAKE, ENGINE_POWER};
 use crate::native::pool::{Handleable, Pool, VehiclePool};
 use crate::pattern::RageBox;
 use std::time::Duration;
@@ -214,6 +214,10 @@ impl Vehicle {
         CURRENT_RPM.set(self, rpm)
     }
 
+    pub fn get_dashboard_speed(&self) -> f32 {
+        DASHBOARD_SPEED.get(self)
+    }
+
     pub fn get_wheel_speed(&self) -> f32 {
         WHEEL_SPEED.get(self)
     }
@@ -228,6 +232,42 @@ impl Vehicle {
 
     pub fn set_acceleration(&self, acceleration: f32) {
         ACCELERATION.set(self, acceleration)
+    }
+
+    pub fn get_fuel(&self) -> f32 {
+        FUEL_LEVEL.get(self)
+    }
+
+    pub fn set_fuel(&self, fuel: f32) {
+        FUEL_LEVEL.set(self, fuel)
+    }
+
+    pub fn get_oil(&self) -> f32 {
+        OIL_LEVEL.get(self)
+    }
+
+    pub fn set_oil(&self, oil: f32) {
+        OIL_LEVEL.set(self, oil)
+    }
+
+    pub fn get_max_oil(&self) -> f32 {
+        OIL_VOLUME.get(self)
+    }
+
+    pub fn get_engine_temperature(&self) -> f32 {
+        ENGINE_TEMPERATURE.get(self)
+    }
+
+    pub fn set_engine_temperature(&self, temperature: f32) {
+        ENGINE_TEMPERATURE.set(self, temperature)
+    }
+
+    pub fn get_engine_power(&self) -> f32 {
+        ENGINE_POWER.get(self)
+    }
+
+    pub fn get_brake_power(&self) -> f32 {
+        BRAKE_POWER.get(self)
     }
 
     pub fn get_steering_scale(&self) -> f32 {
@@ -286,12 +326,8 @@ impl Vehicle {
         THROTTLE_POWER.set(self, power)
     }
 
-    pub fn get_brake_power(&self) -> f32 {
-        BRAKE_POWER.get(self)
-    }
-
-    pub fn set_brake_power(&self, brake_power: f32) {
-        BRAKE_POWER.set(self, brake_power)
+    pub fn is_handbrake(&self) -> bool {
+        HANDBRAKE.get(self)
     }
 
     pub fn get_passenger(&self, seat: i32) -> Option<Ped> {
@@ -417,12 +453,17 @@ impl Vehicle {
     }
 
     pub fn is_interior_light(&self) -> bool {
-        let flag = INTERIOR_LIGHT.get(self);
-        (flag & 0b01000000) > 0
+        let lights = LIGHTS.get(self);
+        (lights & 0b01000000) > 0
     }
 
     pub fn set_interior_light(&self, enabled: bool) {
         invoke!((), 0xBC2042F090AF6AD3, self.handle, enabled)
+    }
+
+    pub fn get_indicator_light(&self) -> u8 {
+        let lights = LIGHTS.get(self);
+        lights.to_ne_bytes()[0]
     }
 
     pub fn as_cargobob(&self) -> Option<VehicleCargobob> {

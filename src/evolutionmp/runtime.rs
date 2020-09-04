@@ -38,8 +38,6 @@ use jni_dynamic::strings::JNIStr;
 use jni_dynamic::errors::ErrorKind;
 use crate::native::pool::Pool;
 
-static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
-
 pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
     let exception = env.exception_occurred().unwrap();
     env.exception_clear().unwrap();
@@ -144,38 +142,52 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
         NativeMethod::new("getPosition", "(JJ)J", crate::native::pool::get_entity_pos as _)
     );
 
-    extern "C" fn is_vehicle_interior_light(_env: &JNIEnv, obj: JObject) -> bool {
-        use crate::native::pool::Handleable;
-        let handle = i32::from_java_field(&attach_thread(), obj, "handle");
-        Vehicle::from_handle(handle as u32).unwrap().is_interior_light()
-    }
-
-    macro_rules! getter  {
-        ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => {{
+    macro_rules! g  {
+        ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
             extern "C" fn get(_env: &JNIEnv, obj: JObject) -> $ty {
-                use crate::native::pool::Handleable;
+                use $crate::native::pool::Handleable;
                 let handle = i32::from_java_field(&attach_thread(), obj, "handle");
-                $handle::from_handle(handle as u32).unwrap().$name()
+                <$handle>::from_handle(handle as u32).unwrap().$name()
             }
             NativeMethod::new($vm_name, $vm_sig, get as _)
-        }};
+        })
     }
 
-    macro_rules! setter  {
-        ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => {{
+    macro_rules! s  {
+        ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
             extern "C" fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
-                use crate::native::pool::Handleable;
+                use $crate::native::pool::Handleable;
                 let handle = i32::from_java_field(&attach_thread(), obj, "handle");
-                $handle::from_handle(handle as u32).unwrap().$name(value)
+                <$handle>::from_handle(handle as u32).unwrap().$name(value)
             }
             NativeMethod::new($vm_name, $vm_sig, set as _)
-        }};
+        })
     }
 
     natives!(env, "mp/evolution/game/entity/vehicle/Vehicle",
-        NativeMethod::new("isInteriorLight", "()Z", is_vehicle_interior_light as _)
-        //getter!(Vehicle, bool, "isInteriorLight", "()Z", is_interior_light),
-        //getter!(Vehicle, f32, "getCurrentGear", "()F", get_current_gear),
+        g!(Vehicle, bool, "isInteriorLight", "()Z", is_interior_light),
+        g!(Vehicle, bool, "isHandbrake", "()Z", is_handbrake),
+        g!(Vehicle, u8, "getIndicatorLight", "()B", get_indicator_light),
+        g!(Vehicle, i32, "getCurrentGear", "()I", get_current_gear),
+        s!(Vehicle, i32, "setCurrentGear", "(I)V", set_current_gear),
+        g!(Vehicle, i32, "getHighGear", "()I", get_high_gear),
+        s!(Vehicle, i32, "setHighGear", "(I)V", set_high_gear),
+        g!(Vehicle, f32, "getCurrentRPM", "()F", get_current_rpm),
+        s!(Vehicle, f32, "setCurrentRPM", "(F)V", set_current_rpm),
+        g!(Vehicle, f32, "getDashboardSpeed", "()F", get_dashboard_speed),
+        g!(Vehicle, f32, "getWheelSpeed", "()F", get_wheel_speed),
+        s!(Vehicle, f32, "setWheelSpeed", "(F)V", set_wheel_speed),
+        g!(Vehicle, f32, "getAcceleration", "()F", get_acceleration),
+        s!(Vehicle, f32, "setAcceleration", "(F)V", set_acceleration),
+        g!(Vehicle, f32, "getFuel", "()F", get_fuel),
+        s!(Vehicle, f32, "setFuel", "(F)V", set_fuel),
+        g!(Vehicle, f32, "getMaxOil", "()F", get_max_oil),
+        g!(Vehicle, f32, "getOil", "()F", get_oil),
+        s!(Vehicle, f32, "setOil", "(F)V", set_oil),
+        g!(Vehicle, f32, "getEngineTemperature", "()F", get_engine_temperature),
+        s!(Vehicle, f32, "setEngineTemperature", "(F)V", set_engine_temperature),
+        g!(Vehicle, f32, "getEnginePower", "()F", get_engine_power),
+        g!(Vehicle, f32, "getBrakePower", "()F", get_brake_power)
     );
     pool!(env, crate::game::vehicle::get_pool(), "mp/evolution/game/entity/vehicle/VehiclePool");
     pool!(env, crate::game::prop::get_pool(), "mp/evolution/game/entity/prop/PropPool");
@@ -200,19 +212,6 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
     for id in 0..count {
         java_scripts.push(id);
     }
-
-    /*HOOKS.replace(Some(HashMap::new()));
-
-    info!("Hooking natives");
-
-    hook_native(0x7B5280EBA9840C72, |context| {
-        let label = context.get_args().read::<&str>();
-        let hash = label.joaat();
-        crate::info!("Called GET_LABEL_TEXT for {} (0x{:08X})", label, hash.0);
-        call_native_trampoline(0x7B5280EBA9840C72, context);
-    });*/
-
-    //crate::events::init(mem);
 }
 
 lazy_static::lazy_static! {
@@ -349,30 +348,6 @@ unsafe extern "C" fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObj
         std::mem::forget(context);
     } else {
         env.throw_new("Ljava/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
-    }
-}
-
-fn get_trampoline(hash: u64) -> NativeFunction {
-    let hooks = HOOKS.try_borrow().expect("unable to borrow hook map");
-    let hooks = hooks.as_ref().expect("hook map is not initialized");
-    let detour = hooks.get(&hash).expect(&format!("missing native trampoline for 0x{:016X}", hash));
-    unsafe { std::mem::transmute(detour.trampoline()) }
-}
-
-pub fn call_native_trampoline(hash: u64, context: *mut NativeCallContext) {
-    let trampoline = get_trampoline(hash);
-    trampoline(context);
-}
-
-pub fn hook_native(hash: u64, hook: fn(&mut NativeCallContext)) {
-    let original = crate::native::get_handler(hash);
-    unsafe {
-        let detour = GenericDetour::new(original, std::mem::transmute(hook))
-            .expect(&format!("native hook creation failed for 0x{:016X}", hash));
-        detour.enable().expect(&format!("native hook enabling failed for 0x{:016X}", hash));
-        let mut hooks = HOOKS.try_borrow_mut().expect("unable to mutably borrow hook map");
-        let detour = std::mem::transmute::<GenericDetour<_>, RawDetour>(detour);
-        hooks.as_mut().expect("hook map is not initialized").insert(hash, detour);
     }
 }
 

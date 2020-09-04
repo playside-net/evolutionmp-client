@@ -135,12 +135,6 @@ fn add_dll_directory(java_exe: &Path) {
     std::env::set_var("PATH", format!("{}\\{}", old_path, java_libs_root.display()));
 }
 
-pub(crate) unsafe fn disassemble_mem(mem: &MemoryRegion) {
-    let bytes = mem.as_bytes();
-    crate::info!("mem: {:p}", mem.as_ptr());
-    disassemble(bytes, bytes.as_ptr() as u64);
-}
-
 pub(crate) fn disassemble(bytes: &[u8], ip: u64) {
     let mut decoder = Decoder::new(64, bytes, DecoderOptions::NONE);
     decoder.set_ip(ip);
@@ -153,7 +147,7 @@ pub(crate) fn disassemble(bytes: &[u8], ip: u64) {
 
     while decoder.can_decode() {
         decoder.decode_out(&mut instruction);
-        if instruction.code() == Code::Iretw {
+        if instruction.flow_control() == FlowControl::Return {
             break;
         }
 
@@ -209,6 +203,8 @@ fn attach(instance: HINSTANCE) {
             .add(12).nop(5);
         mem.find("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
             .add(8).nop(6);
+        /*mem.find("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
+            .nop(24);*/
 
         lazy_static::initialize(&GAME_STATE);
 

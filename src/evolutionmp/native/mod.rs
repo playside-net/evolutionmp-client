@@ -15,7 +15,7 @@ use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
 use byteorder::WriteBytesExt;
 use std::os::raw::c_char;
 use std::mem::ManuallyDrop;
-use detour::RawDetour;
+use detour::{RawDetour, GenericDetour};
 use crate::{LOG_PANIC, print_address_info};
 use backtrace::{SymbolName, Backtrace};
 
@@ -67,6 +67,8 @@ impl<T> std::ops::DerefMut for ThreadSafe<T> {
 lazy_static! {
     pub static ref MEM: MemoryRegion = MemoryRegion::image();
 }
+
+static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
 
 #[macro_export]
 macro_rules! bind_fn_detour {
@@ -193,6 +195,50 @@ pub(crate) fn pre_init() {
 pub(crate) fn init() {
     lazy_static::initialize(&NATIVES);
     vehicle::init();
+
+    crate::info!("Hooking natives");
+    HOOKS.replace(Some(HashMap::new()));
+
+    hook(0x577D1284D6873711, |context| {
+        let paused = context.get_args().read::<bool>();
+        crate::info!("Omitting SET_GAME_PAUSED({}) call", paused);
+    });
+    unsafe {
+        disassemble(0x577D1284D6873711);
+    }
+
+
+    crate::events::init();
+}
+
+unsafe fn disassemble(hash: u64) {
+    let handler = get_handler(hash);
+    let mem = MEM.offset_to(handler as _);
+    crate::disassemble(mem.as_bytes(), handler as _);
+}
+
+fn get_trampoline(hash: u64) -> NativeFunction {
+    let hooks = HOOKS.try_borrow().expect("unable to borrow hook map");
+    let hooks = hooks.as_ref().expect("hook map is not initialized");
+    let detour = hooks.get(&hash).expect(&format!("missing native trampoline for 0x{:016X}", hash));
+    unsafe { std::mem::transmute(detour.trampoline()) }
+}
+
+pub fn call_trampoline(hash: u64, context: *mut NativeCallContext) {
+    let trampoline = get_trampoline(hash);
+    trampoline(context);
+}
+
+pub fn hook(hash: u64, hook: fn(&mut NativeCallContext)) {
+    let original = crate::native::get_handler(hash);
+    unsafe {
+        let detour = GenericDetour::new(original, std::mem::transmute(hook))
+            .expect(&format!("native hook creation failed for 0x{:016X}", hash));
+        detour.enable().expect(&format!("native hook enabling failed for 0x{:016X}", hash));
+        let mut hooks = HOOKS.try_borrow_mut().expect("unable to mutably borrow hook map");
+        let detour = std::mem::transmute::<GenericDetour<_>, RawDetour>(detour);
+        hooks.as_mut().expect("hook map is not initialized").insert(hash, detour);
+    }
 }
 
 pub fn get_handler_opt(hash: u64) -> Option<NativeFunction> {

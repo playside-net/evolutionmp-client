@@ -309,6 +309,11 @@ impl MemoryRegion {
         *self.get_mut::<i32>() = offset;
     }
 
+    pub unsafe fn offset_to(&self, target: *mut ()) -> MemoryRegion {
+        let offset = target as isize - self.base as isize;
+        self.offset(offset)
+    }
+
     pub unsafe fn offset(&self, offset: isize) -> MemoryRegion {
         MemoryRegion {
             base: self.base.offset(offset),
