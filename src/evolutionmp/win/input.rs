@@ -1,15 +1,13 @@
-use crate::pattern::MemoryRegion;
-use winapi::shared::windef::{HWND, POINT};
-use winapi::shared::basetsd::LONG_PTR;
-use winapi::shared::minwindef::{UINT, WPARAM, LPARAM, LRESULT, HKL};
-use winapi::um::winuser::{WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_MOUSEMOVE, CallWindowProcA, WNDPROC, FindWindowA, SetWindowLongPtrA, GWLP_WNDPROC, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, VK_SHIFT, VK_CONTROL, WM_CHAR, WM_UNICHAR, SetWindowLongPtrW, CallWindowProcW, TranslateMessage, GetMessageW, MSG, WM_SYSCHAR, WM_KEYFIRST, WM_KEYLAST, GetKeyboardState, ToUnicode, MapVirtualKeyA, GetKeyboardLayout, MAPVK_VK_TO_CHAR, MapVirtualKeyW, LoadKeyboardLayoutW, MapVirtualKeyExW, MAPVK_VK_TO_VSC, MAPVK_VSC_TO_VK, WM_INPUT, HRAWINPUT, RAWINPUT, RAWINPUTHEADER, GetRawInputData, RID_INPUT, RIM_TYPEKEYBOARD, RI_KEY_E0, RI_KEY_E1, MAPVK_VSC_TO_VK_EX, VK_RCONTROL, VK_LCONTROL, VK_RMENU, VK_LMENU, VK_PAUSE, VK_SCROLL, GetForegroundWindow, GetWindowThreadProcessId, WM_INPUTLANGCHANGE, WM_INPUTLANGCHANGEREQUEST, ActivateKeyboardLayout, KLF_RESET, KLF_REPLACELANG, KLF_SETFORPROCESS, ToUnicodeEx, VK_DELETE, WM_CREATE, SetWindowTextA};
-use winapi::um::sysinfoapi::GetTickCount;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 use std::ffi::CString;
-use std::time::{Duration, Instant};
 use std::ptr::null_mut;
+use std::sync::mpsc::{channel, Sender};
+use std::time::{Duration, Instant};
+
 use widestring::WideCStr;
+use winapi::shared::minwindef::{HKL, LPARAM, LRESULT, UINT, WPARAM};
+use winapi::shared::windef::HWND;
+use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC};
+
 use crate::events::ScriptEvent;
 use crate::Window;
 
@@ -23,7 +21,7 @@ struct EventPool {
 #[derive(Debug, Clone)]
 pub enum InputEvent {
     Keyboard(KeyboardEvent),
-    Mouse(MouseEvent)
+    Mouse(MouseEvent),
 }
 
 #[derive(Debug, Clone)]
@@ -37,21 +35,23 @@ pub enum KeyboardEvent {
         shift: bool,
         control: bool,
         was_down_before: bool,
-        is_up: bool
+        is_up: bool,
     },
-    Char(char)
+    Char(char),
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum MouseEvent {
     Click(MouseButton, bool),
     Wheel(f32),
-    Move(i16, i16)
+    Move(i16, i16),
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum MouseButton {
-    Left, Right, Middle
+    Left,
+    Right,
+    Middle,
 }
 
 static mut LAST_LAYOUT: Option<HKL> = None;
@@ -77,7 +77,7 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
                 shift: (GetAsyncKeyState(VK_SHIFT) as usize & 0x8000) != 0,
                 control: (GetAsyncKeyState(VK_CONTROL) as usize & 0x8000) != 0,
                 was_down_before: ((lparam >> 30) & 1) == 1,
-                is_up
+                is_up,
             };
 
             push_event(InputEvent::Keyboard(event));
@@ -85,7 +85,7 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
             if wparam as i32 == VK_DELETE && !is_up {
                 push_event(InputEvent::Keyboard(KeyboardEvent::Char('\u{007F}')));
             }
-        },
+        }
         WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN | WM_MBUTTONUP => {
             let down = match msg {
                 WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN => true,
@@ -97,16 +97,16 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
                 _ => MouseButton::Middle
             };
             push_event(InputEvent::Mouse(MouseEvent::Click(button, down)))
-        },
+        }
         WM_MOUSEWHEEL => {
             let scroll = if GET_WHEEL_DELTA_WPARAM(wparam) > 0 { 1.0 } else { -1.0 };
             push_event(InputEvent::Mouse(MouseEvent::Wheel(scroll)))
-        },
+        }
         WM_MOUSEMOVE => {
             let x = lparam as i16;
             let y = (lparam >> 16) as i16;
             push_event(InputEvent::Mouse(MouseEvent::Move(x, y)))
-        },
+        }
         WM_CHAR | WM_SYSCHAR => {
             let target_thread = GetWindowThreadProcessId(hwnd, null_mut());
             let layout = LAST_LAYOUT.unwrap_or_else(|| GetKeyboardLayout(target_thread));
@@ -121,7 +121,7 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
                 let chr = chars.chars().next().unwrap();
                 push_event(InputEvent::Keyboard(KeyboardEvent::Char(chr)))
             }
-        },
+        }
         WM_INPUTLANGCHANGE => {
             let layout = lparam as HKL;
             if let Some(last_layout) = LAST_LAYOUT {

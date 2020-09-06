@@ -1,8 +1,8 @@
-use crate::invoke;
-use crate::native::pool::Handleable;
-use crate::game::{Handle, Rgb};
-use cgmath::{Vector3, Vector2};
+use cgmath::{Vector2, Vector3};
+
 use crate::game::entity::Entity;
+use crate::game::Handle;
+use crate::invoke;
 
 pub fn get_pool() -> BlipIterator {
     BlipIterator::new()
@@ -16,8 +16,8 @@ pub struct Blip {
 crate::impl_handle!(Blip);
 
 pub enum BlipName<'a, 'b, 'c> {
-    Localized(&'a str, &'b[&'c str]),
-    Generic(&'a str)
+    Localized(&'a str, &'b [&'c str]),
+    Generic(&'a str),
 }
 
 impl Blip {
@@ -72,7 +72,7 @@ impl Blip {
             BlipName::Generic(name) => {
                 invoke!((), 0xF9113A30DE5C6670, "STRING");
                 super::ui::push_string(name);
-            },
+            }
         }
         invoke!((), 0xBC38B49BCB83BC9B, self.handle)
     }
@@ -255,14 +255,14 @@ impl Blip {
 
 pub struct BlipIterator {
     handle: Handle,
-    first: bool
+    first: bool,
 }
 
 impl BlipIterator {
     pub fn new() -> BlipIterator {
         BlipIterator {
             handle: invoke!(Handle, 0x186E5D252FA50E7D),
-            first: true
+            first: true,
         }
     }
 }

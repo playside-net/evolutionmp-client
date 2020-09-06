@@ -138,6 +138,6 @@ pub mod timecycle {
     }
 
     pub fn set_transition_modifier(modifier: &str, transition: f32) {
-        invoke!((), 0x3BCF567485E1971C, modifier)
+        invoke!((), 0x3BCF567485E1971C, modifier, transition)
     }
 }

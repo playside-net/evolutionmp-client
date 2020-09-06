@@ -1,23 +1,16 @@
-use crate::events::ScriptEvent;
-use crate::win::input::{InputEvent, KeyboardEvent};
-use crate::runtime::Script;
-use crate::game;
-use crate::game::player::Player;
-use crate::game::entity::Entity;
-use crate::game::controls::{Control, Group as ControlGroup};
-use crate::game::streaming::{Model, Resource};
-use crate::game::vehicle::{Vehicle, Dispatch};
-use std::time::Instant;
 use std::collections::VecDeque;
-use cgmath::{Vector3, Array, Vector2};
-use crate::game::GameState;
-use crate::game::ui::LoadingPrompt;
-use crate::game::ped::{ParentalFeatures, AppearanceComponent, AppearanceVariation, Ped};
-use crate::game::interior::Interior;
+use std::time::Instant;
+
+use cgmath::{Array, Vector3};
+
+use crate::events::ScriptEvent;
+use crate::game;
+use crate::game::controls::{Control, Group as ControlGroup};
+use crate::game::ped::Ped;
+use crate::game::player::Player;
+use crate::game::vehicle::Dispatch;
 use crate::native::pool::Handleable;
-use crate::hash::Hashable;
-use crate::pattern::MemoryRegion;
-use crate::game::script::wait;
+use crate::runtime::Script;
 
 static AUDIO_FLAGS: [(&'static str, bool); 7] = [
     ("LoadMPData", true),
@@ -32,7 +25,7 @@ static AUDIO_FLAGS: [(&'static str, bool); 7] = [
 pub struct ScriptCleanWorld {
     last_cleanup: Instant,
     loaded: bool,
-    model_loaded: bool
+    model_loaded: bool,
 }
 
 impl ScriptCleanWorld {
@@ -40,7 +33,7 @@ impl ScriptCleanWorld {
         ScriptCleanWorld {
             last_cleanup: Instant::now(),
             loaded: false,
-            model_loaded: false
+            model_loaded: false,
         }
     }
 }
@@ -135,7 +128,7 @@ impl Script for ScriptCleanWorld {
         }
     }
 
-    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, _event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
         false
     }
 }

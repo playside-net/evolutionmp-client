@@ -1,12 +1,11 @@
 use super::Handle;
-use crate::native;
 use crate::game::entity::{Entity, Bone};
 use crate::game::player::Player;
 use crate::game::vehicle::Vehicle;
 use crate::{invoke, invoke_option};
 use crate::native::pool::{Handleable, Pool, GenericPool};
 use crate::hash::Hashable;
-use crate::game::streaming::{AnimDict, PedPhoto, Model, Resource};
+use crate::game::streaming::{AnimDict, PedPhoto};
 use crate::native::{NativeStackValue, NativeVector3};
 use cgmath::{Vector3, MetricSpace, Zero};
 

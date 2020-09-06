@@ -1,8 +1,8 @@
-use crate::invoke;
-use crate::game::{Handle, Rgba};
 use cgmath::{Vector2, Vector3};
-use crate::native::pool::Handleable;
+
+use crate::game::{Handle, Rgba};
 use crate::game::streaming::Resource;
+use crate::invoke;
 
 #[derive(Debug)]
 pub struct Scaleform {
@@ -71,7 +71,10 @@ impl Resource for Scaleform {
 }
 
 pub enum ScaleformArg {
-    I32(i32), F32(f32), Bool(bool), Str(String)
+    I32(i32),
+    F32(f32),
+    Bool(bool),
+    Str(String),
 }
 
 pub trait ScaleformResult {
@@ -79,20 +82,20 @@ pub trait ScaleformResult {
 }
 
 impl ScaleformResult for () {
-    fn read(handle: Handle) -> Self where Self: Sized {
+    fn read(_handle: Handle) -> Self where Self: Sized {
         invoke!((), 0xC6796A8FFA375E53)
     }
 }
 
 impl ScaleformResult for i32 {
-    fn read(handle: Handle) -> Self where Self: Sized {
+    fn read(_handle: Handle) -> Self where Self: Sized {
         let ret = end_method_returnable();
         invoke!(i32, 0x2DE7EFA66B906036, ret)
     }
 }
 
 impl ScaleformResult for bool {
-    fn read(handle: Handle) -> Self where Self: Sized {
+    fn read(_handle: Handle) -> Self where Self: Sized {
         let ret = end_method_returnable();
         invoke!(bool, 0x768FF8961BA904D6, ret)
     }

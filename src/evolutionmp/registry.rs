@@ -1,5 +1,6 @@
+use std::path::PathBuf;
+
 use winreg::RegKey;
-use std::path::{Path, PathBuf};
 
 pub struct Registry {
     is_steam: bool,
@@ -7,7 +8,7 @@ pub struct Registry {
     game_type: String,
     game_version: String,
     language: String,
-    patch_version: String
+    patch_version: String,
 }
 
 impl Registry {
@@ -18,11 +19,11 @@ impl Registry {
             let path = gta_key.get_value::<String, &str>("InstallFolderSteam").ok()?;
             Some(Registry {
                 is_steam: true,
-                install_folder: PathBuf::from(&path[..path.len()-5]),
+                install_folder: PathBuf::from(&path[..path.len() - 5]),
                 game_type: String::new(),
                 game_version: String::new(),
                 language: String::new(),
-                patch_version: String::new()
+                patch_version: String::new(),
             })
         } else if let Some(gta_key) = rockstar_key.open_subkey("Grand Theft Auto V").ok() {
             Some(Registry {
@@ -31,7 +32,7 @@ impl Registry {
                 game_type: gta_key.get_value("Game Type").ok()?,
                 game_version: gta_key.get_value("Game Version").ok()?,
                 language: gta_key.get_value("Language").ok()?,
-                patch_version: gta_key.get_value("PatchVersion").ok()?
+                patch_version: gta_key.get_value("PatchVersion").ok()?,
             })
         } else {
             None

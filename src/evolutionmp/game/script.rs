@@ -1,7 +1,5 @@
-use crate::invoke;
 use crate::game::Handle;
-use crate::native::pool::Handleable;
-use backtrace::Backtrace;
+use crate::invoke;
 
 #[derive(Debug)]
 pub struct ScriptThread {

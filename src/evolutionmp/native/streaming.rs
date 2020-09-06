@@ -1,7 +1,7 @@
-use crate::{bind_fn, bind_field, bind_field_ip};
-use crate::hash::Hash;
-use std::collections::HashMap;
 use std::mem::ManuallyDrop;
+
+use crate::{bind_field, bind_field_ip, bind_fn};
+use crate::hash::Hash;
 use crate::native::TypeInfo;
 
 bind_fn!(INIT_MANIFEST_CHUNK, "48 8D 4F 10 B2 01 48 89 2F", -0x2E, "C", fn(*const ()) -> ());
@@ -28,7 +28,7 @@ pub(crate) fn pre_init() {
 #[repr(C)]
 pub struct DataFileType {
     hash: Hash,
-    index: u32
+    index: u32,
 }
 
 impl DataFileType {
@@ -55,18 +55,17 @@ pub struct DataFileEntry {
     disabled: bool,
     persistent: bool,
     overlay: bool,
-    pad0: [u8; 10]
+    pad0: [u8; 10],
 }
 
-impl DataFileEntry {
-}
+impl DataFileEntry {}
 
 #[repr(C)]
 pub struct PackFileMounterVTable {
     type_info: ManuallyDrop<Box<TypeInfo>>,
     drop: extern "C" fn(this: *mut PackFileMounter),
     mount: extern "C" fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
-    unmount: extern "C" fn(this: *mut PackFileMounter, entry: *mut DataFileEntry)
+    unmount: extern "C" fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
 }
 
 #[repr(C)]

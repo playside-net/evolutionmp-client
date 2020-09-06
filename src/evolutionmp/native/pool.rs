@@ -1,21 +1,18 @@
-use crate::pattern::{MemoryRegion, RageBox};
-use crate::game::Handle;
-use crate::game::vehicle::Vehicle;
-use crate::game::ped::Ped;
-use crate::game::entity::Entity;
-use crate::game::pickup::Pickup;
-use crate::game::checkpoint::Checkpoint;
-use crate::native::ThreadSafe;
-use crate::game::prop::Prop;
-use crate::game::camera::Camera;
 use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
-use std::cell::Cell;
 
-use crate::{bind_fn, bind_fn_ip, bind_field_ip};
-use cgmath::{Vector3, MetricSpace, Zero, Array};
+use cgmath::{Array, Vector3, Zero};
 use jni_dynamic::JNIEnv;
 use jni_dynamic::objects::JClass;
+
+use crate::{bind_field_ip, bind_fn, bind_fn_ip};
+use crate::game::camera::Camera;
+use crate::game::entity::Entity;
+use crate::game::Handle;
+use crate::game::ped::Ped;
+use crate::game::pickup::Pickup;
+use crate::game::prop::Prop;
+use crate::game::vehicle::Vehicle;
+use crate::native::ThreadSafe;
 
 bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, "C", fn(Handle) -> *mut u8);
 bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, "C", fn(Handle) -> *mut u8);
@@ -64,7 +61,7 @@ pub struct GlobalPool {
     pad1: [u32; 4],
     num1: u32,
     pad2: [u32; 3],
-    num2: u32
+    num2: u32,
 }
 
 impl GlobalPool {
@@ -94,7 +91,7 @@ pub struct VehiclePool {
     pad1: [u32; 9],
     bit_array: ThreadSafe<*mut u32>,
     pad2: [u32; 10],
-    len: u32
+    len: u32,
 }
 
 impl Pool<Vehicle> for VehiclePool {
@@ -123,7 +120,7 @@ pub struct GenericPool<T: Handleable> {
     byte_array: ThreadSafe<*mut u8>,
     capacity: u32,
     len: u32,
-    _ty: PhantomData<T>
+    _ty: PhantomData<T>,
 }
 
 impl<T> GenericPool<T> where T: Handleable {
@@ -156,7 +153,7 @@ pub struct CameraPool {
     start_address: u64,
     byte_array: ThreadSafe<*mut u8>,
     capacity: u32,
-    len: u32
+    len: u32,
 }
 
 impl Pool<Camera> for CameraPool {
@@ -179,7 +176,7 @@ impl Pool<Camera> for CameraPool {
 
 pub struct PoolEntry<T: Handleable> {
     address: *mut u8,
-    _ty: PhantomData<T>
+    _ty: PhantomData<T>,
 }
 
 impl<E> PoolEntry<E> where E: Entity {
@@ -201,7 +198,7 @@ impl<E> PoolEntry<E> where E: Entity {
 
 pub struct PoolIterator<'a, T: Handleable> {
     pool: &'a dyn Pool<T>,
-    index: u32
+    index: u32,
 }
 
 impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
@@ -216,7 +213,7 @@ impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
                 let address = self.pool.get_address(index);
                 return Some(PoolEntry {
                     address,
-                    _ty: PhantomData
+                    _ty: PhantomData,
                 });
             }
         }
@@ -228,7 +225,7 @@ impl<'a, T> PoolIterator<'a, T> where T: Handleable {
     pub fn new(pool: &dyn Pool<T>) -> PoolIterator<T> {
         PoolIterator {
             pool,
-            index: 0
+            index: 0,
         }
     }
 }

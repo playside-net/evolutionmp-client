@@ -1,16 +1,16 @@
 use std::collections::VecDeque;
-use cgmath::{Vector2, Array};
-use super::Script;
+
 use crate::game;
 use crate::game::player::Player;
 use crate::game::streaming::{AnimDict, Resource};
-use crate::game::camera::{Camera, GameplayCamera};
+use crate::game::camera::GameplayCamera;
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
 use crate::events::ScriptEvent;
-use crate::native::pool::Handleable;
-use crate::game::{Rgba, GameState};
-use crate::game::ui::Font;
+
+
+
+use crate::runtime::Script;
 
 pub struct ScriptFingerPointing {
     active: bool
@@ -55,7 +55,7 @@ impl Script for ScriptFingerPointing {
         }
     }
 
-    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, _event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
         false
     }
 }

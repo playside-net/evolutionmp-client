@@ -1,42 +1,20 @@
-use crate::hash::{Hash, Hashable};
-use crate::pattern::MemoryRegion;
-use crate::{GameState, GAME_STATE, launcher_dir};
-use crate::win::input::{KeyboardEvent, InputEvent, MouseEvent, MouseButton};
-use crate::native::{NativeCallContext, NativeStackValue, ThreadSafe, NativeFunction};
-use crate::hash::joaat;
-use crate::win::thread::Fiber;
-use crate::{args, info, error};
-use crate::game::streaming::Resource;
-use crate::game::player::Player;
-use crate::game::ped::Ped;
-use crate::game::vehicle::Vehicle;
-use crate::events::{NativeEvent, ScriptEvent, EventPool};
-use crate::game::ui::FrontendButtons;
-use crate::jni::{JavaObject, JavaValue};
-use std::os::raw::c_char;
-use std::ffi::CString;
-use std::time::{Instant, Duration};
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::collections::{VecDeque, HashMap};
-use std::panic::AssertUnwindSafe;
-use std::pin::Pin;
-use std::path::Path;
-use detour::{GenericDetour, RawDetour};
-use winapi::shared::ntdef::{HANDLE, NULL};
-use winapi::shared::minwindef::{LPVOID, DWORD, TRUE};
-use winapi::um::winuser::VK_RETURN;
-use std::panic::PanicInfo;
-use winapi::ctypes::c_void;
-use std::cell::{Cell, RefCell};
-use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicBool, AtomicPtr};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::Ordering;
-use cgmath::Vector3;
-use jni_dynamic::{JavaVM, InitArgs, InitArgsBuilder, JNIVersion, NativeMethod, JNIEnv, AttachGuard};
-use jni_dynamic::objects::{JClass, JString, JObject, JByteBuffer, JValue};
-use jni_dynamic::strings::JNIStr;
+
+use jni_dynamic::{AttachGuard, JavaVM, JNIEnv, NativeMethod};
 use jni_dynamic::errors::ErrorKind;
+use jni_dynamic::objects::{JClass, JObject, JString};
+use jni_dynamic::strings::JNIStr;
+
+use crate::args;
+use crate::events::ScriptEvent;
+use crate::game::vehicle::Vehicle;
+use crate::jni::{JavaObject, JavaValue};
+use crate::launcher_dir;
+use crate::native::NativeCallContext;
 use crate::native::pool::Pool;
+use crate::win::input::{InputEvent, KeyboardEvent};
 
 pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
     let exception = env.exception_occurred().unwrap();
@@ -59,7 +37,6 @@ fn attach_thread() -> AttachGuard<'static> {
 }
 
 pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
-
     unsafe { VM = Some(vm) };
 
     let env = attach_thread();
@@ -142,7 +119,7 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
         NativeMethod::new("getPosition", "(JJ)J", crate::native::pool::get_entity_pos as _)
     );
 
-    macro_rules! g  {
+    macro_rules! g {
         ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
             extern "C" fn get(_env: &JNIEnv, obj: JObject) -> $ty {
                 use $crate::native::pool::Handleable;
@@ -153,7 +130,7 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
         })
     }
 
-    macro_rules! s  {
+    macro_rules! s {
         ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
             extern "C" fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
                 use $crate::native::pool::Handleable;
@@ -202,7 +179,7 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
     let count = match env.call_static_method(main_class, "start", "(Ljava/lang/String;[Ljava/lang/String;)I", args![launcher_dir, arr]) {
         Err(e) if matches!(e.kind(), ErrorKind::JavaException) => {
             panic!("{}", get_last_exception(&env));
-        },
+        }
         other => other.expect("Error invoking main function").i().unwrap(),
     };
 
@@ -246,7 +223,7 @@ impl Script for ScriptJava {
         }
     }
 
-    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
         if crate::game::is_loaded() {
             let env = attach_thread();
             let event = match event {
@@ -266,23 +243,23 @@ impl Script for ScriptJava {
                                     is_up
                                 } => {
                                     env.new_object("mp/evolution/script/event/ScriptEventKeyboardKey", "(ISBZZZZZZ)V", args![
-                                    *key, *repeats as i16, *scan_code as i8, *is_extended, *alt,
-                                    *shift, *control, *was_down_before, *is_up
-                                ]).unwrap()
-                                },
+                                        *key, *repeats as i16, *scan_code as i8, *is_extended, *alt,
+                                        *shift, *control, *was_down_before, *is_up
+                                    ]).unwrap()
+                                }
                                 KeyboardEvent::Char(c) => {
                                     env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(C)V", args![
-                                    *c as u16
-                                ]).unwrap()
-                                },
+                                        *c as u16
+                                    ]).unwrap()
+                                }
                             }
-                        },/*
-                    InputEvent::Mouse(event) => {
+                        }/*
+                        InputEvent::Mouse(event) => {
 
-                    },*/
+                        },*/
                         _ => return false
                     }
-                },
+                }
                 _ => return false
             };
             let mut result = false;
@@ -311,11 +288,7 @@ unsafe extern "C" fn get_string<'a>(_env: &'a JNIEnv, args: JObject) -> JString<
     env.new_string(JNIStr::from_ptr(ptr).to_owned()).unwrap()
 }
 
-unsafe extern "C" fn wait(_env: &JNIEnv, _script: JObject, millis: u64) {
-    crate::game::script::wait(millis);
-}
-
-unsafe extern "C" fn propagate(_env: &JNIEnv, _script: JObject, event: JObject<'static>) {
+unsafe extern "C" fn propagate(_env: &JNIEnv, _script: JObject, _event: JObject<'static>) {
     unimplemented!()
 }
 
@@ -340,7 +313,7 @@ unsafe extern "C" fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObj
         let mut context = NativeCallContext::new_allocated(
             Box::from_raw(args as _),
             Box::from_raw(result as _),
-            arg_count
+            arg_count,
         );
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
         handler(&mut context);

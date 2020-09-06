@@ -1,23 +1,19 @@
-use crate::pattern::MemoryRegion;
-use crate::game::{Rgba, Rgb, Handle};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
+use std::os::raw::c_char;
+use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
+
+use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3};
+use detour::{GenericDetour, RawDetour};
+
+use crate::game::{Handle, Rgb, Rgba};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
 use crate::native::pool::Handleable;
-use crate::game::entity::Entity;
-use std::collections::HashMap;
-use std::ffi::{CString, CStr};
-use std::cell::{Cell, RefCell};
-use std::sync::atomic::{AtomicPtr, AtomicI32, AtomicU64, Ordering};
-use std::ops::Deref;
-use std::ptr::null_mut;
-use std::marker::PhantomData;
-use cgmath::{Vector3, Vector2, Euler, Deg, Quaternion};
-use byteorder::WriteBytesExt;
-use std::os::raw::c_char;
-use std::mem::ManuallyDrop;
-use detour::{RawDetour, GenericDetour};
-use crate::{LOG_PANIC, print_address_info};
-use backtrace::{SymbolName, Backtrace};
+use crate::pattern::MemoryRegion;
 
 pub mod vehicle;
 pub mod pool;
@@ -33,7 +29,7 @@ pub mod assets;
 #[derive(Debug)]
 pub struct TypeInfo {
     undecorated: ManuallyDrop<Box<CStr>>,
-    decorated: [c_char; 1]
+    decorated: [c_char; 1],
 }
 
 #[repr(transparent)]
@@ -48,6 +44,7 @@ impl<T> ThreadSafe<T> {
 }
 
 unsafe impl<T> std::marker::Send for ThreadSafe<T> {}
+
 unsafe impl<T> std::marker::Sync for ThreadSafe<T> {}
 
 impl<T> std::ops::Deref for ThreadSafe<T> {
@@ -237,7 +234,7 @@ pub fn get_handler(hash: u64) -> NativeFunction {
 #[repr(C, packed(1))]
 struct PtrXorU64 {
     prev: u64,
-    next: u64
+    next: u64,
 }
 
 impl PtrXorU64 {
@@ -251,7 +248,7 @@ impl PtrXorU64 {
 #[repr(C, packed(1))]
 struct PtrXorU32 {
     prev: u32,
-    next: u32
+    next: u32,
 }
 
 impl PtrXorU32 {
@@ -267,14 +264,14 @@ struct NativeGroup {
     handlers: [NativeFunction; 7],
     len: PtrXorU32,
     pad: u32,
-    hashes: [PtrXorU64; 7]
+    hashes: [PtrXorU64; 7],
 }
 
 #[repr(C)]
 pub struct NativeTable {
     groups: [Box<NativeGroup>; 256],
     _unknown: u32,
-    initialized: bool
+    initialized: bool,
 }
 
 impl NativeTable {
@@ -304,14 +301,14 @@ impl NativeGroup {
     pub fn iter(&self) -> NativeGroupIterator {
         NativeGroupIterator {
             group: self,
-            index: 0
+            index: 0,
         }
     }
 }
 
 pub struct NativeGroupIterator<'a> {
     group: &'a NativeGroup,
-    index: usize
+    index: usize,
 }
 
 impl<'a> Iterator for NativeGroupIterator<'a> {
@@ -338,14 +335,15 @@ impl<'a> Iterator for NativeGroupIterator<'a> {
 }
 
 pub struct NativeStackReader<'a> {
-    stack: &'a[u64],
-    pos: usize
+    stack: &'a [u64],
+    pos: usize,
 }
 
 impl<'a> NativeStackReader<'a> {
-    pub fn new(stack: &'a[u64]) -> NativeStackReader<'a> {
+    pub fn new(stack: &'a [u64]) -> NativeStackReader<'a> {
         NativeStackReader {
-            stack, pos: 0
+            stack,
+            pos: 0,
         }
     }
 
@@ -388,14 +386,15 @@ impl<'a> NativeStackReader<'a> {
 }
 
 pub struct NativeStackWriter<'a> {
-    stack: &'a mut[u64],
-    pos: usize
+    stack: &'a mut [u64],
+    pos: usize,
 }
 
 impl<'a> NativeStackWriter<'a> {
     pub fn new(stack: &'a mut [u64]) -> NativeStackWriter<'a> {
         NativeStackWriter {
-            stack, pos: 0
+            stack,
+            pos: 0,
         }
     }
 
@@ -488,7 +487,7 @@ impl NativeCallContext {
             arg_count,
             args,
             data_count: 0,
-            data: [0; 48]
+            data: [0; 48],
         }
     }
 
@@ -520,14 +519,14 @@ pub type NativeFunction = extern "C" fn(*mut NativeCallContext);
 
 pub struct Natives {
     mappings: HashMap<u64, u64>,
-    handlers: HashMap<u64, NativeFunction>
+    handlers: HashMap<u64, NativeFunction>,
 }
 
 impl Natives {
     pub fn new() -> Natives {
         bind_field_ip!(NATIVE_TABLE, "76 32 48 8B 53 40", 9, NativeTable);
 
-        let mut mappings = crate::mappings::MAPPINGS.iter().cloned().collect::<HashMap<_, _>>();
+        let mappings = crate::mappings::MAPPINGS.iter().cloned().collect::<HashMap<_, _>>();
         let mut handlers = HashMap::with_capacity(mappings.len());
 
         for group in NATIVE_TABLE.groups.iter() {
@@ -664,7 +663,7 @@ impl<H> NativeStackValue for Option<H> where H: Handleable + Sized {
 }
 
 impl NativeStackValue for Rgba {
-    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+    fn read_from_stack(_stack: &mut NativeStackReader) -> Self {
         panic!("Reading Rgba color from stack is not possible")
     }
 
@@ -692,26 +691,42 @@ impl NativeStackValue for Rgb {
 }
 
 impl NativeStackValue for u8 {}
+
 impl NativeStackValue for &mut u8 {}
+
 impl NativeStackValue for i32 {}
+
 impl NativeStackValue for &mut i32 {}
+
 impl NativeStackValue for u32 {}
+
 impl NativeStackValue for &mut u32 {}
+
 impl NativeStackValue for f32 {}
+
 impl NativeStackValue for &mut f32 {}
+
 impl NativeStackValue for Deg<f32> {}
+
 impl NativeStackValue for &mut Deg<f32> {}
+
 impl NativeStackValue for bool {}
+
 impl NativeStackValue for &mut bool {}
+
 impl NativeStackValue for u64 {}
+
 impl NativeStackValue for &mut u64 {}
+
 impl NativeStackValue for () {}
+
 impl NativeStackValue for Hash {}
+
 impl NativeStackValue for &mut Hash {}
 
 pub struct EntityField<T> where T: Sized {
     offset: AtomicI32,
-    _ty: PhantomData<T>
+    _ty: PhantomData<T>,
 }
 
 pub trait Addressable {
@@ -726,7 +741,7 @@ impl<T> EntityField<T> where T: Sized {
     pub const fn predefined(offset: i32) -> EntityField<T> {
         EntityField {
             offset: AtomicI32::new(offset),
-            _ty: PhantomData
+            _ty: PhantomData,
         }
     }
 
@@ -767,15 +782,18 @@ pub struct NativeVector3 {
     pub y: f32,
     _y_pad: u32,
     pub z: f32,
-    _z_pad: u32
+    _z_pad: u32,
 }
 
 impl NativeVector3 {
     pub fn zero() -> NativeVector3 {
         NativeVector3 {
-            x: 0.0, _x_pad: 0,
-            y: 0.0, _y_pad: 0,
-            z: 0.0, _z_pad: 0
+            x: 0.0,
+            _x_pad: 0,
+            y: 0.0,
+            _y_pad: 0,
+            z: 0.0,
+            _z_pad: 0,
         }
     }
 }

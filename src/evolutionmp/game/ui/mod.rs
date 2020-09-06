@@ -1,23 +1,21 @@
-use crate::{invoke, native, print_address_info};
-use crate::game::{Rgba, Handle};
-use cgmath::{Vector2, Vector3};
-use crate::game::controls::{Group, Control};
-use crate::pattern::{MemoryRegion, RET, NOP, XOR_32_64};
-use std::sync::atomic::AtomicBool;
-use std::time::Instant;
 use std::ops::Range;
-use crate::win::input::{InputEvent, KeyboardEvent};
-use clipboard::{ClipboardContext, ClipboardProvider};
 use std::os::raw::c_int;
+use std::time::Instant;
+
+use cgmath::{Vector2, Vector3};
+use clipboard::{ClipboardContext, ClipboardProvider};
+
+use crate::{invoke, native};
+use crate::bind_fn;
+use crate::game::Rgba;
+use crate::hash::Hashable;
+use crate::pattern::{NOP, RET, XOR_32_64};
+use crate::win::input::{InputEvent, KeyboardEvent};
 
 pub mod notification;
 
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
-
-use crate::bind_fn;
-use backtrace::SymbolName;
-use crate::hash::Hashable;
 
 bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
 
@@ -56,9 +54,8 @@ pub fn show_help(text: &str, looping: bool, beep: bool, duration: Option<u32>) {
     invoke!((), 0x238FFE5C7B0498A6, 0, looping, beep, duration.map_or(-1, |d|d as i32))
 }
 
-#[deprecated(note="Not working. Use show_help instead")]
 pub fn show_help_this_frame(text: &str) {
-    invoke!((), 0x960C9FF8F616E41C, 0)
+    invoke!((), 0x960C9FF8F616E41C, text, 0)
 }
 
 pub fn draw_rect<P, S, C>(pos: P, size: S, color: C)
@@ -99,7 +96,7 @@ pub enum Font {
     HouseScript,
     Monospace,
     ChaletComprimeCologne = 4,
-    Pricedown = 7
+    Pricedown = 7,
 }
 
 #[repr(C)]
@@ -109,7 +106,7 @@ pub enum LoadingPrompt {
     LoadingLeft2,
     LoadingLeft3,
     SavingLeft,
-    LoadingRight
+    LoadingRight,
 }
 
 #[repr(C)]
@@ -127,7 +124,7 @@ pub enum CursorSprite {
     DownArrow,
     HorizontalExpand,
     Add,
-    Remove
+    Remove,
 }
 
 #[repr(C)]
@@ -183,7 +180,7 @@ pub enum HudElement {
     ReplayTopLine,
     ReplayBottomLine,
     ReplayLeftBar,
-    ReplayTimer
+    ReplayTimer,
 }
 
 pub fn at_origin<F>(origin: Vector3<f32>, task: F) where F: FnOnce() {
@@ -215,7 +212,7 @@ pub fn push_string(value: &str) {
 }
 
 pub fn push_int(value: u32) {
-    invoke!((), 0x03B504CF259931BC)
+    invoke!((), 0x03B504CF259931BC, value)
 }
 
 pub fn set_frontend_active(active: bool) {
@@ -314,10 +311,10 @@ pub fn prompt(title: &str, placeholder: &str, max_length: u32) -> Option<String>
             1 => {
                 let input = invoke!(&str, 0x8362B09B91893647);
                 break Some(input.to_owned());
-            },
+            }
             2 => {
                 break None;
-            },
+            }
             _ => {
                 super::script::wait(0);
             }
@@ -332,7 +329,7 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
     let buttons = buttons as u32;
     loop {
         super::script::wait(0);
-        invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, true);
+        invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, background);
         let result = GET_WARN_RESULT(true, 0);
         if result != FrontendButtons::None {
             break result;
@@ -397,7 +394,7 @@ pub enum FrontendButtons {
     CancelLoadingSpinner = 134217744,
     CancelSelectLoadingSpinner = 134217745,
     CancelOkLoadingSpinner = 134217746,
-    CancelYesLoadingSpinner = 134217748
+    CancelYesLoadingSpinner = 134217748,
 }
 
 pub struct TextInput {
@@ -408,7 +405,7 @@ pub struct TextInput {
     last_selection_changed: Instant,
     width: f32,
     height: f32,
-    font: Font
+    font: Font,
 }
 
 impl TextInput {
@@ -421,16 +418,16 @@ impl TextInput {
             last_selection_changed: Instant::now(),
             width,
             height,
-            font
+            font,
         }
     }
 
     pub fn input(&mut self, event: &InputEvent) -> Option<String> {
-        use winapi::um::winuser::{VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_RETURN};
+        use winapi::um::winuser::{VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_RETURN};
         match event {
             InputEvent::Keyboard(event) => {
                 match event {
-                    KeyboardEvent::Key { key, alt, shift, control, is_up, .. } if !*is_up => {
+                    KeyboardEvent::Key { key, shift, control, is_up, .. } if !*is_up => {
                         const VK_KEY_A: c_int = 0x41;
                         const VK_KEY_C: c_int = 0x43;
                         const VK_KEY_X: c_int = 0x58;
@@ -457,7 +454,7 @@ impl TextInput {
                                     }
                                 }
                                 self.last_selection_changed = Instant::now();
-                            },
+                            }
                             VK_RIGHT => {
                                 if *control {
                                     let len = self.len();
@@ -480,7 +477,7 @@ impl TextInput {
                                     }
                                 }
                                 self.last_selection_changed = Instant::now();
-                            },
+                            }
                             VK_HOME => {
                                 if *shift {
                                     self.selection.end = 0;
@@ -488,7 +485,7 @@ impl TextInput {
                                     self.selection = 0..0;
                                 }
                                 self.last_selection_changed = Instant::now();
-                            },
+                            }
                             VK_END => {
                                 let len = self.len();
                                 if *shift {
@@ -497,7 +494,7 @@ impl TextInput {
                                     self.selection = len..len;
                                 }
                                 self.last_selection_changed = Instant::now();
-                            },
+                            }
                             VK_UP => {
                                 if self.history_pos < self.history.len() {
                                     self.history_pos += 1;
@@ -505,7 +502,7 @@ impl TextInput {
                                     self.selection = len..len;
                                     self.last_selection_changed = Instant::now();
                                 }
-                            },
+                            }
                             VK_DOWN => {
                                 if self.history_pos > 0 {
                                     self.history_pos -= 1;
@@ -513,7 +510,7 @@ impl TextInput {
                                     self.selection = len..len;
                                     self.last_selection_changed = Instant::now();
                                 }
-                            },
+                            }
                             VK_RETURN => {
                                 if self.history_pos == 0 {
                                     if !self.input.is_empty() {
@@ -528,12 +525,12 @@ impl TextInput {
                                     self.reset();
                                     return Some(input);
                                 }
-                            },
+                            }
                             VK_KEY_A if *control => {
                                 let len = self.len();
                                 self.selection = 0..len;
                                 self.last_selection_changed = Instant::now();
-                            },
+                            }
                             VK_KEY_C if *control => {
                                 let start = self.selection.start;
                                 let end = self.selection.end;
@@ -544,7 +541,7 @@ impl TextInput {
                                     context.set_contents(selected)
                                         .expect("clipboard text update failed");
                                 }
-                            },
+                            }
                             VK_KEY_X if *control => {
                                 let start = self.selection.start;
                                 let end = self.selection.end;
@@ -556,22 +553,22 @@ impl TextInput {
                                         .expect("clipboard text update failed");
                                     self.replace_chars(start, end, "")
                                 }
-                            },
+                            }
                             VK_KEY_V if *control => {
                                 let start = self.selection.start;
                                 let end = self.selection.end;
                                 let mut context = ClipboardContext::new()
                                     .expect("clipboard context creation failed");
-                                let mut input = context.get_contents()
+                                let input = context.get_contents()
                                     .expect("clipboard text getting failed");
                                 self.replace_chars(start, end, &input);
                                 let pos = start.min(end) + input.chars().count();
                                 self.selection = pos..pos;
                                 self.last_selection_changed = Instant::now();
-                            },
+                            }
                             _ => {}
                         }
-                    },
+                    }
                     KeyboardEvent::Char(c) => {
                         match c {
                             &'\u{0008}' => self.erase_left(),
@@ -579,10 +576,10 @@ impl TextInput {
                             c if !c.is_control() => self.enter_char(*c),
                             _ => {}
                         }
-                    },
+                    }
                     _ => {}
                 }
-            },
+            }
             _ => {}
         }
         None
@@ -686,7 +683,7 @@ impl TextInput {
 
     pub fn reset(&mut self) {
         self.selection = 0..0;
-        self.last_selection_changed = Instant::now();;
+        self.last_selection_changed = Instant::now();
         self.input = String::new();
         self.history_pos = 0;
     }

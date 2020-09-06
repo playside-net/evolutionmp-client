@@ -1,12 +1,11 @@
-use crate::invoke;
-use crate::native;
-use crate::hash::{Hash, Hashable};
-use crate::native::{NativeStackValue, NativeStackReader, NativeStackWriter};
+use cgmath::Vector3;
+
 use crate::game::Handle;
 use crate::game::ped::Ped;
+use crate::hash::{Hash, Hashable};
+use crate::invoke;
+use crate::native::{NativeStackReader, NativeStackValue, NativeStackWriter};
 use crate::native::pool::Handleable;
-use std::time::Duration;
-use cgmath::Vector3;
 
 pub trait Resource {
     fn is_loaded(&self) -> bool;
@@ -24,7 +23,7 @@ pub trait Resource {
 #[derive(Clone)]
 pub struct Model {
     hash: Hash,
-    name: String
+    name: String,
 }
 
 impl AsRef<dyn Hashable> for Model {
@@ -75,7 +74,7 @@ impl Model {
     pub fn from<H>(hash: H) -> Self where H: Hashable {
         Model {
             hash: hash.joaat(),
-            name: hash.to_string()
+            name: hash.to_string(),
         }
     }
 
@@ -231,14 +230,14 @@ impl Drop for PedPhoto {
 
 pub struct Texture {
     dict: String,
-    name: String
+    name: String,
 }
 
 impl Texture {
     pub fn new<D, N>(dict: D, name: N) -> Texture where D: Into<String>, N: Into<String> {
         Texture {
             dict: dict.into(),
-            name: name.into()
+            name: name.into(),
         }
     }
 }

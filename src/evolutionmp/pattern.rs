@@ -1,23 +1,20 @@
-use std::any::Any;
-use std::ptr::null_mut;
-use std::time::{Duration, Instant};
-use std::mem::ManuallyDrop;
-use std::ptr::replace;
-use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
 use std::fs::File;
+use std::ops::Deref;
+use std::path::PathBuf;
+use std::ptr::null_mut;
 use std::sync::Mutex;
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, PAGE_EXECUTE_READWRITE, IMAGE_OPTIONAL_HEADER64, PAGE_READONLY, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_NOACCESS, MEM_IMAGE};
-use winapi::um::memoryapi::{VirtualProtect, VirtualQueryEx, VirtualProtectEx, ReadProcessMemory, VirtualQuery};
-use winapi::um::libloaderapi::{GetModuleHandleA, GetModuleFileNameW};
-use winapi::shared::minwindef::{DWORD, TRUE, HMODULE, MAX_PATH};
+
 use detour::RawDetour;
-use serde_derive::{Serialize, Deserialize};
-use crate::launcher_dir;
-use std::path::{Path, PathBuf};
-use winapi::um::sysinfoapi::{SYSTEM_INFO, GetSystemInfo};
+use serde_derive::{Deserialize, Serialize};
+use winapi::shared::minwindef::{DWORD, HMODULE, TRUE};
+use winapi::um::libloaderapi::GetModuleHandleA;
+use winapi::um::memoryapi::{ReadProcessMemory, VirtualProtect, VirtualQuery};
 use winapi::um::processthreadsapi::GetCurrentProcess;
-use winapi::um::errhandlingapi::GetLastError;
+use winapi::um::sysinfoapi::{GetSystemInfo, SYSTEM_INFO};
+use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READWRITE, PAGE_NOACCESS};
+
+use crate::launcher_dir;
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
@@ -44,7 +41,7 @@ impl PatternCache {
     }
 
     fn get(&self, pattern: &Pattern, occurrence: usize) -> Option<MemoryRegion> {
-        let mut cache = self.inner.lock().unwrap();
+        let cache = self.inner.lock().unwrap();
         if let Some(entry) = cache.get(pattern) {
             if let Some(offset) = entry.get(occurrence).cloned() {
                 let mem = &crate::native::MEM;
@@ -52,7 +49,7 @@ impl PatternCache {
                 let size = mem.size as u64 - offset;
                 return Some(MemoryRegion {
                     base: base as _,
-                    size: size as _
+                    size: size as _,
                 });
             }
         }
@@ -63,7 +60,7 @@ impl PatternCache {
         let mut cache = self.inner.lock().unwrap();
         let mem = &crate::native::MEM;
         let offset = region.base as u64 - mem.base as u64;
-        if let Some(mut entry) = cache.get_mut(pattern) {
+        if let Some(entry) = cache.get_mut(pattern) {
             entry.push(offset);
         } else {
             cache.insert(pattern.clone(), vec![offset]);
@@ -71,7 +68,7 @@ impl PatternCache {
     }
 
     pub(crate) fn load(&self) {
-        let mut file = self.get_file();
+        let file = self.get_file();
         if file.exists() {
             crate::info!("Loading hints...");
             let mut file = File::open(&file)
@@ -84,7 +81,7 @@ impl PatternCache {
     }
 
     pub(crate) fn save(&self) {
-        let mut file = self.get_file();
+        let file = self.get_file();
         if !file.exists() {
             crate::info!("Saving hints...");
             let mut file = File::create(&file)
@@ -138,7 +135,7 @@ impl Pattern {
         None
     }
 
-    pub unsafe fn find(&self, region: &MemoryRegion) -> Option<MemoryRegion> {
+    pub unsafe fn find(&self) -> Option<MemoryRegion> {
         //crate::info!("Searching for pattern {}", self);
         let mut sys_info = SYSTEM_INFO::default();
         GetSystemInfo(&mut sys_info);
@@ -151,7 +148,7 @@ impl Pattern {
             let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
 
             let process = GetCurrentProcess();
-            let hr = GetLastError();
+
             if VirtualQuery(current_chunk, &mut mbi, mbi_size) == 0 {
                 return None;
             }
@@ -173,11 +170,9 @@ impl Pattern {
                     VirtualProtect(mbi.BaseAddress, mbi.RegionSize, old_protect, &mut old_protect);
                     if let Some(index) = self.scan(&buffer[0..bytes_read]) {
                         let base = current_chunk.add(index).cast();
-                        let offset = base as u64 - mbi.AllocationBase as u64;
-                        //crate::info!("Found pattern {} at address {:p} offset {:X}", self, base, offset);
                         return Some(MemoryRegion {
                             base,
-                            size: bytes_read - index
+                            size: bytes_read - index,
                         });
                     }
                 }
@@ -233,7 +228,7 @@ impl<T> RageBox<T> {
     }
 
     pub unsafe fn as_mut(&self) -> &mut T {
-        unsafe { &mut *self.ptr }
+        &mut *self.ptr
     }
 
     pub fn cloned(&self) -> RageBox<T> {
@@ -244,12 +239,13 @@ impl<T> RageBox<T> {
 }
 
 unsafe impl<T> Send for RageBox<T> {}
+
 unsafe impl<T> Sync for RageBox<T> {}
 
 #[derive(Clone)]
 pub struct MemoryRegion {
     pub base: *mut u8,
-    pub size: usize
+    pub size: usize,
 }
 
 impl MemoryRegion {
@@ -260,7 +256,7 @@ impl MemoryRegion {
             let size = size(std::mem::transmute::<*mut (), *mut IMAGE_NT_HEADERS64>(lfa as *mut ()).read().OptionalHeader);
             MemoryRegion {
                 base: handle as *mut _,
-                size: size as usize
+                size: size as usize,
             }
         }
     }
@@ -276,12 +272,12 @@ impl MemoryRegion {
     }
 
     pub fn find<P>(&self, pattern: P) -> Option<MemoryRegion> where P: Into<Pattern> {
-        unsafe { pattern.into().find(self) }
+        unsafe { pattern.into().find() }
     }
 
     pub fn find_str<S>(&self, str: S) -> Option<MemoryRegion> where S: AsRef<str> {
         self.find(Pattern {
-            nibbles: str.as_ref().as_bytes().iter().map(|b|Some(*b)).collect::<_>()
+            nibbles: str.as_ref().as_bytes().iter().map(|b| Some(*b)).collect::<_>()
         })
     }
 
@@ -292,7 +288,7 @@ impl MemoryRegion {
     pub unsafe fn add(&self, offset: usize) -> MemoryRegion {
         MemoryRegion {
             base: self.base.add(offset),
-            size: self.size - offset
+            size: self.size - offset,
         }
     }
 
@@ -317,7 +313,7 @@ impl MemoryRegion {
     pub unsafe fn offset(&self, offset: isize) -> MemoryRegion {
         MemoryRegion {
             base: self.base.offset(offset),
-            size: (self.size as isize - offset) as usize
+            size: (self.size as isize - offset) as usize,
         }
     }
 
@@ -350,7 +346,7 @@ impl MemoryRegion {
     }
 
     pub unsafe fn replace<P>(&self, pattern: P) where P: Into<Pattern> {
-        for (i, b) in pattern.into().nibbles.iter().map(|n|n.unwrap()).enumerate() {
+        for (i, b) in pattern.into().nibbles.iter().map(|n| n.unwrap()).enumerate() {
             self.base.add(i).write(b)
         }
     }
@@ -412,6 +408,7 @@ impl MemoryRegion {
 }
 
 unsafe impl Sync for MemoryRegion {}
+
 unsafe impl Send for MemoryRegion {}
 
 impl std::fmt::Display for MemoryRegion {

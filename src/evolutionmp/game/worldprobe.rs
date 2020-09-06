@@ -1,10 +1,10 @@
-use crate::invoke;
+use cgmath::Vector3;
+
 use crate::game::entity::Entity;
 use crate::game::Handle;
-use crate::native::pool::Handleable;
 use crate::hash::Hash;
+use crate::invoke;
 use crate::native::NativeVector3;
-use cgmath::{Vector3, Array};
 
 #[derive(Debug)]
 pub struct Probe {
@@ -33,7 +33,7 @@ impl Probe {
             surface_normal: surface_normal.into(),
             entity: if entity == 0 { None } else { Some(ProbeEntity { handle: entity }) },
             material: if include_material { Some(material) } else { None },
-            code
+            code,
         }
     }
 }
@@ -47,7 +47,7 @@ pub struct ProbeResult {
     pub surface_normal: Vector3<f32>,
     pub entity: Option<ProbeEntity>,
     pub material: Option<Hash>,
-    pub code: u32
+    pub code: u32,
 }
 
 #[derive(Debug)]

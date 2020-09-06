@@ -1,39 +1,33 @@
-use crate::{invoke, bind_field};
-use crate::native::{EntityField, NativeFunction};
-use crate::pattern::MemoryRegion;
-use crate::game::entity::Entity;
-use crate::game::vehicle::Vehicle;
-use std::sync::atomic::{AtomicI32, Ordering};
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
-type VehicleField<T> = EntityField<T>;
+use crate::bind_field;
+use crate::native::EntityField;
 
-pub(crate) static CURRENT_GEAR: VehicleField<i32> = VehicleField::unset();
-pub(crate) static HIGH_GEAR: VehicleField<i32> = VehicleField::unset();
-pub(crate) static FUEL_LEVEL: VehicleField<f32> = VehicleField::unset();
-pub(crate) static OIL_LEVEL: VehicleField<f32> = VehicleField::unset();
-pub(crate) static WHEEL_SPEED: VehicleField<f32> = VehicleField::unset();
-pub(crate) static CURRENT_RPM: VehicleField<f32> = VehicleField::unset();
-pub(crate) static ACCELERATION: VehicleField<f32> = VehicleField::unset();
-pub(crate) static DASHBOARD_SPEED: VehicleField<f32> = VehicleField::unset();
-pub(crate) static STEERING_SCALE: VehicleField<f32> = VehicleField::unset();
-pub(crate) static STEERING_ANGLE: VehicleField<f32> = VehicleField::unset();
-pub(crate) static HANDBRAKE: VehicleField<bool> = VehicleField::unset();
-pub(crate) static ENGINE_TEMPERATURE: VehicleField<f32> = VehicleField::unset();
-pub(crate) static LIGHTS: VehicleField<i32> = VehicleField::unset();
-pub(crate) static ENGINE_POWER: VehicleField<f32> = VehicleField::predefined(0xAC0);
-pub(crate) static BRAKE_POWER: VehicleField<f32> = VehicleField::predefined(0x9A0);
-pub(crate) static OIL_VOLUME: VehicleField<f32> = VehicleField::predefined(0x0104);
-pub(crate) static PETROL_TANK_VOLUME: VehicleField<f32> = VehicleField::predefined(0x0100);
-pub(crate) static GEARS: VehicleField<i32> = VehicleField::predefined(0x870);
-pub(crate) static NEXT_GEAR: VehicleField<i32> = VehicleField::predefined(0x870);
-pub(crate) static TURBO: VehicleField<f32> = VehicleField::predefined(0x8D8);
-pub(crate) static CLUTCH: VehicleField<f32> = VehicleField::predefined(0x8C0);
-pub(crate) static THROTTLE: VehicleField<f32> = VehicleField::predefined(0x8C4);
-pub(crate) static THROTTLE_POWER: VehicleField<f32> = VehicleField::predefined(0x99C);
-pub(crate) static HELICOPTER_BLADES_SPEED: VehicleField<f32> = VehicleField::predefined(0x1AA8);
-pub(crate) static TRAIN_TRACK_NODE: VehicleField<i32> = VehicleField::predefined(0x14C0);
+pub(crate) static CURRENT_GEAR: EntityField<i32> = EntityField::unset();
+pub(crate) static HIGH_GEAR: EntityField<i32> = EntityField::unset();
+pub(crate) static FUEL_LEVEL: EntityField<f32> = EntityField::unset();
+pub(crate) static OIL_LEVEL: EntityField<f32> = EntityField::unset();
+pub(crate) static WHEEL_SPEED: EntityField<f32> = EntityField::unset();
+pub(crate) static CURRENT_RPM: EntityField<f32> = EntityField::unset();
+pub(crate) static ACCELERATION: EntityField<f32> = EntityField::unset();
+pub(crate) static DASHBOARD_SPEED: EntityField<f32> = EntityField::unset();
+pub(crate) static STEERING_SCALE: EntityField<f32> = EntityField::unset();
+pub(crate) static STEERING_ANGLE: EntityField<f32> = EntityField::unset();
+pub(crate) static HANDBRAKE: EntityField<bool> = EntityField::unset();
+pub(crate) static ENGINE_TEMPERATURE: EntityField<f32> = EntityField::unset();
+pub(crate) static LIGHTS: EntityField<i32> = EntityField::unset();
+pub(crate) static ENGINE_POWER: EntityField<f32> = EntityField::predefined(0xAC0);
+pub(crate) static BRAKE_POWER: EntityField<f32> = EntityField::predefined(0x9A0);
+pub(crate) static OIL_VOLUME: EntityField<f32> = EntityField::predefined(0x0104);
+pub(crate) static PETROL_TANK_VOLUME: EntityField<f32> = EntityField::predefined(0x0100);
+pub(crate) static GEARS: EntityField<i32> = EntityField::predefined(0x870);
+pub(crate) static NEXT_GEAR: EntityField<i32> = EntityField::predefined(0x870);
+pub(crate) static TURBO: EntityField<f32> = EntityField::predefined(0x8D8);
+pub(crate) static CLUTCH: EntityField<f32> = EntityField::predefined(0x8C0);
+pub(crate) static THROTTLE: EntityField<f32> = EntityField::predefined(0x8C4);
+pub(crate) static THROTTLE_POWER: EntityField<f32> = EntityField::predefined(0x99C);
+pub(crate) static HELICOPTER_BLADES_SPEED: EntityField<f32> = EntityField::predefined(0x1AA8);
+pub(crate) static TRAIN_TRACK_NODE: EntityField<i32> = EntityField::predefined(0x14C0);
 
 fn find_nearest_native(natives: &HashMap<u64, *const ()>, address: *const ()) -> Option<(u64, *const ())> {
     natives.iter().min_by(|(_, f1), (_, f2)| {

@@ -1,18 +1,13 @@
 use super::Handle;
 use crate::{invoke, impl_handle};
 use crate::game::entity::Entity;
-use crate::game;
 use crate::game::ped::Ped;
 use crate::game::streaming::{Model, Resource};
 use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
 use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE, LIGHTS, FUEL_LEVEL, ENGINE_TEMPERATURE, OIL_LEVEL, OIL_VOLUME, DASHBOARD_SPEED, HANDBRAKE, ENGINE_POWER};
-use crate::native::pool::{Handleable, Pool, VehiclePool};
-use crate::pattern::RageBox;
-use std::time::Duration;
-use std::sync::atomic::Ordering;
-use std::mem::ManuallyDrop;
+use crate::native::pool::{Handleable, VehiclePool};
 use cgmath::{Vector3, Rad, Vector2};
 
 pub fn get_pool() -> &'static Box<VehiclePool> {

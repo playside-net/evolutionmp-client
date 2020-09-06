@@ -1,7 +1,8 @@
-use crate::invoke;
+use cgmath::{Angle, Deg, Euler, Vector3};
+
 use crate::game::Handle;
-use crate::hash::{Hashable, Hash};
-use cgmath::{Vector3, Matrix3, Euler, Deg, SquareMatrix, Angle};
+use crate::hash::{Hash, Hashable};
+use crate::invoke;
 
 pub enum CameraShake {
     DeathFailInEffect,
@@ -14,7 +15,7 @@ pub enum CameraShake {
     SmallExplosion,
     RoadVibration,
     SkyDiving,
-    Vibrate
+    Vibrate,
 }
 
 impl CameraShake {
@@ -40,7 +41,7 @@ pub enum CameraType {
     DefaultAnimated,
     DefaultSpline,
     DefaultScriptedFly,
-    TimedSpline
+    TimedSpline,
 }
 
 impl CameraType {
@@ -92,7 +93,7 @@ pub fn rotation_to_direction(rot: Vector3<f32>) -> Vector3<f32> {
     Vector3::new(
         -rot.z.sin() * rot.x.cos().abs(),
         rot.z.cos() * rot.x.cos().abs(),
-        rot.x.sin()
+        rot.x.sin(),
     )
 }
 

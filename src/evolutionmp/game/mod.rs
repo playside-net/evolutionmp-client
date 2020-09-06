@@ -5,8 +5,6 @@ use jni_dynamic::{InitArgsBuilder, JavaVM, JNIVersion};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{add_dll_directory, bind_fn_detour_ip, launcher_dir};
-use crate::native::NativeStackValue;
-use crate::pattern::MemoryRegion;
 
 pub mod audio;
 pub mod entity;
@@ -95,6 +93,17 @@ impl GameState {
     }
 }
 
+
+/*extern "C" fn run_init_state() {
+    RUN_INIT_STATE()
+}*/
+
+/*extern "C" fn skip_init(stage: u32) -> bool {
+    info!("skipping init {}", stage);
+    SKIP_INIT(stage)
+}*/
+
+//bind_field_ip!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
 //bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, "C", fn() -> ());
 //bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, "C", fn(u32) -> bool);
 bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, "C", fn(u8) -> u32);

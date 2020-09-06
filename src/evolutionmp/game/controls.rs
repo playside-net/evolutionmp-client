@@ -1,4 +1,3 @@
-use super::Handle;
 use crate::invoke;
 
 #[derive(Copy, Clone)]
@@ -36,7 +35,7 @@ pub enum Group {
     SniperZoomSecondary,
     VehicleHydraulicsControl,
     MaxInputGroups,
-    Invalid
+    Invalid,
 }
 
 #[derive(Copy, Clone)]
@@ -386,7 +385,7 @@ pub enum Control {
     VehicleBikeWings,
     VehicleFlyBombBay,
     VehicleFlyCounter,
-    VehicleFlyTransform
+    VehicleFlyTransform,
 }
 
 pub fn disable_action(group: Group, control: Control, disable: bool) {

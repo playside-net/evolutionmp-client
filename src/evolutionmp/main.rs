@@ -1,40 +1,33 @@
 #![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
 
+extern crate backtrace;
 #[macro_use]
 extern crate lazy_static;
-extern crate backtrace;
 
-use crate::pattern::MemoryRegion;
-use crate::game::entity::Entity;
-use crate::game::GameState;
-use crate::hash::Hashable;
-use std::ptr::null_mut;
-use std::time::Duration;
-use std::path::{Path, PathBuf};
-use std::io::prelude::*;
-use std::panic::PanicInfo;
+use std::ffi::{CString, OsString};
 use std::io::stdout;
-use backtrace::{Backtrace, BacktraceFmt, BacktraceFrame, SymbolName};
-use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE, MAX_PATH, DWORD};
-use winapi::shared::windef::{HICON, HMENU, HWND};
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress};
+use std::panic::PanicInfo;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
+
+use backtrace::{Backtrace, SymbolName};
 use colored::{Color, Colorize};
+use detour::RawDetour;
 use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
-use log::{info, debug, error};
-use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
-use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, MEMORY_BASIC_INFORMATION, MAX_PACKAGE_NAME, LPWSTR};
-use winapi::um::processthreadsapi::GetCurrentThreadId;
+use log::{debug, error, info};
 use winapi::ctypes::c_void;
+use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, LPVOID, MAX_PATH, TRUE};
+use winapi::shared::windef::{HMENU, HWND};
+use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress};
 use winapi::um::memoryapi::VirtualQuery;
-use std::ffi::{CStr, CString, OsString};
-use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM};
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use iced_x86::{Decoder, DecoderOptions, NasmFormatter, Formatter, Instruction, FlowControl, Code, CodeSize};
-use detour::RawDetour;
+use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, LPWSTR, MEMORY_BASIC_INFORMATION};
+use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC};
 use wio::wide::FromWide;
-use winapi::um::winuser::{IsWindow, IsWindowVisible, WNDPROC, SetWindowLongPtrW, GWLP_WNDPROC};
+
+use crate::game::GameState;
+use crate::pattern::MemoryRegion;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -66,22 +59,15 @@ pub mod console;
 #[repr(u32)]
 #[derive(Debug)]
 pub enum DllCallReason {
-    ProcessDetach, ProcessAttach, ThreadAttach, ThreadDetach
+    ProcessDetach,
+    ProcessAttach,
+    ThreadAttach,
+    ThreadDetach,
 }
 
 pub const LOG_ROOT: &'static str = "root";
 pub const LOG_PANIC: &'static str = "panic";
 
-/*extern "C" fn run_init_state() {
-    RUN_INIT_STATE()
-}*/
-
-/*extern "C" fn skip_init(stage: u32) -> bool {
-    info!("skipping init {}", stage);
-    SKIP_INIT(stage)
-}*/
-
-bind_field_ip!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
 bind_field_ip!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bool);
 bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
 bind_field_ip!(HEAP_SIZE, "83 C8 01 48 8D 0D ? ? ? ? 41 B1 01 45 33 C0", 17, u32);
@@ -230,7 +216,7 @@ unsafe fn initialize(window: &Window) {
     focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
     focus_pause.nop(7);
     bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
-    unsafe { *DEVICE_LIMIT.as_mut() *= 5 };
+    *DEVICE_LIMIT.as_mut() *= 5;
     mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
         .add(12).nop(5);
     /*mem.find("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
@@ -253,7 +239,7 @@ unsafe fn initialize(window: &Window) {
 }
 
 #[cfg(target_os = "windows")]
-fn attach(instance: HINSTANCE) {
+fn attach() {
     unsafe {
         if AddVectoredExceptionHandler(0, Some(except)).is_null() {
             panic!("Unable to set exception handler");
@@ -290,18 +276,18 @@ macro_rules! info_message {
 #[cfg(target_os = "windows")]
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, reserved: LPVOID) -> BOOL {
+pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, _reserved: LPVOID) -> BOOL {
     match reason {
         DllCallReason::ProcessAttach => {
             unsafe { DisableThreadLibraryCalls(instance) };
             setup_logger("client", true);
-            attach(instance)
-        },
+            attach()
+        }
         DllCallReason::ProcessDetach => {
             unsafe { FreeLibrary(instance) };
             detach();
         }
-        other => {
+        _ => {
             //crate::info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })
         }
     }
@@ -317,7 +303,7 @@ pub fn launcher_dir() -> PathBuf {
     launcher_dir
 }
 
-pub fn downcast_str(string: &(dyn std::any::Any + Send)) -> &str  {
+pub fn downcast_str(string: &(dyn std::any::Any + Send)) -> &str {
     match string.downcast_ref::<&'static str>() {
         Some(s) => *s,
         None => {
@@ -366,7 +352,7 @@ pub fn setup_logger(prefix: &str, debug: bool) {
                         (&*level).bold(),
                         message
                     ))
-                },
+                }
                 LOG_PANIC => {
                     let message = format!("{}", message);
                     out.finish(format_args!(
@@ -374,7 +360,7 @@ pub fn setup_logger(prefix: &str, debug: bool) {
                         time,
                         (&*message).red()
                     ))
-                },
+                }
                 _ => {
                     let level = format!("{}", colors.color(record.level()));
                     out.finish(format_args!(
@@ -409,7 +395,7 @@ pub fn setup_logger(prefix: &str, debug: bool) {
 
         let s = format!("{:?}", backtrace);
 
-        for line in s.lines(){
+        for line in s.lines() {
             debug!(target: LOG_PANIC, "{}", line);
         }
     }));

@@ -1,10 +1,10 @@
+use cgmath::{Quaternion, Vector3};
+
+use crate::game::streaming::AnimDict;
 use crate::hash::Hash;
-use super::Handle;
 use crate::invoke;
+use crate::native::Addressable;
 use crate::native::pool::{self, Handleable};
-use crate::native::{EntityField, Addressable};
-use crate::game::streaming::{Resource, AnimDict};
-use cgmath::{Vector3, Euler, Deg, Quaternion, Matrix3};
 
 pub trait Entity: Handleable {
     fn exists(&self) -> bool {
@@ -163,7 +163,7 @@ impl<E> Addressable for E where E: Entity + Sized {
 
 pub struct Bone<'a, E> where E: Entity {
     pub entity: &'a E,
-    pub index: i32
+    pub index: i32,
 }
 
 impl<'a, E> Bone<'a, E> where E: Entity {

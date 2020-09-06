@@ -1,24 +1,18 @@
-use crate::pattern::{MemoryRegion, RageBox};
-use crate::native::alloc::RageVec;
-use crate::hash::{Hash, Hashable};
-use crate::win::thread::__readgsqword;
-use crate::runtime::Script;
-use std::mem::ManuallyDrop;
-use std::os::raw::c_char;
-use std::mem::MaybeUninit;
-
-use crate::{bind_fn, bind_field_ip, bind_fn_detour, bind_fn_detour_ip};
-use std::ffi::CStr;
-use std::alloc::Layout;
-use std::ops::{Deref, DerefMut, Add};
-use winapi::um::processthreadsapi::GetCurrentThreadId;
-use std::sync::Mutex;
-use crate::events::ScriptEvent;
 use std::collections::VecDeque;
-use crate::win::input::InputEvent;
-use crate::native::ThreadSafe;
-use crate::game::GameState;
+use std::ffi::CStr;
+use std::mem::ManuallyDrop;
+use std::ops::{Add, Deref, DerefMut};
+use std::os::raw::c_char;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Mutex;
+
+use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip};
+use crate::events::ScriptEvent;
+use crate::hash::{Hash, Hashable};
+use crate::native::alloc::RageVec;
+use crate::native::ThreadSafe;
+use crate::runtime::Script;
+use crate::win::thread::__readgsqword;
 
 lazy_static::lazy_static! {
     pub static ref LOADED_SCRIPTS: Mutex<Vec<ScriptThreadRuntime>> = Mutex::new(Vec::new());
@@ -85,7 +79,7 @@ unsafe extern "C" fn script_reset() {
 
 unsafe extern "C" fn script_no(script: &'static mut ScriptThread, ops: u32) -> RageThreadState {
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
-    if let Some(mut s) = loaded_scripts.iter_mut().find(|s| s.context.id == script.context.id) {
+    if let Some(s) = loaded_scripts.iter_mut().find(|s| s.context.id == script.context.id) {
         s.run(ops);
     }
     script.context.state
@@ -143,16 +137,16 @@ fn with_thread<A>(thread: &mut ScriptThreadRuntime, mut action: A) where A: FnMu
 #[repr(C)]
 pub struct ScriptManagerVTable {
     destructor: extern "C" fn(this: *mut ScriptManager),
-    fn1:        extern "C" fn(this: *mut ScriptManager),
-    fn2:        extern "C" fn(this: *mut ScriptManager),
-    fn3:        extern "C" fn(this: *mut ScriptManager),
-    fn4:        extern "C" fn(this: *mut ScriptManager),
-    fn5:        extern "C" fn(this: *mut ScriptManager),
-    fn6:        extern "C" fn(this: *mut ScriptManager),
-    fn7:        extern "C" fn(this: *mut ScriptManager),
-    fn8:        extern "C" fn(this: *mut ScriptManager),
-    fn9:        extern "C" fn(this: *mut ScriptManager),
-    attach:     extern "C" fn(this: *mut ScriptManager, thread: *mut ScriptThread),
+    fn1: extern "C" fn(this: *mut ScriptManager),
+    fn2: extern "C" fn(this: *mut ScriptManager),
+    fn3: extern "C" fn(this: *mut ScriptManager),
+    fn4: extern "C" fn(this: *mut ScriptManager),
+    fn5: extern "C" fn(this: *mut ScriptManager),
+    fn6: extern "C" fn(this: *mut ScriptManager),
+    fn7: extern "C" fn(this: *mut ScriptManager),
+    fn8: extern "C" fn(this: *mut ScriptManager),
+    fn9: extern "C" fn(this: *mut ScriptManager),
+    attach: extern "C" fn(this: *mut ScriptManager, thread: *mut ScriptThread),
 }
 
 #[repr(u32)]
@@ -198,17 +192,17 @@ pub struct RageThreadContext {
     unk2: u32,
     pad1: [u32; 13],
     set1: u32,
-    pad2: [u32; 17]
+    pad2: [u32; 17],
 }
 
 #[repr(C)]
 pub struct RageThreadVTable {
-    drop:   extern "C" fn(this: *mut ()),
-    reset:  extern "C" fn(this: *mut (), id: u32, args: *const (), len: u32) -> RageThreadState,
-    run:    extern "C" fn(this: *mut (), ops: u32) -> RageThreadState,
-    tick:   extern "C" fn(this: *mut (), ops: u32) -> RageThreadState,
-    kill:   extern "C" fn(this: *mut ()),
-    frame:  extern "C" fn(this: *mut ())
+    drop: extern "C" fn(this: *mut ()),
+    reset: extern "C" fn(this: *mut (), id: u32, args: *const (), len: u32) -> RageThreadState,
+    run: extern "C" fn(this: *mut (), ops: u32) -> RageThreadState,
+    tick: extern "C" fn(this: *mut (), ops: u32) -> RageThreadState,
+    kill: extern "C" fn(this: *mut ()),
+    frame: extern "C" fn(this: *mut ()),
 }
 
 #[repr(C)]
@@ -218,7 +212,7 @@ pub struct RageThread {
     stack: u64,
     pad1: u64,
     pad2: u64,
-    sz_exit_message: *const c_char
+    sz_exit_message: *const c_char,
 }
 
 #[repr(C)]
@@ -235,7 +229,7 @@ pub struct ScriptThread {
     pad4: u16,
     pad5: [u8; 12],
     can_remove_blips_from_other_scripts: bool,
-    pad6: [u8; 7]
+    pad6: [u8; 7],
 }
 
 impl ScriptThread {
@@ -248,12 +242,12 @@ impl ScriptThread {
                 v_table: ManuallyDrop::new(Box::new(v_table)),
                 context: RageThreadContext {
                     script_hash: name.joaat(),
-                    .. Default::default()
+                    ..Default::default()
                 },
                 stack: 0,
                 pad1: 0,
                 pad2: 0,
-                sz_exit_message: std::ptr::null()
+                sz_exit_message: std::ptr::null(),
             },
             script_name,
             script_handler: std::ptr::null(),
@@ -266,13 +260,13 @@ impl ScriptThread {
             can_remove_blips_from_other_scripts: false,
             pad3: 0,
             net_id: 0,
-            pad6: [0; 7]
+            pad6: [0; 7],
         }
     }
 
     pub fn spawn(&mut self) {
         unsafe {
-            let mut collection = THREAD_COLLECTION.as_mut();
+            let collection = THREAD_COLLECTION.as_mut();
             let mut slot = 0;
             for t in collection.iter() {
                 if t.as_ref() as *const _ as u64 == self as *const _ as u64 {
@@ -310,7 +304,7 @@ impl ScriptThread {
 pub struct ScriptThreadRuntime {
     parent: ThreadSafe<ScriptThread>,
     script: ThreadSafe<Box<dyn Script>>,
-    receiver: Receiver<ScriptEvent>
+    receiver: Receiver<ScriptEvent>,
 }
 
 macro_rules! vtable_fn {
@@ -330,10 +324,10 @@ impl ScriptThreadRuntime {
                 run: vtable_fn!(Self::run),
                 tick: vtable_fn!(Self::tick),
                 kill: vtable_fn!(Self::kill),
-                frame: vtable_fn!(Self::frame)
+                frame: vtable_fn!(Self::frame),
             })),
             script: ThreadSafe::new(script),
-            receiver
+            receiver,
         })
     }
 
@@ -343,7 +337,7 @@ impl ScriptThreadRuntime {
         SCRIPT_THREAD_KILL(&mut **self)
     }
 
-    extern "C" fn run(&mut self, ops: u32) -> RageThreadState {
+    extern "C" fn run(&mut self, _ops: u32) -> RageThreadState {
         with_thread(self, move |script| {
             if script.context.state != RageThreadState::Killed {
                 script.frame();
@@ -352,14 +346,14 @@ impl ScriptThreadRuntime {
         self.context.state
     }
 
-    extern "C" fn reset(&mut self, hash: Hash, args: *const (), len: u32) -> RageThreadState {
+    extern "C" fn reset(&mut self, hash: Hash, _args: *const (), _len: u32) -> RageThreadState {
         self.context = RageThreadContext {
             state: RageThreadState::Idle,
             script_hash: hash,
             unk1: std::u32::MAX,
             unk2: std::u32::MAX,
             set1: 1,
-            .. Default::default()
+            ..Default::default()
         };
         SCRIPT_THREAD_INIT(&mut **self);
         self.net_flag = true;

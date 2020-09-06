@@ -1,26 +1,21 @@
 use crate::win::thread::ThreadHandle;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 use std::error::Error;
-use std::path::{Display, Path};
-use std::os::windows::ffi::OsStringExt;
-use std::os::windows::ffi::OsStrExt;
-use std::ffi::{OsString, OsStr, CString, CStr};
+use std::path::Path;
+use std::ffi::{CString, CStr};
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
-use std::io::Write;
-use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, TH32CS_SNAPPROCESS, Process32FirstW, PROCESSENTRY32W, THREADENTRY32, MODULEENTRY32W, Process32NextW, TH32CS_SNAPALL, Thread32First, Thread32Next, Module32FirstW, Module32NextW};
+use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, TH32CS_SNAPPROCESS, Process32FirstW, PROCESSENTRY32W, Process32NextW};
 use winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
-use winapi::um::processthreadsapi::{OpenProcess, OpenProcessToken, GetCurrentProcess, GetProcessId, CreateThread, CreateRemoteThread, CreateRemoteThreadEx};
-use winapi::um::winnt::{PROCESS_ALL_ACCESS, TOKEN_QUERY, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, SE_PRIVILEGE_REMOVED, MEM_RELEASE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE, PAGE_EXECUTE_READWRITE, LPCWSTR};
+use winapi::um::processthreadsapi::{OpenProcess, OpenProcessToken, GetCurrentProcess, GetProcessId, CreateThread, CreateRemoteThreadEx};
+use winapi::um::winnt::{TOKEN_QUERY, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, MEM_RELEASE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE};
 use winapi::um::winbase::{LookupPrivilegeValueW, THREAD_PRIORITY_HIGHEST, INFINITE};
 use winapi::um::securitybaseapi::AdjustTokenPrivileges;
-use winapi::um::minwinbase::LPTHREAD_START_ROUTINE;
 use winapi::um::memoryapi::{VirtualFreeEx, VirtualAllocEx, WriteProcessMemory, ReadProcessMemory};
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
-use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
-use winapi::um::winuser::{MessageBeep, MB_ICONEXCLAMATION, MB_ICONSTOP, MessageBoxW, MB_ICONHAND, MB_OKCANCEL, GetParent};
+use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress};
 use winapi::shared::ntdef::{HANDLE, NULL};
-use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, LPCVOID, __some_function, FARPROC, HINSTANCE, LPDWORD};
+use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, FARPROC, HINSTANCE};
 use winapi::shared::basetsd::SIZE_T;
 use winapi::ctypes::c_void;
 use widestring::{WideCStr, WideCString};
@@ -90,11 +85,6 @@ type ElevatedThread = unsafe extern "system" fn(LPVOID) -> DWORD;
 
 pub unsafe fn create_elevated_thread(thread: ElevatedThread) -> bool {
     CloseHandle(CreateThread(null_mut(), 0, Some(thread), null_mut(), THREAD_PRIORITY_HIGHEST, null_mut())) == TRUE
-}
-
-pub unsafe fn kill_process_by_name(file_name: String) {
-    let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0);
-
 }
 
 pub struct ModuleHandle {
@@ -524,8 +514,7 @@ pub enum CreateThreadError {
 impl std::fmt::Display for CreateThreadError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            CreateThreadError::Unknown(code) => f.pad(&format!("Unknown error: {}", code)),
-            _ => unreachable!()
+            CreateThreadError::Unknown(code) => f.pad(&format!("Unknown error: {}", code))
         }
     }
 }

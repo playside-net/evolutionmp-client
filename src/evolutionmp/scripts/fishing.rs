@@ -1,27 +1,25 @@
 use std::collections::VecDeque;
-use std::time::Instant;
 use std::time::Duration;
-use std::cmp::Ordering::Equal;
-use cgmath::{Vector3, Zero, Array, Vector2, MetricSpace};
-use super::Script;
-use crate::game;
-use crate::game::player::Player;
-use crate::game::ped::{PedBone, Ped};
-use crate::game::entity::Entity;
-use crate::game::{Rgba, Rgb, GameState};
-use crate::game::controls::{Group as ControlGroup, Control};
+use std::time::Instant;
+
+use cgmath::{Array, Vector2, Vector3, Zero};
+
 use crate::events::ScriptEvent;
-use crate::game::streaming::{AnimDict, Ipl, Resource};
-use crate::game::prop::Prop;
-use crate::native::pool::Pool;
-use crate::hash::{Hashable, Hash};
-use crate::game::ui::{Font, LoadingPrompt};
-use crate::game::door::Door;
+use crate::game;
+use crate::game::Rgba;
 use crate::game::camera::GameplayCamera;
+use crate::game::controls::{Control, Group as ControlGroup};
+use crate::game::entity::Entity;
+use crate::game::ped::{Ped, PedBone};
+use crate::game::player::Player;
+use crate::game::prop::Prop;
+use crate::game::streaming::{AnimDict, Resource};
+use crate::game::ui::Font;
+use crate::runtime::Script;
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
-    prop: Option<Prop>
+    prop: Option<Prop>,
 }
 
 impl Script for ScriptFishing {
@@ -105,7 +103,7 @@ impl Script for ScriptFishing {
         }
     }
 
-    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, _event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
         false
     }
 }
@@ -114,7 +112,7 @@ impl ScriptFishing {
     pub fn new() -> ScriptFishing {
         ScriptFishing {
             catch_time: None,
-            prop: None
+            prop: None,
         }
     }
 

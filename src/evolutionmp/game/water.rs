@@ -1,8 +1,8 @@
+use cgmath::{Vector2, Vector3};
+
 use crate::{invoke, invoke_option};
 use crate::game::Handle;
-use crate::native::pool::Handleable;
 use crate::native::NativeVector3;
-use cgmath::{Vector3, Vector2};
 
 pub fn set_height(pos: Vector2<f32>, radius: f32, height: f32) {
     invoke!((), 0xC443FD757C3BA637, pos, radius, height)

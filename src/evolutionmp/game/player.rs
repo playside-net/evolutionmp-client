@@ -1,7 +1,6 @@
 use super::Handle;
 use crate::invoke;
 use crate::native::pool;
-use crate::game::entity::Entity;
 use crate::game::ped::Ped;
 use crate::hash::Hashable;
 use crate::native::pool::Handleable;

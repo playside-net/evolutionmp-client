@@ -1,17 +1,13 @@
 use crate::bind_fn_detour_ip;
-use crate::pattern::MemoryRegion;
 use crate::native::{NativeCallContext, ThreadSafe};
 use crate::game::vehicle::Vehicle;
 use crate::game::ped::Ped;
-use crate::hash::{Hash, Hashable};
+use crate::hash::Hash;
 use crate::win::input::InputEvent;
 use cgmath::{Vector3, Vector2};
 use std::collections::VecDeque;
 use std::cell::RefCell;
-use detour::RawDetour;
-use std::ffi::CStr;
 use std::mem::ManuallyDrop;
-use jni_dynamic::objects::JObject;
 
 #[repr(C)]
 struct EventVTable {
