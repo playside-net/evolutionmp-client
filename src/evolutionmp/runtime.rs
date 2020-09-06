@@ -234,7 +234,7 @@ impl ScriptJava {
 }
 
 impl Script for ScriptJava {
-    fn frame(&mut self, game_state: GameState) {
+    fn frame(&mut self) {
         if crate::game::is_loaded() {
             let env = attach_thread();
             let scripts = JAVA_SCRIPTS.lock().unwrap();
@@ -374,7 +374,7 @@ impl TaskQueue {
 }
 
 pub trait Script {
-    fn frame(&mut self, game_state: GameState);
+    fn frame(&mut self);
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool;
 }
 

@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use std::ptr::null_mut;
 use widestring::WideCStr;
 use crate::events::ScriptEvent;
+use crate::Window;
 
 static mut EVENT_POOL: Option<Sender<InputEvent>> = None;
 static mut WND_PROC: WNDPROC = None;
@@ -63,7 +64,7 @@ fn push_event(event: InputEvent) {
 }
 
 #[no_mangle]
-pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_KEYDOWN | WM_KEYUP | WM_SYSKEYDOWN | WM_SYSKEYUP => {
             let is_up = msg == WM_SYSKEYUP || msg == WM_KEYUP;
@@ -143,18 +144,10 @@ pub unsafe extern "stdcall" fn WndProc(hwnd: HWND, msg: UINT, wparam: WPARAM, lp
 }
 
 
-pub unsafe fn hook() {
+pub unsafe fn hook(window: &Window) {
     let (sender, receiver) = channel::<InputEvent>();
     EVENT_POOL = Some(sender);
-    std::thread::spawn(move || {
-        let mut handle: HWND = std::ptr::null_mut();
-        let window = CString::new("grcWindow").unwrap();
-        while handle.is_null() {
-            handle = FindWindowA(window.as_ptr() as *const _, std::ptr::null());
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        WND_PROC = std::mem::transmute(SetWindowLongPtrW(handle, GWLP_WNDPROC, WndProc as u64 as LONG_PTR));
-    });
+    WND_PROC = window.set_event_processor(Some(process_event));
     std::thread::spawn(move || {
         while let Ok(event) = receiver.recv() {
             let mut event_senders = crate::native::script::EVENT_SENDERS.lock().unwrap();

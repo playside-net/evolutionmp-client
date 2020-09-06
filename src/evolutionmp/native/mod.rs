@@ -199,22 +199,7 @@ pub(crate) fn init() {
     crate::info!("Hooking natives");
     HOOKS.replace(Some(HashMap::new()));
 
-    hook(0x577D1284D6873711, |context| {
-        let paused = context.get_args().read::<bool>();
-        crate::info!("Omitting SET_GAME_PAUSED({}) call", paused);
-    });
-    unsafe {
-        disassemble(0x577D1284D6873711);
-    }
-
-
     crate::events::init();
-}
-
-unsafe fn disassemble(hash: u64) {
-    let handler = get_handler(hash);
-    let mem = MEM.offset_to(handler as _);
-    crate::disassemble(mem.as_bytes(), handler as _);
 }
 
 fn get_trampoline(hash: u64) -> NativeFunction {

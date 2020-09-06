@@ -88,18 +88,6 @@ impl Ped {
         invoke!((), 0x9AFEFF481A85AB2E, self.handle, pos)
     }
 
-    pub fn set_model<H>(&self, model: H) -> bool where H: Hashable {
-        let model = Model::from(model);
-        if model.is_in_cd_image() && model.is_valid() {
-            model.request_and_wait();
-            invoke!((), 0x00A1CADD00108836, self.handle, model.joaat());
-            self.set_default_component_variation();
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn get_waypoint_distance(&self) -> f32 {
         invoke!(f32, 0xE6A877C64CAF1BC5, self.handle)
     }

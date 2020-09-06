@@ -5,6 +5,7 @@ use crate::game::entity::Entity;
 use crate::game::ped::Ped;
 use crate::hash::Hashable;
 use crate::native::pool::Handleable;
+use crate::game::streaming::{Model, Resource};
 
 #[derive(Debug)]
 pub struct Player {
@@ -70,6 +71,18 @@ impl Player {
 
     pub fn disable_vehicle_rewards(&self) {
         invoke!((), 0xC142BE3BB9CE125F, self.handle)
+    }
+
+    pub fn set_model<H>(&self, model: H) -> bool where H: Hashable {
+        let model = Model::from(model);
+        if model.is_in_cd_image() && model.is_valid() {
+            model.request_and_wait();
+            invoke!((), 0x00A1CADD00108836, self.handle, model.joaat());
+            self.get_ped().set_default_component_variation();
+            true
+        } else {
+            false
+        }
     }
 }
 

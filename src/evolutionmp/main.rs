@@ -15,22 +15,26 @@ use std::io::prelude::*;
 use std::panic::PanicInfo;
 use std::io::stdout;
 use backtrace::{Backtrace, BacktraceFmt, BacktraceFrame, SymbolName};
-use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE, MAX_PATH};
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW};
+use winapi::shared::minwindef::{HINSTANCE, LPVOID, BOOL, TRUE, MAX_PATH, DWORD};
+use winapi::shared::windef::{HICON, HMENU, HWND};
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress};
 use colored::{Color, Colorize};
 use fern::colors::ColoredLevelConfig;
 use fern::Dispatch;
 use log::{info, debug, error};
 use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
-use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, MEMORY_BASIC_INFORMATION, MAX_PACKAGE_NAME};
+use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, MEMORY_BASIC_INFORMATION, MAX_PACKAGE_NAME, LPWSTR};
 use winapi::um::processthreadsapi::GetCurrentThreadId;
 use winapi::ctypes::c_void;
 use winapi::um::memoryapi::VirtualQuery;
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, OsString};
 use jni_dynamic::{InitArgsBuilder, JNIVersion, JavaVM};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use iced_x86::{Decoder, DecoderOptions, NasmFormatter, Formatter, Instruction, FlowControl, Code, CodeSize};
+use detour::RawDetour;
+use wio::wide::FromWide;
+use winapi::um::winuser::{IsWindow, IsWindowVisible, WNDPROC, SetWindowLongPtrW, GWLP_WNDPROC};
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -135,43 +139,117 @@ fn add_dll_directory(java_exe: &Path) {
     std::env::set_var("PATH", format!("{}\\{}", old_path, java_libs_root.display()));
 }
 
-pub(crate) fn disassemble(bytes: &[u8], ip: u64) {
-    let mut decoder = Decoder::new(64, bytes, DecoderOptions::NONE);
-    decoder.set_ip(ip);
-    let mut formatter = NasmFormatter::new();
-    formatter.options_mut().set_digit_separator("`");
-    formatter.options_mut().set_first_operand_char_index(10);
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct Window {
+    ptr: HWND
+}
 
-    let mut output = String::new();
-    let mut instruction = Instruction::default();
-
-    while decoder.can_decode() {
-        decoder.decode_out(&mut instruction);
-        if instruction.flow_control() == FlowControl::Return {
-            break;
-        }
-
-        if instruction.code() == Code::Jo_rel8_32 && instruction.code_size() == CodeSize::Code32 { //32 bit jmp
-            break;
-        }
-
-        output.clear();
-        formatter.format(&instruction, &mut output);
-
-        let mut line = format!("{:016X} ", instruction.ip());
-        let start_index = (instruction.ip() - ip) as usize;
-        let instr_bytes = &bytes[start_index..start_index + instruction.len()];
-        for b in instr_bytes.iter() {
-            line.push_str(&format!("{:02X}", b));
-        }
-        if instr_bytes.len() < 10 {
-            for _ in 0..10 - instr_bytes.len() {
-                line.push_str("  ");
-            }
-        }
-        line.push_str(&output);
-        crate::info!("{}", line);
+impl Window {
+    pub fn is_null(&self) -> bool {
+        self.ptr.is_null()
     }
+
+    pub fn is_valid(&self) -> bool {
+        unsafe {
+            IsWindow(self.ptr) == TRUE
+        }
+    }
+
+    pub fn is_visible(&self) -> bool {
+        unsafe {
+            IsWindowVisible(self.ptr) == TRUE
+        }
+    }
+
+    pub fn set_event_processor(&self, event_processor: WNDPROC) -> WNDPROC {
+        unsafe {
+            std::mem::transmute(
+                SetWindowLongPtrW(self.ptr, GWLP_WNDPROC, std::mem::transmute(event_processor))
+            )
+        }
+    }
+}
+
+macro_rules! proc_detour {
+    ($name:ident,$module:literal,$proc:literal,$repl:expr,$abi:literal,fn($($arg:ty),*)->$ret:ty) => {
+        lazy_static::lazy_static! {
+            static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+                let module = CString::new($module).unwrap();
+                let module = GetModuleHandleA(module.as_ptr());
+                let proc = CString::new($proc).unwrap();
+                let proc = GetProcAddress(module, proc.as_ptr());
+                let detour = RawDetour::new(proc as _, $repl as _)
+                    .expect(concat!("error detouring ", $proc));
+                detour.enable().expect(concat!("error enabling detour for ", $proc));
+                let trampoline = detour.trampoline() as *const ();
+                std::mem::forget(detour);
+                std::mem::transmute(trampoline)
+            };
+        }
+    };
+}
+
+unsafe extern "system" fn create_window(ex_style: DWORD, class_name: LPWSTR, window_name: LPWSTR,
+                                        style: DWORD, x: i32, y: i32, w: i32, h: i32, parent: Window,
+                                        menu: HMENU, instance: HINSTANCE, param: LPVOID) -> Window {
+    let window = CREATE_WINDOW(ex_style, class_name, window_name, style, x, y, w, h, parent, menu, instance, param);
+    if parent.is_null() {
+        let title = OsString::from_wide_ptr_null(class_name as _);
+        if title == "grcWindow" {
+            initialize(&window);
+        }
+    }
+    window
+}
+
+proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window, "system",
+    fn(DWORD, LPWSTR, LPWSTR, DWORD, i32, i32, i32, i32, Window, HMENU, HINSTANCE, LPVOID) -> Window
+);
+
+unsafe fn initialize(window: &Window) {
+    console::attach();
+    info!("Hooking user input...");
+    crate::win::input::hook(window);
+
+    let mem = MemoryRegion::image();
+
+    info!("Applying patches...");
+
+    lazy_static::initialize(&GAME_STATE);
+
+    //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
+    /*mem.find_str("platform:/movies").expect("movie")
+        .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie*/
+    mem.find("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[0xC3]); //Disable movie
+    /*mem.find("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
+        .nop(2); //Disable legals*/
+    mem.find("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
+        .add(8).nop(6);
+    let focus_pause = mem.find("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
+    focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
+    focus_pause.nop(7);
+    bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
+    unsafe { *DEVICE_LIMIT.as_mut() *= 5 };
+    mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
+        .add(12).nop(5);
+    /*mem.find("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
+        .nop(24);*/
+
+    //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
+
+    info!("Initializing FS");
+    native::fs::pre_init();
+
+    info!("Initializing natives");
+    native::pre_init();
+
+    info!("Initializing game hooks");
+    crate::game::pre_init();
+    game::init();
+
+    info!("Initializing core scripts");
+    crate::scripts::init();
 }
 
 #[cfg(target_os = "windows")]
@@ -180,58 +258,7 @@ fn attach(instance: HINSTANCE) {
         if AddVectoredExceptionHandler(0, Some(except)).is_null() {
             panic!("Unable to set exception handler");
         }
-        console::attach();
-        info!("Injection successful");
-
-        //crate::pattern::CACHE.load();
-
-        let mem = MemoryRegion::image();
-
-        info!("Applying patches...");
-
-        //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
-        mem.find_str("platform:/movies").expect("movie")
-            .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie
-        /*mem.find("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
-            .nop(2);*/
-        let focus_pause = mem.find("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
-        focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
-        focus_pause.nop(7);
-        bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
-        unsafe { *DEVICE_LIMIT.as_mut() *= 5 };
-        mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
-            .add(12).nop(5);
-        mem.find("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
-            .add(8).nop(6);
-        /*mem.find("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
-            .nop(24);*/
-
-        lazy_static::initialize(&GAME_STATE);
-
-        //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
-
-        info!("Initializing FS");
-        native::fs::pre_init();
-
-        info!("Initializing natives");
-        native::pre_init();
-
-        info!("Initializing game hooks");
-        crate::game::pre_init();
-        game::init();
-
-        std::thread::spawn(move || {
-            console::attach();
-
-            info!("Initializing core scripts");
-            crate::scripts::init();
-
-            //crate::pattern::CACHE.save();
-
-            info!("Hooking user input...");
-            crate::win::input::hook();
-            console::attach();
-        });
+        lazy_static::initialize(&CREATE_WINDOW);
     }
 }
 

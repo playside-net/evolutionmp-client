@@ -33,6 +33,7 @@ alignas = "*"
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
 region = "*"
 iced-x86 = "1.8.0"
+wio = "*"
 
 [[bin]]
 name = "launcher"
@@ -47,4 +48,4 @@ path = "src/evolutionmp/main.rs"
 crate_type = ["rlib", "cdylib"]
 
 [profile.dev]
-opt-level = 1
+opt-level = 2

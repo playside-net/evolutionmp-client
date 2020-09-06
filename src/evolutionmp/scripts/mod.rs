@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 use std::collections::{VecDeque, HashMap};
 use std::sync::atomic::Ordering;
 use crate::game::fire::ExplosionSource;
+use crate::game::script::wait;
 
 pub mod cleanup;
 pub mod pointing;
@@ -42,6 +43,19 @@ pub fn init() {
 
     crate::native::script::run("clean_world", ScriptCleanWorld::new());
     crate::native::script::run("java", ScriptJava::new());
+    crate::native::script::run("dummy_wait", ScriptDummyWait);
     //crate::native::script::run("finger_pointing", ScriptFingerPointing::new());
     //crate::native::script::run("fishing", ScriptFishing::new());
+}
+
+struct ScriptDummyWait;
+
+impl Script for ScriptDummyWait {
+    fn frame(&mut self) {
+        wait(1000);
+    }
+
+    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
+        false
+    }
 }

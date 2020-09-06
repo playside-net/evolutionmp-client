@@ -31,21 +31,22 @@ static AUDIO_FLAGS: [(&'static str, bool); 7] = [
 
 pub struct ScriptCleanWorld {
     last_cleanup: Instant,
-    loaded: bool
+    loaded: bool,
+    model_loaded: bool
 }
 
 impl ScriptCleanWorld {
     pub fn new() -> ScriptCleanWorld {
         ScriptCleanWorld {
             last_cleanup: Instant::now(),
-            loaded: false
+            loaded: false,
+            model_loaded: false
         }
     }
 }
 
 impl Script for ScriptCleanWorld {
-    fn frame(&mut self, game_state: GameState) {
-
+    fn frame(&mut self) {
         if !self.loaded {
             self.loaded = true;
 
@@ -123,6 +124,15 @@ impl Script for ScriptCleanWorld {
             false
         };
         game::ui::set_ability_bar_visible(has_special_ability);
+
+        if game::controls::is_disabled_just_pressed(ControlGroup::Wheel, Control::FrontendPause) {
+            game::ui::set_frontend_active(false);
+            game::ui::activate_frontend_menu("FE_MENU_VERSION_LANDING_MENU", false, -1);
+        }
+        if game::controls::is_disabled_just_pressed(ControlGroup::Wheel, Control::FrontendPauseAlternate) {
+            game::ui::set_frontend_active(false);
+            game::ui::activate_frontend_menu("FE_MENU_VERSION_SP_PAUSE", false, -1);
+        }
     }
 
     fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool {
@@ -155,8 +165,6 @@ impl ScriptCleanWorld {
         game::ped::set_cops(false);
         game::ped::set_scenario_cops(false);
 
-        //gameplay::set_time_scale(1.0);
-
         game::streaming::set_vehicle_population_budget(0);
         game::streaming::set_ped_population_budget(0);
 
@@ -174,11 +182,11 @@ impl ScriptCleanWorld {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 18] = [
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 20] = [
     Control::Cover,
     Control::EnterCheatCode,
-    //Control::FrontendPause,
-    //Control::FrontendPauseAlternate,
+    Control::FrontendPause,
+    Control::FrontendPauseAlternate,
     Control::FrontendSocialClub,
     Control::FrontendSocialClubSecondary,
     Control::SpecialAbilityPC,

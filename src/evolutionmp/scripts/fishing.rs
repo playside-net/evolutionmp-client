@@ -25,7 +25,7 @@ pub struct ScriptFishing {
 }
 
 impl Script for ScriptFishing {
-    fn frame(&mut self, game_state: GameState) {
+    fn frame(&mut self) {
         let distance = 10.0;
         let player = Player::local();
         let ped = player.get_ped();

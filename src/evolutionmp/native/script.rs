@@ -337,7 +337,7 @@ impl ScriptThreadRuntime {
         })
     }
 
-    extern "C" fn drop(&mut self) {}
+    extern "C" fn drop(self: Box<ScriptThreadRuntime>) {}
 
     extern "C" fn kill(&mut self) {
         SCRIPT_THREAD_KILL(&mut **self)
@@ -378,7 +378,7 @@ impl ScriptThreadRuntime {
     }
 
     extern "C" fn frame(&mut self) {
-        self.script.frame(**crate::GAME_STATE);
+        self.script.frame();
         while let Ok(event) = self.receiver.try_recv() {
             self.script.event(&event, &mut VecDeque::with_capacity(0));
         }

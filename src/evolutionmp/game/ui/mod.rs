@@ -17,6 +17,7 @@ pub const BASE_HEIGHT: f32 = 720.0;
 
 use crate::bind_fn;
 use backtrace::SymbolName;
+use crate::hash::Hashable;
 
 bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
 
@@ -215,6 +216,14 @@ pub fn push_string(value: &str) {
 
 pub fn push_int(value: u32) {
     invoke!((), 0x03B504CF259931BC)
+}
+
+pub fn set_frontend_active(active: bool) {
+    invoke!((), 0x745711A75AB09277, active)
+}
+
+pub fn activate_frontend_menu<H>(menu: H, toggle_pause: bool, component: i32) where H: Hashable {
+    invoke!((), 0xEF01D36B9C9D0C7B, menu.joaat(), toggle_pause, component)
 }
 
 pub fn set_cursor_sprite(sprite: u32) {
