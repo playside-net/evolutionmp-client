@@ -13,7 +13,6 @@ use crate::game::{Handle, Rgb, Rgba};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
 use crate::native::pool::Handleable;
-use crate::pattern::MemoryRegion;
 
 pub mod vehicle;
 pub mod pool;
@@ -61,10 +60,6 @@ impl<T> std::ops::DerefMut for ThreadSafe<T> {
     }
 }
 
-lazy_static! {
-    pub static ref MEM: MemoryRegion = MemoryRegion::image();
-}
-
 static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
 
 #[macro_export]
@@ -72,7 +67,7 @@ macro_rules! bind_fn_detour {
     ($name:ident,$pattern:literal,$offset:literal,$detour:ident,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
-                let d = crate::native::MEM.find($pattern)
+                let d = $crate::mem!($pattern)
                 .expect(concat!("failed to find call for ", stringify!($name)))
                     .offset($offset).detour($detour as _);
                 std::mem::transmute(d)
@@ -86,7 +81,7 @@ macro_rules! bind_fn_detour_ip {
     ($name:ident,$pattern:literal,$offset:literal,$detour:ident,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
-                let d = crate::native::MEM.find($pattern)
+                let d = $crate::mem!($pattern)
                 .expect(concat!("failed to find call for ", stringify!($name)))
                     .offset($offset).detour_ip($detour as _);
                 std::mem::transmute(d)
@@ -96,11 +91,18 @@ macro_rules! bind_fn_detour_ip {
 }
 
 #[macro_export]
+macro_rules! mem {
+    ($pat:literal) => {
+        $crate::pattern::Pattern::from($pat).find()
+    };
+}
+
+#[macro_export]
 macro_rules! bind_fn {
     ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
-                let ptr = crate::native::MEM.find($pattern)
+                let ptr = $crate::mem!($pattern)
                 .expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).as_ptr();
                 std::mem::transmute(ptr)
@@ -117,7 +119,7 @@ macro_rules! bind_fn_ip {
     ($name:ident,$pattern:literal,$offset:expr,$abi:literal,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
-                let ptr = crate::native::MEM.find($pattern)
+                let ptr = $crate::mem!($pattern)
                     .expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).read_ptr($ptr_len).as_ptr();
                 std::mem::transmute(ptr)
@@ -131,7 +133,7 @@ macro_rules! bind_field {
     ($name:ident,$pattern:literal,$offset:literal,$ty:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
-                crate::native::MEM.find($pattern)
+                $crate::mem!($pattern)
                 .expect(concat!("failed to bind field for ", stringify!($name)))
                     .offset($offset).get_box()
             };
@@ -147,7 +149,7 @@ macro_rules! bind_field_ip {
     ($name:ident,$pattern:literal,$offset:expr,$ty:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
-                crate::native::MEM.find($pattern)
+                $crate::mem!($pattern)
                     .expect(concat!("failed to bind field for ", stringify!($name)))
                     .offset($offset).read_ptr($ptr_len).get_box()
             };
@@ -180,7 +182,8 @@ bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSpr
 
 pub(crate) fn pre_init() {
     script::pre_init();
-    //streaming::pre_init();
+    streaming::pre_init();
+    grc::pre_init();
     pool::pre_init();
     vehicle::pre_init();
     lazy_static::initialize(&EXPANDED_RADAR);

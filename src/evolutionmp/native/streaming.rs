@@ -107,7 +107,7 @@ impl CustomPackFileMounter {
         }
     }*/
 
-    fn drop(&mut self) {}
+    fn drop(self: Box<CustomPackFileMounter>) {}
 
     pub fn mount(&mut self, entry: &mut DataFileEntry) {
         entry.disabled = true;

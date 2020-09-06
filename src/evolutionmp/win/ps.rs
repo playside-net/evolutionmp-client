@@ -1,26 +1,28 @@
-use crate::win::thread::ThreadHandle;
-use std::ptr::null_mut;
-use std::error::Error;
-use std::path::Path;
-use std::ffi::{CString, CStr};
 use std::cell::UnsafeCell;
+use std::error::Error;
+use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
-use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, TH32CS_SNAPPROCESS, Process32FirstW, PROCESSENTRY32W, Process32NextW};
-use winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
-use winapi::um::processthreadsapi::{OpenProcess, OpenProcessToken, GetCurrentProcess, GetProcessId, CreateThread, CreateRemoteThreadEx};
-use winapi::um::winnt::{TOKEN_QUERY, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, MEM_RELEASE, MEM_RESERVE, MEM_COMMIT, PAGE_READWRITE};
-use winapi::um::winbase::{LookupPrivilegeValueW, THREAD_PRIORITY_HIGHEST, INFINITE};
-use winapi::um::securitybaseapi::AdjustTokenPrivileges;
-use winapi::um::memoryapi::{VirtualFreeEx, VirtualAllocEx, WriteProcessMemory, ReadProcessMemory};
-use winapi::um::errhandlingapi::{GetLastError, SetLastError};
-use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress};
-use winapi::shared::ntdef::{HANDLE, NULL};
-use winapi::shared::minwindef::{HMODULE, TRUE, MAX_PATH, DWORD, FALSE, LPVOID, FARPROC, HINSTANCE};
-use winapi::shared::basetsd::SIZE_T;
-use winapi::ctypes::c_void;
-use widestring::{WideCStr, WideCString};
-use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
 use std::mem::size_of;
+use std::path::Path;
+use std::ptr::null_mut;
+
+use widestring::{WideCStr, WideCString};
+use winapi::ctypes::c_void;
+use winapi::shared::basetsd::SIZE_T;
+use winapi::shared::minwindef::{DWORD, FALSE, FARPROC, HINSTANCE, HMODULE, LPVOID, MAX_PATH, TRUE};
+use winapi::shared::ntdef::{HANDLE, NULL};
+use winapi::um::errhandlingapi::{GetLastError, SetLastError};
+use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
+use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress};
+use winapi::um::memoryapi::{ReadProcessMemory, VirtualAllocEx, VirtualFreeEx, WriteProcessMemory};
+use winapi::um::processthreadsapi::{CreateRemoteThreadEx, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess, OpenProcessToken};
+use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
+use winapi::um::securitybaseapi::AdjustTokenPrivileges;
+use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+use winapi::um::winbase::{INFINITE, LookupPrivilegeValueW, THREAD_PRIORITY_HIGHEST};
+use winapi::um::winnt::{LUID_AND_ATTRIBUTES, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY};
+
+use crate::win::thread::ThreadHandle;
 
 pub fn get_current_process() -> ProcessHandle {
     ProcessHandle::from(unsafe { GetCurrentProcess() })
@@ -29,7 +31,7 @@ pub fn get_current_process() -> ProcessHandle {
 pub fn get_process<S>(file_name: S, desired_access: DWORD) -> Option<ProcessHandle> where S: AsRef<str> {
     for process in ProcessIterator::new(TH32CS_SNAPPROCESS)? {
         if &process.get_name().to_string_lossy() == file_name.as_ref() {
-            return Some(process.open(desired_access, false).expect(&format!("Error opening process `{}`", file_name.as_ref())))
+            return Some(process.open(desired_access, false).expect(&format!("Error opening process `{}`", file_name.as_ref())));
         }
     }
     None
@@ -43,8 +45,8 @@ unsafe fn set_privilege(privilege: &str, value: bool) -> bool {
             PrivilegeCount: 1,
             Privileges: [LUID_AND_ATTRIBUTES {
                 Attributes: if value { SE_PRIVILEGE_ENABLED } else { 0 },
-                .. Default::default()
-            }]
+                ..Default::default()
+            }],
         };
         if LookupPrivilegeValueW(null_mut(), privilege.as_ptr(), &mut token_privileges.Privileges[0].Luid) == TRUE {
             if AdjustTokenPrivileges(token, FALSE, &mut token_privileges, std::mem::size_of::<TOKEN_PRIVILEGES>() as u32, null_mut(), null_mut()) == TRUE {
@@ -118,7 +120,7 @@ impl std::ops::Deref for ModuleHandle {
 
 pub struct ModuleEntry {
     instance: HMODULE,
-    name: String
+    name: String,
 }
 
 impl ModuleEntry {
@@ -168,7 +170,7 @@ impl ProcessHandle {
                         let name = WideCStr::from_ptr_str(mod_name.as_mut_ptr()).to_string_lossy();
                         result.push(ModuleEntry {
                             instance: module,
-                            name
+                            name,
                         });
                     }
                 }
@@ -190,7 +192,7 @@ impl ProcessHandle {
             Ok(thread) => {
                 thread.wait_for_single_object(INFINITE);
                 Ok(thread.get_exit_code())
-            },
+            }
             Err(err) => Err(InjectionError::CantCreateThread(err))
         }
     }
@@ -212,7 +214,7 @@ impl ProcessHandle {
                 address,
                 size,
                 inner,
-                _data: PhantomData
+                _data: PhantomData,
             })
         }
     }
@@ -249,7 +251,7 @@ pub struct VirtualAlloc<'a, T> {
     address: LPVOID,
     size: SIZE_T,
     inner: HANDLE,
-    _data: PhantomData<T>
+    _data: PhantomData<T>,
 }
 
 impl<'a, T> VirtualAlloc<'a, T> where T: VirtualData {
@@ -345,7 +347,7 @@ impl ProcessEntry {
 pub struct ProcessIterator {
     processes_snapshot: HANDLE,
     first: bool,
-    entry: PROCESSENTRY32W
+    entry: PROCESSENTRY32W,
 }
 
 impl ProcessIterator {
@@ -358,8 +360,8 @@ impl ProcessIterator {
                 first: true,
                 entry: PROCESSENTRY32W {
                     dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
-                    .. Default::default()
-                }
+                    ..Default::default()
+                },
             })
         } else {
             None
@@ -374,11 +376,11 @@ impl Iterator for ProcessIterator {
         if self.first {
             self.first = false;
             if unsafe { Process32FirstW(self.processes_snapshot, &mut self.entry) } == TRUE {
-                return Some(ProcessEntry::from(self.entry.clone()))
+                return Some(ProcessEntry::from(self.entry.clone()));
             }
         } else {
             while unsafe { Process32NextW(self.processes_snapshot, &mut self.entry) } == TRUE {
-                return Some(ProcessEntry::from(self.entry.clone()))
+                return Some(ProcessEntry::from(self.entry.clone()));
             }
         }
         None
@@ -538,7 +540,7 @@ pub enum InjectionError {
     CantCreateThread(CreateThreadError),
     Th32Fail,
     CantGetPeb,
-    AlreadyInjected
+    AlreadyInjected,
 }
 
 impl std::fmt::Display for InjectionError {
@@ -572,7 +574,7 @@ pub enum VirtualAllocError {
     WriteFailed(u32),
     WriteBytesMismatch(usize, usize),
     ReadFailed(u32),
-    ReadBytesMismatch(usize, usize)
+    ReadBytesMismatch(usize, usize),
 }
 
 impl Error for VirtualAllocError {}

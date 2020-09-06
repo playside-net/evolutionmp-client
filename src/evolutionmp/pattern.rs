@@ -1,97 +1,18 @@
-use std::collections::HashMap;
-use std::fs::File;
 use std::ops::Deref;
-use std::path::PathBuf;
-use std::ptr::null_mut;
-use std::sync::Mutex;
 
 use detour::RawDetour;
 use serde_derive::{Deserialize, Serialize};
-use winapi::shared::minwindef::{DWORD, HMODULE, TRUE};
-use winapi::um::libloaderapi::GetModuleHandleA;
+use winapi::shared::minwindef::{DWORD, TRUE};
 use winapi::um::memoryapi::{ReadProcessMemory, VirtualProtect, VirtualQuery};
 use winapi::um::processthreadsapi::GetCurrentProcess;
 use winapi::um::sysinfoapi::{GetSystemInfo, SYSTEM_INFO};
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READWRITE, PAGE_NOACCESS};
+use winapi::um::winnt::{MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READWRITE, PAGE_NOACCESS};
 
 use crate::launcher_dir;
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
 pub const XOR_32_64: u8 = 0x31;
-
-lazy_static::lazy_static! {
-    pub static ref CACHE: PatternCache = PatternCache::new();
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PatternCache {
-    inner: Mutex<HashMap<Pattern, Vec<u64>>>
-}
-
-impl PatternCache {
-    fn new() -> PatternCache {
-        PatternCache {
-            inner: Mutex::new(HashMap::new())
-        }
-    }
-
-    fn get_file(&self) -> PathBuf {
-        launcher_dir().join("hints.dat")
-    }
-
-    fn get(&self, pattern: &Pattern, occurrence: usize) -> Option<MemoryRegion> {
-        let cache = self.inner.lock().unwrap();
-        if let Some(entry) = cache.get(pattern) {
-            if let Some(offset) = entry.get(occurrence).cloned() {
-                let mem = &crate::native::MEM;
-                let base = mem.base as u64 + offset;
-                let size = mem.size as u64 - offset;
-                return Some(MemoryRegion {
-                    base: base as _,
-                    size: size as _,
-                });
-            }
-        }
-        None
-    }
-
-    fn set(&self, pattern: &Pattern, region: &MemoryRegion) {
-        let mut cache = self.inner.lock().unwrap();
-        let mem = &crate::native::MEM;
-        let offset = region.base as u64 - mem.base as u64;
-        if let Some(entry) = cache.get_mut(pattern) {
-            entry.push(offset);
-        } else {
-            cache.insert(pattern.clone(), vec![offset]);
-        }
-    }
-
-    pub(crate) fn load(&self) {
-        let file = self.get_file();
-        if file.exists() {
-            crate::info!("Loading hints...");
-            let mut file = File::open(&file)
-                .expect("error opening mem hints");
-            let hints = bincode::deserialize_from::<_, HashMap<Pattern, Vec<u64>>>(&mut file)
-                .expect("error reading mem hints");
-            let mut cache = self.inner.lock().unwrap();
-            *cache = hints;
-        }
-    }
-
-    pub(crate) fn save(&self) {
-        let file = self.get_file();
-        if !file.exists() {
-            crate::info!("Saving hints...");
-            let mut file = File::create(&file)
-                .expect("error creating mem hints");
-            let mut cache = self.inner.lock().unwrap();
-            bincode::serialize_into(&mut file, &mut *cache)
-                .expect("error writing mem hints");
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, PartialEq, Eq, Hash)]
 pub struct Pattern {
@@ -249,38 +170,6 @@ pub struct MemoryRegion {
 }
 
 impl MemoryRegion {
-    pub fn with_size<S>(size: S) -> MemoryRegion where S: FnOnce(IMAGE_OPTIONAL_HEADER64) -> u32 {
-        unsafe {
-            let handle = GetModuleHandleA(null_mut());
-            let lfa = handle.offset(std::mem::transmute::<HMODULE, *mut IMAGE_DOS_HEADER>(handle).read().e_lfanew as isize);
-            let size = size(std::mem::transmute::<*mut (), *mut IMAGE_NT_HEADERS64>(lfa as *mut ()).read().OptionalHeader);
-            MemoryRegion {
-                base: handle as *mut _,
-                size: size as usize,
-            }
-        }
-    }
-
-    #[inline]
-    pub fn image() -> MemoryRegion {
-        Self::with_size(|header| header.SizeOfImage)
-    }
-
-    #[inline]
-    pub fn code() -> MemoryRegion {
-        Self::with_size(|header| header.SizeOfCode)
-    }
-
-    pub fn find<P>(&self, pattern: P) -> Option<MemoryRegion> where P: Into<Pattern> {
-        unsafe { pattern.into().find() }
-    }
-
-    pub fn find_str<S>(&self, str: S) -> Option<MemoryRegion> where S: AsRef<str> {
-        self.find(Pattern {
-            nibbles: str.as_ref().as_bytes().iter().map(|b| Some(*b)).collect::<_>()
-        })
-    }
-
     pub fn contains(&self, address: *mut u8) -> bool {
         (self.base as usize) > (address as usize) && (address as usize) < (self.base as usize + self.size)
     }

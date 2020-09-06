@@ -27,7 +27,6 @@ use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLong
 use wio::wide::FromWide;
 
 use crate::game::GameState;
-use crate::pattern::MemoryRegion;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -198,28 +197,26 @@ unsafe fn initialize(window: &Window) {
     info!("Hooking user input...");
     crate::win::input::hook(window);
 
-    let mem = MemoryRegion::image();
-
     info!("Applying patches...");
 
     lazy_static::initialize(&GAME_STATE);
 
-    //mem.find("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").next().expect("launcher").nop(21); //Disable launcher check
+    //mem!("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").expect("launcher").nop(21); //Disable launcher check
     /*mem.find_str("platform:/movies").expect("movie")
         .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie*/
-    mem.find("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[0xC3]); //Disable movie
-    /*mem.find("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
+    mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[0xC3]); //Disable movie
+    /*mem!("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
         .nop(2); //Disable legals*/
-    mem.find("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
+    mem!("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
         .add(8).nop(6);
-    let focus_pause = mem.find("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
+    let focus_pause = mem!("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
     focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
     focus_pause.nop(7);
     bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
     *DEVICE_LIMIT.as_mut() *= 5;
-    mem.find("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
+    mem!("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
         .add(12).nop(5);
-    /*mem.find("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
+    /*mem!("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
         .nop(24);*/
 
     //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB

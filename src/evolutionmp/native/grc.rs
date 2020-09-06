@@ -11,7 +11,7 @@ enum D3D11Resource {}
 
 enum D3D11ShaderResourceView {}
 
-pub(crate) unsafe fn pre_init() {
+pub(crate) fn pre_init() {
     lazy_static::initialize(&TEXTURE_FACTORY);
     lazy_static::initialize(&MISSING_TEXTURE);
 }

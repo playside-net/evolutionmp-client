@@ -6,7 +6,7 @@ use cgmath::{Vector2, Vector3};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 use crate::{invoke, native};
-use crate::bind_fn;
+use crate::{bind_fn, mem};
 use crate::game::Rgba;
 use crate::hash::Hashable;
 use crate::pattern::{NOP, RET, XOR_32_64};
@@ -25,12 +25,12 @@ pub fn pre_init() {
 
 pub fn init() {
     unsafe {
-        let no_slowmo = crate::native::MEM.find("38 51 64 74 19")
+        let no_slowmo = mem!("38 51 64 74 19")
             .expect("no_slowmo");
 
-        no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
+        //no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
 
-        no_slowmo.add(8).nop(5); //Vignetting call patch
+        //no_slowmo.add(8).nop(5); //Vignetting call patch
 
         no_slowmo.add(34).write_bytes(&[XOR_32_64, 0xD2]); //Timescale override patch
     }
