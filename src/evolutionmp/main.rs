@@ -204,7 +204,6 @@ unsafe fn initialize(window: &Window) {
     crate::win::input::hook(window);
 
     info!("Applying patches...");
-
     lazy_static::initialize(&GAME_STATE);
 
     //mem!("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").expect("launcher").nop(21); //Disable launcher check
@@ -227,17 +226,11 @@ unsafe fn initialize(window: &Window) {
 
     //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
 
-    info!("Initializing FS");
-    native::fs::pre_init();
+    native::fs::hook();
+    native::hook();
 
-    info!("Initializing natives");
-    native::pre_init();
-
-    info!("Initializing game hooks");
-    crate::game::pre_init();
+    game::hook();
     game::init();
-
-    info!("Initializing core scripts");
 
     let server = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), PORT);
     crate::scripts::init(server);

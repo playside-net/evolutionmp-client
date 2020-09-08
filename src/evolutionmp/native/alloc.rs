@@ -1,6 +1,5 @@
 use std::ops::{Deref, DerefMut};
 use std::alloc::{Layout};
-use crate::pattern::RageBox;
 
 #[repr(C)]
 pub struct RageVec<T> {

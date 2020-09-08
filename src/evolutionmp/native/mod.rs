@@ -181,13 +181,15 @@ bind_field!(EXPANDED_RADAR, "33 C0 0F 57 C0 ? 0D", 7, bool);
 bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
 bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSprite);
 
-pub(crate) fn pre_init() {
-    script::pre_init();
-    streaming::pre_init();
-    grc::pre_init();
-    pool::pre_init();
-    vehicle::pre_init();
-    init_fns::pre_init();
+pub(crate) fn hook() {
+    script::hook();
+    streaming::hook();
+    grc::hook();
+    pool::hook();
+    vehicle::hook();
+    init_fns::hook();
+
+    crate::info!("Hooking generic natives...");
     lazy_static::initialize(&EXPANDED_RADAR);
     lazy_static::initialize(&REVEAL_FULL_MAP);
     lazy_static::initialize(&CURSOR_SPRITE);
@@ -195,10 +197,9 @@ pub(crate) fn pre_init() {
 }
 
 pub(crate) fn init() {
+    crate::info!("Initializing natives...");
     lazy_static::initialize(&NATIVES);
     vehicle::init();
-
-    crate::info!("Hooking natives");
     HOOKS.replace(Some(HashMap::new()));
 
     crate::events::init();
@@ -216,7 +217,7 @@ pub fn call_trampoline(hash: u64, context: *mut NativeCallContext) {
     trampoline(context);
 }
 
-pub fn hook(hash: u64, hook: fn(&mut NativeCallContext)) {
+pub fn detour(hash: u64, hook: fn(&mut NativeCallContext)) {
     let original = crate::native::get_handler(hash);
     unsafe {
         let detour = GenericDetour::new(original, std::mem::transmute(hook))

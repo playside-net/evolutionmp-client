@@ -11,7 +11,8 @@ enum D3D11Resource {}
 
 enum D3D11ShaderResourceView {}
 
-pub(crate) fn pre_init() {
+pub(crate) fn hook() {
+    crate::info!("Hooking grc...");
     lazy_static::initialize(&TEXTURE_FACTORY);
     lazy_static::initialize(&MISSING_TEXTURE);
 }

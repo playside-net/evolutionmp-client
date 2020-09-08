@@ -48,7 +48,8 @@ bind_field!(STEERING_OFFSET, "74 0A F3 0F 11 B3 ? ? ? ? EB 25", 6, i32);
 bind_field!(HANDBRAKE_OFFSET, "8A C2 24 01 C0 E0 04 08 81", 19, i32);
 bind_field!(ENGINE_TEMPERATURE_OFFSET, "48 8D 8F ? ? ? ? 45 32 FF", -4, i32);
 
-pub fn pre_init() {
+pub fn hook() {
+    crate::info!("Hooking vehicle offsets...");
     lazy_static::initialize(&LIGHTS_OFFSET);
     lazy_static::initialize(&GEAR_OFFSET);
     lazy_static::initialize(&FUEL_OFFSET);
@@ -62,6 +63,7 @@ pub fn pre_init() {
 }
 
 pub fn init() {
+    crate::info!("Initializing vehicle offsets...");
     LIGHTS.set_offset(**LIGHTS_OFFSET);
     CURRENT_GEAR.set_offset(**GEAR_OFFSET + 2);
     HIGH_GEAR.set_offset(**GEAR_OFFSET + 6);

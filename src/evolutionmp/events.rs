@@ -200,7 +200,7 @@ pub fn push_native_event(event: NativeEvent) {
 
 macro_rules! native_event {
     ($hash:literal, $constructor:ident) => {
-        crate::native::hook($hash, |context| {
+        crate::native::detour($hash, |context| {
             crate::events::push_native_event(NativeEvent::$constructor(context));
             crate::native::call_trampoline($hash, context);
         });
@@ -226,6 +226,7 @@ pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut (
 }
 
 pub fn init() {
+    crate::info!("Intializing native events...");
     EVENTS.replace(Some(VecDeque::new()));
 
     //lazy_static::initialize(&CALL_EVENT);

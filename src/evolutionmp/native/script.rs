@@ -89,7 +89,8 @@ unsafe extern "C" fn script_access(script: &'static mut ScriptThread, unk: *mut 
     true
 }
 
-pub(crate) fn pre_init() {
+pub(crate) fn hook() {
+    crate::info!("Hooking scripts...");
     lazy_static::initialize(&THREAD_COLLECTION);
     lazy_static::initialize(&THREAD_ID);
     lazy_static::initialize(&THREAD_COUNT);

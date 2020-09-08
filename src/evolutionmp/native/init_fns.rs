@@ -4,7 +4,7 @@ use crate::{bind_fn_detour, bind_fn_detour_ip};
 use crate::hash::{Hash, Hashable};
 use crate::win::thread::seh;
 use crate::pattern::RageBox;
-use crate::native::alloc::{RageVec, Chained, ChainedBox};
+use crate::native::alloc::{RageVec, ChainedBox};
 
 bitflags! {
     #[repr(C)]
@@ -181,7 +181,8 @@ bind_fn_detour_ip!(RUN_INIT, "BA 04 00 00 00 E8 ? ? ? ? E8 ? ? ? ? E8", 5, GameS
 bind_fn_detour_ip!(RUN_UPDATE, "48 8D 0D ? ? ? ? BA 01 00 00 00 E8 ? ? ? ? E8 ? ? ? ?", 12, GameSkeleton::update, "C", fn(&mut GameSkeleton, u32) -> ());
 bind_fn_detour!(RUN_UPDATE_GROUP, "40 53 48 83 EC 20 48 8B 59 20 EB 0D 48 8B 03 48", 0, UpdateFn::run_group, "C", fn(&mut UpdateFn) -> ());
 
-pub fn pre_init() {
+pub fn hook() {
+    crate::info!("Hooking init functions...");
     lazy_static::initialize(&FN_MAP);
     lazy_static::initialize(&RUN_INIT);
     /*lazy_static::initialize(&RUN_UPDATE);

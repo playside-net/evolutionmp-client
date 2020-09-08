@@ -27,7 +27,8 @@ bind_field_ip!(GLOBAL, "4C 8B 0D ? ? ? ? 44 8B C1 49 8B 41 08", 3, Option<Box<Gl
 bind_field_ip!(VEHICLE, "48 8B 05 ? ? ? ? F3 0F 59 F6 48 8B 08", 3, Option<Box<Box<VehiclePool>>>);
 bind_field_ip!(PICKUP, "4C 8B 05 ? ? ? ? 40 8A F2 8B E9", 3, Option<Box<GenericPool<Pickup>>>);
 
-pub(crate) fn pre_init() {
+pub(crate) fn hook() {
+    crate::info!("Hooking pools...");
     lazy_static::initialize(&PARTICLE_ADDRESS);
     lazy_static::initialize(&ENTITY_ADDRESS);
     lazy_static::initialize(&PLAYER_ADDRESS);

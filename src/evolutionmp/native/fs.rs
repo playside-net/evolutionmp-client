@@ -64,7 +64,8 @@ bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05",
 bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, DeviceVTable);
 bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVTable);
 
-pub(crate) unsafe fn pre_init() {
+pub(crate) fn hook() {
+    crate::info!("Hooking filesystem...");
     lazy_static::initialize(&INITIAL_MOUNT);
 
     lazy_static::initialize(&DEVICE_VTABLE);

@@ -108,9 +108,9 @@ impl GameState {
 //bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, "C", fn(u32) -> bool);
 bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, "C", fn(u8) -> u32);
 
-pub fn pre_init() {
-    locale::pre_init();
-    ui::pre_init();
+pub fn hook() {
+    locale::hook();
+    ui::hook();
     lazy_static::initialize(&LOAD_GAME_NOW);
 }
 
@@ -128,7 +128,6 @@ pub fn is_loaded() -> bool {
 }
 
 unsafe fn load_game_now(u: u8) -> u32 {
-    crate::info!("Initializing natives...");
     crate::native::init();
     crate::info!("Loading game...");
     let r = LOAD_GAME_NOW(u);

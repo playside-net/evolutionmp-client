@@ -19,7 +19,8 @@ bind_field_ip!(DATA_TYPES, "61 44 DF 04 00 00 00 00", 0, *const DataFileType);
     };
 }*/
 
-pub(crate) fn pre_init() {
+pub(crate) fn hook() {
+    crate::info!("Hooking streaming...");
     lazy_static::initialize(&MANIFEST_CHUNK);
     lazy_static::initialize(&MOUNTERS);
     lazy_static::initialize(&DATA_TYPES);
