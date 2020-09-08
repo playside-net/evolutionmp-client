@@ -1,4 +1,4 @@
-#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall, arbitrary_self_types)]
+#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics)]
 
 extern crate backtrace;
 #[macro_use]

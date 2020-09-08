@@ -50,12 +50,12 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
 bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, "C", fn(RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
 bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, "C", fn(RagePath, *const Device, bool) -> bool);
 bind_fn!(UNMOUNT, "E8 ? ? ? ? 85 C0 75 23 48 83", -0x22, "C", fn(RagePath) -> ());
-bind_fn!(PACK_FILE_INIT, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E, "thiscall", fn(*mut PackFile) -> ());
-bind_fn!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, "thiscall", fn(*mut PackFile, RagePath, bool, i32, bool) -> bool);
-bind_fn!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, "thiscall", fn(*mut PackFile, RagePath) -> ());
-bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, "thiscall", fn(*mut RelativeDevice, RagePath, bool, Option<&Device>) -> ());
-bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, "thiscall", fn(*mut RelativeDevice, RagePath, bool) -> ());
-bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, "thiscall", fn(*mut KeyState, *const u8) -> ());
+bind_fn!(PACK_FILE_INIT, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E, "C", fn(*mut PackFile) -> ());
+bind_fn!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, "C", fn(*mut PackFile, RagePath, bool, i32, bool) -> bool);
+bind_fn!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, "C", fn(*mut PackFile, RagePath) -> ());
+bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, "C", fn(*mut RelativeDevice, RagePath, bool, Option<&Device>) -> ());
+bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, "C", fn(*mut RelativeDevice, RagePath, bool) -> ());
+bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, "C", fn(*mut KeyState, *const u8) -> ());
 
 bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, "C", fn() -> ());
 
@@ -119,53 +119,53 @@ struct ResourceFlags {
 
 #[repr(C)]
 pub struct DeviceVTable {
-    destructor: extern "thiscall" fn(this: *mut Device),
-    open: extern "thiscall" fn(this: *mut Device, file_name: RagePath, read_only: bool) -> u64,
-    open_bulk: extern "thiscall" fn(this: *mut Device, file_name: RagePath, ptr: *const u64) -> u64,
-    open_bulk_wrap: extern "thiscall" fn(this: *mut Device, file_name: RagePath, ptr: *const u64, *const ()) -> u64,
-    create_local: extern "thiscall" fn(this: *mut Device, file_name: RagePath) -> u64,
-    create: extern "thiscall" fn(this: *mut Device, file_name: RagePath) -> u64,
-    read: extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *mut u8, to_read: u32) -> u32,
-    read_bulk: extern "thiscall" fn(this: *mut Device, handle: u64, ptr: u64, buffer: *const (), to_read: u32) -> u32,
-    write_bulk: extern "thiscall" fn(this: *mut Device, handle: u64, i32, i32, i32, i32) -> u32,
-    write: extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *const u8, to_write: u32) -> u32,
-    seek: extern "thiscall" fn(this: *mut Device, handle: u64, distance: i32, method: u32) -> u32,
-    seek_long: extern "thiscall" fn(this: *mut Device, handle: u64, distance: i64, method: u32) -> u64,
-    close: extern "thiscall" fn(this: *mut Device, handle: u64) -> i32,
-    close_bulk: extern "thiscall" fn(this: *mut Device, handle: u64) -> i32,
-    get_file_len: extern "thiscall" fn(this: *mut Device, handle: u64) -> i32,
-    get_file_len_u: extern "thiscall" fn(this: *mut Device, handle: u64) -> u64,
-    m_40: extern "thiscall" fn(this: *mut Device, i32) -> i32,
-    remove_file: extern "thiscall" fn(this: *mut Device, file_name: RagePath) -> bool,
-    rename_file: extern "thiscall" fn(this: *mut Device, from: RagePath, to: RagePath) -> i32,
-    create_dir: extern "thiscall" fn(this: *mut Device, dir_name: RagePath) -> i32,
-    remove_dir: extern "thiscall" fn(this: *mut Device, dir_name: RagePath) -> i32,
-    m_xx: extern "thiscall" fn(this: *mut Device),
-    get_file_len_l: extern "thiscall" fn(this: *const Device, file_name: RagePath) -> u64,
-    get_file_time: extern "thiscall" fn(this: *const Device, file_name: RagePath) -> u64,
-    set_file_time: extern "thiscall" fn(this: *mut Device, file_name: RagePath, time: FILETIME),
-    find_first: extern "thiscall" fn(this: *const Device, path: RagePath, data: *mut DeviceEntry) -> u64,
-    find_next: extern "thiscall" fn(this: *const Device, handle: u64, data: *mut DeviceEntry) -> bool,
-    find_close: extern "thiscall" fn(this: *const Device, handle: u64),
-    get_unk_device: extern "thiscall" fn(this: *mut Device) -> *const Device,
-    m_xy: extern "thiscall" fn(this: *mut Device, *const (), i32, *const ()) -> *const (),
-    truncate: extern "thiscall" fn(this: *mut Device, handle: u64) -> bool,
-    get_file_attr: extern "thiscall" fn(this: *const Device, path: RagePath) -> u32,
-    m_xz: extern "thiscall" fn(this: *mut Device) -> bool,
-    set_file_attr: extern "thiscall" fn(this: *mut Device, attributes: u32) -> bool,
-    m_yx: extern "thiscall" fn(this: *mut Device) -> i32,
-    read_full: extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
-    write_full: extern "thiscall" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
-    get_res_ver: extern "thiscall" fn(this: *mut Device, file_name: RagePath, flags: *const ResourceFlags) -> i32,
-    m_yy: extern "thiscall" fn(this: *mut Device) -> i32,
-    m_yz: extern "thiscall" fn(this: *mut Device, *const ()) -> i32,
-    m_zx: extern "thiscall" fn(this: *mut Device, *const ()) -> i32,
-    is_collection: extern "thiscall" fn(this: *mut Device) -> bool,
-    m_added_in_1290: extern "thiscall" fn(this: *mut Device) -> bool,
-    get_collection: extern "thiscall" fn(this: *mut Device) -> *const Device,
-    m_ax: extern "thiscall" fn(this: *mut Device) -> bool,
-    get_collection_id: extern "thiscall" fn(this: *mut Device) -> i32,
-    get_name: extern "thiscall" fn(this: *const Device) -> RagePath,
+    destructor: extern "C" fn(this: *mut Device),
+    open: extern "C" fn(this: *mut Device, file_name: RagePath, read_only: bool) -> u64,
+    open_bulk: extern "C" fn(this: *mut Device, file_name: RagePath, ptr: *const u64) -> u64,
+    open_bulk_wrap: extern "C" fn(this: *mut Device, file_name: RagePath, ptr: *const u64, *const ()) -> u64,
+    create_local: extern "C" fn(this: *mut Device, file_name: RagePath) -> u64,
+    create: extern "C" fn(this: *mut Device, file_name: RagePath) -> u64,
+    read: extern "C" fn(this: *mut Device, handle: u64, buffer: *mut u8, to_read: u32) -> u32,
+    read_bulk: extern "C" fn(this: *mut Device, handle: u64, ptr: u64, buffer: *const (), to_read: u32) -> u32,
+    write_bulk: extern "C" fn(this: *mut Device, handle: u64, i32, i32, i32, i32) -> u32,
+    write: extern "C" fn(this: *mut Device, handle: u64, buffer: *const u8, to_write: u32) -> u32,
+    seek: extern "C" fn(this: *mut Device, handle: u64, distance: i32, method: u32) -> u32,
+    seek_long: extern "C" fn(this: *mut Device, handle: u64, distance: i64, method: u32) -> u64,
+    close: extern "C" fn(this: *mut Device, handle: u64) -> i32,
+    close_bulk: extern "C" fn(this: *mut Device, handle: u64) -> i32,
+    get_file_len: extern "C" fn(this: *mut Device, handle: u64) -> i32,
+    get_file_len_u: extern "C" fn(this: *mut Device, handle: u64) -> u64,
+    m_40: extern "C" fn(this: *mut Device, i32) -> i32,
+    remove_file: extern "C" fn(this: *mut Device, file_name: RagePath) -> bool,
+    rename_file: extern "C" fn(this: *mut Device, from: RagePath, to: RagePath) -> i32,
+    create_dir: extern "C" fn(this: *mut Device, dir_name: RagePath) -> i32,
+    remove_dir: extern "C" fn(this: *mut Device, dir_name: RagePath) -> i32,
+    m_xx: extern "C" fn(this: *mut Device),
+    get_file_len_l: extern "C" fn(this: *const Device, file_name: RagePath) -> u64,
+    get_file_time: extern "C" fn(this: *const Device, file_name: RagePath) -> u64,
+    set_file_time: extern "C" fn(this: *mut Device, file_name: RagePath, time: FILETIME),
+    find_first: extern "C" fn(this: *const Device, path: RagePath, data: *mut DeviceEntry) -> u64,
+    find_next: extern "C" fn(this: *const Device, handle: u64, data: *mut DeviceEntry) -> bool,
+    find_close: extern "C" fn(this: *const Device, handle: u64),
+    get_unk_device: extern "C" fn(this: *mut Device) -> *const Device,
+    m_xy: extern "C" fn(this: *mut Device, *const (), i32, *const ()) -> *const (),
+    truncate: extern "C" fn(this: *mut Device, handle: u64) -> bool,
+    get_file_attr: extern "C" fn(this: *const Device, path: RagePath) -> u32,
+    m_xz: extern "C" fn(this: *mut Device) -> bool,
+    set_file_attr: extern "C" fn(this: *mut Device, attributes: u32) -> bool,
+    m_yx: extern "C" fn(this: *mut Device) -> i32,
+    read_full: extern "C" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
+    write_full: extern "C" fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
+    get_res_ver: extern "C" fn(this: *mut Device, file_name: RagePath, flags: *const ResourceFlags) -> i32,
+    m_yy: extern "C" fn(this: *mut Device) -> i32,
+    m_yz: extern "C" fn(this: *mut Device, *const ()) -> i32,
+    m_zx: extern "C" fn(this: *mut Device, *const ()) -> i32,
+    is_collection: extern "C" fn(this: *mut Device) -> bool,
+    m_added_in_1290: extern "C" fn(this: *mut Device) -> bool,
+    get_collection: extern "C" fn(this: *mut Device) -> *const Device,
+    m_ax: extern "C" fn(this: *mut Device) -> bool,
+    get_collection_id: extern "C" fn(this: *mut Device) -> i32,
+    get_name: extern "C" fn(this: *const Device) -> RagePath,
 }
 
 #[repr(C)]

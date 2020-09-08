@@ -31,9 +31,9 @@ bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
 bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B F9", 2, u32);
 bind_field_ip!(SCRIPT_MANAGER, "74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D", 13, ScriptManager);
 
-bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, "thiscall", fn(*mut ScriptThread) -> ());
-bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, "thiscall", fn(*mut ScriptThread) -> ());
-bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, "thiscall", fn(*mut ScriptThread, u32) -> RageThreadState);
+bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, "C", fn(&mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, "C", fn(&mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, "C", fn(&mut ScriptThread, u32) -> RageThreadState);
 
 bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, "C", fn(*mut u8, u32, u32) -> *mut u8);
 bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, "C", fn() -> ());
@@ -333,7 +333,7 @@ impl ScriptThreadRuntime {
     extern "C" fn drop(self: Box<ScriptThreadRuntime>) {}
 
     extern "C" fn kill(&mut self) {
-        SCRIPT_THREAD_KILL(&mut **self)
+        SCRIPT_THREAD_KILL(self)
     }
 
     extern "C" fn run(&mut self, _ops: u32) -> RageThreadState {
@@ -354,7 +354,7 @@ impl ScriptThreadRuntime {
             set1: 1,
             ..Default::default()
         };
-        SCRIPT_THREAD_INIT(&mut **self);
+        SCRIPT_THREAD_INIT(self);
         self.net_flag = true;
         self.can_remove_blips_from_other_scripts = true;
         self.sz_exit_message = b"Normal exit\0".as_ptr() as _;
@@ -362,12 +362,12 @@ impl ScriptThreadRuntime {
             self.context.id = **THREAD_ID;
             unsafe { *THREAD_ID.as_mut() += 1; }
         }
-        unsafe { SCRIPT_MANAGER.as_mut().attach(&mut **self); }
+        unsafe { SCRIPT_MANAGER.as_mut().attach(self); }
         self.context.state
     }
 
     extern "C" fn tick(&mut self, ops: u32) -> RageThreadState {
-        SCRIPT_THREAD_TICK(&mut **self, ops)
+        SCRIPT_THREAD_TICK(self, ops)
     }
 
     extern "C" fn frame(&mut self) {

@@ -1,4 +1,4 @@
-use cgmath::{Angle, Deg, Euler, Vector3, Vector2, Zero, MetricSpace, Array};
+use cgmath::{Angle, Deg, Euler, Vector3, Vector2, Zero, MetricSpace, Array, InnerSpace};
 
 use crate::game::Handle;
 use crate::hash::{Hash, Hashable};
