@@ -3,6 +3,7 @@ use cgmath::{Angle, Deg, Euler, Vector3};
 use crate::game::Handle;
 use crate::hash::{Hash, Hashable};
 use crate::invoke;
+use crate::native::pool::Handleable;
 
 pub enum CameraShake {
     DeathFailInEffect,
@@ -58,6 +59,77 @@ impl CameraType {
     pub fn joaat(&self) -> Hash {
         self.get_name().joaat()
     }
+}
+
+#[repr(u32)]
+#[derive(Copy, Clone, Debug)]
+pub enum CameraViewMode {
+    ThirdPersonClose,
+    ThirdPersonMiddle,
+    ThirdPersonFar,
+    FirstPerson
+}
+
+impl Handleable for CameraViewMode {
+    fn from_handle(handle: u32) -> Option<Self> where Self: Sized {
+        if handle < 4 {
+            unsafe { std::mem::transmute(handle) }
+        } else {
+            unreachable!("Invalid enum variant for CameraViewMode: {}", handle)
+        }
+    }
+
+    fn get_handle(&self) -> u32 {
+        *self as u32
+    }
+}
+
+pub fn get_follow_ped_view_mode() -> CameraViewMode {
+    invoke!(CameraViewMode, 0x8D4D46230B2C353A)
+}
+
+pub fn set_follow_ped_view_mode(mode: CameraViewMode) {
+    invoke!((), 0x5A4F9EDF1673F704, mode as u32)
+}
+
+pub fn set_follow_ped(name: &str, ms: u32) {
+    invoke!((), 0x44A113DD6FFC48D1, name, ms)
+}
+
+pub fn get_follow_ped_zoom() -> u32 {
+    invoke!(u32, 0x33E6C8EFD0CD93E9)
+}
+
+pub fn is_follow_ped_active() -> bool {
+    invoke!(bool, 0xC6D3D26810C8E0F9)
+}
+
+pub fn get_follow_vehicle_view_mode() -> CameraViewMode {
+    invoke!(CameraViewMode, 0xA4FF579AC0E3AAAE)
+}
+
+pub fn set_follow_vehicle_view_mode(mode: CameraViewMode) {
+    invoke!((), 0xAC253D7842768F48, mode as u32)
+}
+
+pub fn set_follow_vehicle(name: &str, ms: u32) {
+    invoke!((), 0x44A113DD6FFC48D1, name, ms)
+}
+
+pub fn get_follow_vehicle_zoom() -> u32 {
+    invoke!(u32, 0x33E6C8EFD0CD93E9)
+}
+
+pub fn set_follow_vehicle_zoom(zoom: u32) {
+    invoke!((), 0x19464CB6E4078C8A, zoom)
+}
+
+pub fn is_follow_vehicle_active() -> bool {
+    invoke!(bool, 0xCBBDE6D335D6D496)
+}
+
+pub fn render_first_person(render: bool, zoom: f32, mode: u32) {
+    invoke!((), 0xC819F3CBB62BF692, render, zoom, mode)
 }
 
 pub fn fade_in(duration: u32) {

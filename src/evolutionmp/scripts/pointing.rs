@@ -1,15 +1,10 @@
-use std::collections::VecDeque;
-
+use crate::events::ScriptEvent;
 use crate::game;
-use crate::game::player::Player;
-use crate::game::streaming::{AnimDict, Resource};
 use crate::game::camera::GameplayCamera;
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
-use crate::events::ScriptEvent;
-
-
-
+use crate::game::player::Player;
+use crate::game::streaming::{AnimDict, Resource};
 use crate::runtime::Script;
 
 pub struct ScriptFingerPointing {
@@ -55,9 +50,7 @@ impl Script for ScriptFingerPointing {
         }
     }
 
-    fn event(&mut self, _event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
-        false
-    }
+    fn event(&mut self, _event: ScriptEvent) {}
 }
 
 impl ScriptFingerPointing {

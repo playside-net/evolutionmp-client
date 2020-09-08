@@ -2,7 +2,6 @@ use laminar::{ErrorKind, Packet, Socket, SocketEvent, DeliveryGuarantee, Orderin
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use evolutionmp::network::{PORT, Message, PlayerData, VehicleData, STREAMING_RANGE};
 use std::collections::HashMap;
-use uuid::Uuid;
 use evolutionmp::hash::Hashable;
 use std::time::Instant;
 use cgmath::{MetricSpace, Vector3, Zero};
@@ -12,14 +11,14 @@ pub fn main() -> Result<(), ErrorKind> {
 }
 
 pub struct Session {
-    id: Uuid,
+    id: u32,
     address: SocketAddr,
-    socialclub: String,
+    social_club: String,
     pid: u32
 }
 
 pub struct SyncedVehicle {
-    streamer: Option<Uuid>,
+    streamer: Option<u32>,
     data: VehicleData,
     last_sync: Instant
 }
@@ -30,10 +29,12 @@ pub struct SyncedPlayer {
 }
 
 pub struct Server {
+    next_player_id: u32,
+    next_vehicle_id: u32,
     sender: Box<dyn Fn(Packet) -> Result<(), Packet>>,
     connections: HashMap<SocketAddr, Session>,
-    vehicles: HashMap<Uuid, SyncedVehicle>,
-    players: HashMap<Uuid, SyncedPlayer>
+    vehicles: HashMap<u32, SyncedVehicle>,
+    players: HashMap<u32, SyncedPlayer>
 }
 
 impl Server {
@@ -47,6 +48,8 @@ impl Server {
         let _thread = std::thread::spawn(move || socket.start_polling());
 
         let mut server = Server {
+            next_player_id: 0,
+            next_vehicle_id: 0,
             sender: Box::new(move |packet| sender.send(packet).map_err(|e|e.into_inner())),
             connections: HashMap::new(),
             vehicles: HashMap::new(),
@@ -69,6 +72,7 @@ impl Server {
                         }
                     }
                     SocketEvent::Timeout(address) => server.on_timeout(address),
+                    SocketEvent::Disconnect(address) => server.on_disconnect(address)
                 }
             }
         }
@@ -80,9 +84,15 @@ impl Server {
         //println!("Incoming connection from {:?}", address); //TODO Seem to be called when timed out
     }
 
+    fn on_disconnect(&mut self, address: SocketAddr) {
+        if let Some(session) = self.connections.remove(&address) {
+            println!("{} ({:?}) lost connection: Disconnected", session.social_club, address)
+        }
+    }
+
     fn on_timeout(&mut self, address: SocketAddr) {
         if let Some(session) = self.connections.remove(&address) {
-            println!("{} ({:?}) timed out", session.socialclub, address)
+            println!("{} ({:?}) timed out", session.social_club, address)
         } else {
             println!("{:?} timed out", address);
         }
@@ -90,9 +100,10 @@ impl Server {
 
     fn on_message(&mut self, address: SocketAddr, message: Message) {
         match message {
-            Message::Handshake { socialclub, pid } => {
-                let id = Uuid::new_v4();
-                let session = Session { id, address, socialclub, pid };
+            Message::Handshake { social_club, pid } => {
+                let id = self.next_player_id;
+                self.next_player_id += 1;
+                let session = Session { id, address, social_club, pid };
                 self.create_player(session, Vector3::zero());
             },
             other => {
@@ -101,10 +112,10 @@ impl Server {
                         Message::Payload { channel, data } => {
 
                         },
-                        Message::UpdateVehicle { id, streamer, data } => {
+                        Message::UpdateVehicle { id, data } => {
                             if let Some(vehicle) = self.vehicles.get_mut(&id) {
-                                if vehicle.streamer.is_none() || vehicle.streamer.as_ref() == Some(&streamer) {
-                                    vehicle.streamer = Some(streamer);
+                                if vehicle.streamer.is_none() || vehicle.streamer.as_ref() == Some(&session.id) {
+                                    vehicle.streamer = Some(session.id);
                                     vehicle.data = data;
                                     vehicle.last_sync = Instant::now();
                                 }
@@ -119,7 +130,7 @@ impl Server {
     }
 
     fn create_player(&mut self, session: Session, spawn_pos: Vector3<f32>) {
-        println!("{:?} logged in as {} (pid {})", session.address, session.socialclub, session.pid);
+        println!("{:?} logged in as {} (pid {})", session.address, session.social_club, session.pid);
         let message = Message::CreatePlayer {
             id: session.id,
             data: PlayerData {
@@ -129,7 +140,7 @@ impl Server {
                 model: "mp_m_freemode_01".joaat()
             }
         };
-        println!("Created ped for player {} ({})", session.socialclub, session.id);
+        println!("Created ped for player {} ({})", session.social_club, session.id);
         self.broadcast_reliable_sequenced(spawn_pos, STREAMING_RANGE, Some(session.address), &message, Some(0));
         if let Some(old) = self.connections.insert(session.address, session) {
             self.send_reliable_ordered(old.address, &Message::Disconnect {

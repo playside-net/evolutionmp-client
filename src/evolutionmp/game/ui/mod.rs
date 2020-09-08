@@ -328,8 +328,11 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
     super::locale::set_translation("WNMC_LINE2", line2);
     let buttons = buttons as u32;
     loop {
+        crate::info!("waiting warn");
         super::script::wait(0);
+        crate::info!("invoking draw_warn");
         invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, background);
+        crate::info!("getting result");
         let result = GET_WARN_RESULT(true, 0);
         if result != FrontendButtons::None {
             break result;

@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -6,13 +5,13 @@ use cgmath::{Array, Vector2, Vector3, Zero};
 
 use crate::events::ScriptEvent;
 use crate::game;
-use crate::game::Rgba;
 use crate::game::camera::GameplayCamera;
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::entity::Entity;
 use crate::game::ped::{Ped, PedBone};
 use crate::game::player::Player;
 use crate::game::prop::Prop;
+use crate::game::Rgba;
 use crate::game::streaming::{AnimDict, Resource};
 use crate::game::ui::Font;
 use crate::runtime::Script;
@@ -103,9 +102,7 @@ impl Script for ScriptFishing {
         }
     }
 
-    fn event(&mut self, _event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
-        false
-    }
+    fn event(&mut self, _event: ScriptEvent) {}
 }
 
 impl ScriptFishing {

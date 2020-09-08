@@ -13,7 +13,7 @@ pub fn get_pool() -> &'static GenericPool<Ped> {
     crate::native::pool::PED.as_ref().as_ref().expect("ped pool is not initialized")
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
 pub struct Ped {
     handle: Handle
 }
@@ -160,6 +160,10 @@ impl Ped {
         PedAppearance {
             ped: self
         }
+    }
+
+    pub fn get_remote_id(&self) -> Option<u32> {
+        crate::scripts::network::get_player_remote_id(self)
     }
 }
 

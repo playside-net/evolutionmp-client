@@ -1,5 +1,6 @@
 use std::ops::{Deref, DerefMut};
 use std::alloc::{Layout};
+use crate::pattern::RageBox;
 
 #[repr(C)]
 pub struct RageVec<T> {
@@ -49,26 +50,15 @@ impl<T> DerefMut for RageVec<T> {
     }
 }
 
-#[repr(transparent)]
-pub struct ChainedBox<T> {
-    inner: Box<T>
-}
-
-impl<T> Deref for ChainedBox<Chained<T>> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.inner.value
-    }
-}
-
 #[repr(C)]
 pub struct Chained<T> {
-    value: T,
-    next: Option<ChainedBox<Chained<T>>>
+    pub value: T,
+    next: Option<Box<Chained<T>>>
 }
 
-impl<T> ChainedBox<Chained<T>> {
+pub type ChainedBox<T> = Box<Chained<T>>;
+
+impl<T> Chained<T> {
     pub fn iter(&self) -> ChainedIter<T> {
         ChainedIter {
             current: Some(self)
@@ -77,7 +67,7 @@ impl<T> ChainedBox<Chained<T>> {
 }
 
 pub struct ChainedIter<'a, T> {
-    current: Option<&'a ChainedBox<Chained<T>>>
+    current: Option<&'a Chained<T>>
 }
 
 impl<'a, T> Iterator for ChainedIter<'a, T> {
@@ -85,8 +75,8 @@ impl<'a, T> Iterator for ChainedIter<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current.take() {
-            self.current = current.inner.next.as_ref();
-            Some(&current.inner.value)
+            self.current = current.next.as_deref();
+            Some(&current.value)
         } else {
             None
         }

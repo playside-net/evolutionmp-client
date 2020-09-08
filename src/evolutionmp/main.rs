@@ -1,21 +1,24 @@
-#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall)]
+#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics, abi_thiscall, arbitrary_self_types)]
 
 extern crate backtrace;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate bitflags;
 
 use std::ffi::{CString, OsString};
 use std::io::stdout;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::panic::PanicInfo;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use backtrace::{Backtrace, SymbolName};
-use colored::{Color, Colorize};
+use colored::Colorize;
 use detour::RawDetour;
-use fern::colors::ColoredLevelConfig;
+use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 use winapi::ctypes::c_void;
 use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, LPVOID, MAX_PATH, TRUE};
 use winapi::shared::windef::{HMENU, HWND};
@@ -27,6 +30,7 @@ use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLong
 use wio::wide::FromWide;
 
 use crate::game::GameState;
+use crate::network::PORT;
 
 #[cfg(target_os = "windows")]
 pub mod win;
@@ -48,6 +52,8 @@ pub mod process;
 pub mod registry;
 #[cfg(target_os = "windows")]
 pub mod scripts;
+#[cfg(target_os = "windows")]
+pub mod network;
 #[cfg(target_os = "windows")]
 pub mod jni;
 
@@ -232,7 +238,9 @@ unsafe fn initialize(window: &Window) {
     game::init();
 
     info!("Initializing core scripts");
-    crate::scripts::init();
+
+    let server = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), PORT);
+    crate::scripts::init(server);
 }
 
 #[cfg(target_os = "windows")]

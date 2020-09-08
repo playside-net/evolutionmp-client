@@ -8,7 +8,7 @@ use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCES
 
 use evolutionmp::launcher_dir;
 use evolutionmp::registry::Registry;
-use evolutionmp::win::ps::{get_process, ModuleEntry, ProcessHandle, ProcessIterator};
+use evolutionmp::win::ps::{get_process, ProcessIterator};
 
 fn main() {
     let gta_exe = "GTA5.exe";

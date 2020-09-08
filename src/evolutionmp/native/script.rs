@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::mem::ManuallyDrop;
 use std::ops::{Add, Deref, DerefMut};
@@ -374,7 +373,7 @@ impl ScriptThreadRuntime {
     extern "C" fn frame(&mut self) {
         self.script.frame();
         while let Ok(event) = self.receiver.try_recv() {
-            self.script.event(&event, &mut VecDeque::with_capacity(0));
+            self.script.event(event);
         }
     }
 }

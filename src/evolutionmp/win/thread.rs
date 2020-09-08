@@ -1,4 +1,4 @@
-use winapi::um::winnt::HANDLE;
+use winapi::um::winnt::{HANDLE, PEXCEPTION_POINTERS, LONG, EXCEPTION_RECORD};
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::processthreadsapi::{GetThreadId, SuspendThread, ResumeThread, GetThreadContext, OpenThread, SetThreadContext, GetExitCodeThread};
 use winapi::shared::minwindef::{DWORD, TRUE, FALSE};
@@ -11,6 +11,8 @@ use winapi::um::fibersapi::IsThreadAFiber;
 use winapi::um::winbase::{SwitchToFiber, CreateFiber, ConvertThreadToFiber, DeleteFiber};
 use winapi::shared::basetsd::SIZE_T;
 use field_offset::offset_of;
+use winapi::um::errhandlingapi::{AddVectoredExceptionHandler, RemoveVectoredExceptionHandler};
+use winapi::ctypes::c_void;
 
 pub struct ThreadHandle {
     inner: HANDLE
@@ -234,3 +236,24 @@ impl Fiber {
 }
 
 pub type FiberInitializer<T> = unsafe extern "system" fn(T);
+
+pub unsafe fn seh<C, H, R>(call: C, handler: H) -> R where C: Fn() -> R, H: Fn(&mut EXCEPTION_RECORD) -> LONG + 'static {
+    static mut SEH: Option<Box<dyn Fn(&mut EXCEPTION_RECORD) -> LONG>> = None;
+    static mut HANDLE: *mut c_void = std::ptr::null_mut();
+    unsafe extern "system" fn except(info: PEXCEPTION_POINTERS) -> LONG {
+        if let Some(seh) = SEH.as_mut() {
+            let info = &mut *info;
+            let rec = &mut *info.ExceptionRecord;
+            let code = (seh)(rec);
+            RemoveVectoredExceptionHandler(HANDLE);
+            code
+        } else {
+            0 //EXCEPTION_CONTINUE_SEARCH
+        }
+    }
+    SEH = Some(Box::new(handler));
+    HANDLE = AddVectoredExceptionHandler(TRUE as _, Some(except));
+    let result = call();
+    RemoveVectoredExceptionHandler(HANDLE);
+    result
+}

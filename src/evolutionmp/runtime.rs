@@ -223,7 +223,7 @@ impl Script for ScriptJava {
         }
     }
 
-    fn event(&mut self, event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
+    fn event(&mut self, event: ScriptEvent) {
         if crate::game::is_loaded() {
             let env = attach_thread();
             let event = match event {
@@ -243,13 +243,13 @@ impl Script for ScriptJava {
                                     is_up
                                 } => {
                                     env.new_object("mp/evolution/script/event/ScriptEventKeyboardKey", "(ISBZZZZZZ)V", args![
-                                        *key, *repeats as i16, *scan_code as i8, *is_extended, *alt,
-                                        *shift, *control, *was_down_before, *is_up
+                                        key, repeats as i16, scan_code as i8, is_extended, alt,
+                                        shift, control, was_down_before, is_up
                                     ]).unwrap()
                                 }
                                 KeyboardEvent::Char(c) => {
                                     env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(C)V", args![
-                                        *c as u16
+                                        c as u16
                                     ]).unwrap()
                                 }
                             }
@@ -257,19 +257,18 @@ impl Script for ScriptJava {
                         InputEvent::Mouse(event) => {
 
                         },*/
-                        _ => return false
+                        _ => return
                     }
                 }
-                _ => return false
+                _ => return
             };
             let mut result = false;
             for id in JAVA_SCRIPTS.lock().unwrap().iter() {
                 let script = self.get_java_object(*id);
-                result |= env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
+                if !result {
+                    result |= env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
+                }
             }
-            result
-        } else {
-            false
         }
     }
 }
@@ -348,7 +347,7 @@ impl TaskQueue {
 
 pub trait Script {
     fn frame(&mut self);
-    fn event(&mut self, event: &ScriptEvent, output: &mut VecDeque<ScriptEvent>) -> bool;
+    fn event(&mut self, event: ScriptEvent);
 }
 
 pub struct ScriptEnv {}

@@ -8,8 +8,6 @@ use winapi::um::processthreadsapi::GetCurrentProcess;
 use winapi::um::sysinfoapi::{GetSystemInfo, SYSTEM_INFO};
 use winapi::um::winnt::{MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READWRITE, PAGE_NOACCESS};
 
-use crate::launcher_dir;
-
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
 pub const XOR_32_64: u8 = 0x31;
@@ -57,7 +55,6 @@ impl Pattern {
     }
 
     pub unsafe fn find(&self) -> Option<MemoryRegion> {
-        //crate::info!("Searching for pattern {}", self);
         let mut sys_info = SYSTEM_INFO::default();
         GetSystemInfo(&mut sys_info);
         let end = sys_info.lpMaximumApplicationAddress;
@@ -75,14 +72,6 @@ impl Pattern {
             }
 
             if mbi.State == MEM_COMMIT && mbi.Protect != PAGE_NOACCESS && mbi.Type == MEM_IMAGE {
-                /*let mut name = [0; MAX_PATH];
-                let len = GetModuleFileNameW(mbi.AllocationBase.cast(), name.as_mut_ptr(), MAX_PATH as u32);
-                if len != 0 {
-                    let name = widestring::WideCStr::from_ptr_with_nul(name.as_ptr(), len as usize).to_string_lossy();
-                    crate::info!("Reading chunk of size {} and type MEM_IMAGE in module {}", mbi.RegionSize, name);
-                } else {
-                    crate::info!("Reading chunk of size {} and type MEM_IMAGE", mbi.RegionSize);
-                }*/
                 let mut buffer = Vec::with_capacity(mbi.RegionSize);
                 buffer.extend(std::iter::repeat(0u8).take(mbi.RegionSize));
                 let mut old_protect = 0;

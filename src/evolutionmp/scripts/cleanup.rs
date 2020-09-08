@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::time::Instant;
 
 use cgmath::{Array, Vector3};
@@ -24,16 +23,14 @@ static AUDIO_FLAGS: [(&'static str, bool); 7] = [
 
 pub struct ScriptCleanWorld {
     last_cleanup: Instant,
-    loaded: bool,
-    model_loaded: bool,
+    loaded: bool
 }
 
 impl ScriptCleanWorld {
     pub fn new() -> ScriptCleanWorld {
         ScriptCleanWorld {
             last_cleanup: Instant::now(),
-            loaded: false,
-            model_loaded: false,
+            loaded: false
         }
     }
 }
@@ -128,9 +125,7 @@ impl Script for ScriptCleanWorld {
         }
     }
 
-    fn event(&mut self, _event: &ScriptEvent, _output: &mut VecDeque<ScriptEvent>) -> bool {
-        false
-    }
+    fn event(&mut self, _event: ScriptEvent) {}
 }
 
 impl ScriptCleanWorld {

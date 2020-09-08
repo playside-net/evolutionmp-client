@@ -158,7 +158,7 @@ impl MissionTrain {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
 pub struct Vehicle {
     handle: Handle
 }
@@ -479,6 +479,10 @@ impl Vehicle {
         } else {
             None
         }
+    }
+
+    pub fn get_remote_id(&self) -> Option<u32> {
+        crate::scripts::network::get_vehicle_remote_id(self)
     }
 }
 

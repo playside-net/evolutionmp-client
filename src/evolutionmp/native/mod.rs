@@ -23,6 +23,7 @@ pub mod script;
 pub mod streaming;
 pub mod grc;
 pub mod assets;
+pub mod init_fns;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -64,7 +65,7 @@ static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe:
 
 #[macro_export]
 macro_rules! bind_fn_detour {
-    ($name:ident,$pattern:literal,$offset:literal,$detour:ident,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:path,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
@@ -78,7 +79,7 @@ macro_rules! bind_fn_detour {
 
 #[macro_export]
 macro_rules! bind_fn_detour_ip {
-    ($name:ident,$pattern:literal,$offset:literal,$detour:ident,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:path,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
@@ -186,6 +187,7 @@ pub(crate) fn pre_init() {
     grc::pre_init();
     pool::pre_init();
     vehicle::pre_init();
+    init_fns::pre_init();
     lazy_static::initialize(&EXPANDED_RADAR);
     lazy_static::initialize(&REVEAL_FULL_MAP);
     lazy_static::initialize(&CURSOR_SPRITE);
