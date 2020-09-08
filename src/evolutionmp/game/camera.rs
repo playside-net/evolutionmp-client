@@ -1,8 +1,8 @@
-use cgmath::{Angle, Deg, Euler, Vector3};
+use cgmath::{Angle, Deg, Euler, Vector3, Vector2, Zero, MetricSpace, Array};
 
 use crate::game::Handle;
 use crate::hash::{Hash, Hashable};
-use crate::invoke;
+use crate::{invoke, invoke_option};
 use crate::native::pool::Handleable;
 
 pub enum CameraShake {
@@ -167,6 +167,36 @@ pub fn rotation_to_direction(rot: Vector3<f32>) -> Vector3<f32> {
         rot.z.cos() * rot.x.cos().abs(),
         rot.x.sin(),
     )
+}
+
+pub fn screen_from_world(world: Vector3<f32>) -> Option<Vector2<f32>> {
+    let mut result = Vector2::zero();
+    invoke_option!(result, 0x34E82F05DF2974F5, world, &mut result.x, &mut result.y)
+}
+
+pub fn screen_from_world_relative(world: Vector3<f32>) -> Option<Vector2<f32>> {
+    screen_from_world(world).map(|pos| pos * 2.0 - Vector2::from_value(1.0))
+}
+
+pub fn world_from_screen(cam_pos: Vector3<f32>, cam_rot: Vector3<f32>, screen: Vector2<f32>) -> Vector3<f32> {
+    let cam_forward = rotation_to_direction(cam_rot);
+    let cam_right = rotation_to_direction(cam_rot - Vector3::unit_z() * 10.0);
+    let cam_up = rotation_to_direction(cam_rot - Vector3::unit_x() * 10.0);
+    let roll = cam_rot.y.to_radians();
+    let cam_right_roll = cam_right * roll.cos() - cam_up * roll.sin();
+    let cam_up_roll = cam_right * roll.sin() - cam_up * roll.cos();
+    let end = cam_pos + cam_forward * 10.0;
+    if let Some(target) = screen_from_world_relative(end + cam_right_roll + cam_up_roll) {
+        if let Some(origin) = screen_from_world_relative(end) {
+            let eps = 0.001;
+            if target.distance2(origin) > eps * eps {
+                let scale_x = (screen.x - origin.x) / (target.x - origin.x);
+                let scale_y = (screen.y - origin.y) / (target.y - origin.y);
+                return cam_pos + cam_forward * 10.0 + cam_right_roll * scale_x + cam_up_roll * scale_y;
+            }
+        }
+    }
+    end
 }
 
 pub struct GameplayCamera;
