@@ -521,7 +521,7 @@ impl NativeCallContext {
     }
 }
 
-pub type NativeFunction = extern "C" fn(*mut NativeCallContext);
+pub type NativeFunction = extern fn(*mut NativeCallContext);
 
 pub struct Natives {
     mappings: HashMap<u64, u64>,

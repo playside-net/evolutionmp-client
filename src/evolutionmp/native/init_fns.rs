@@ -19,8 +19,8 @@ bitflags! {
 
 #[repr(C)]
 struct InitFnData {
-    init: extern "C" fn(InitFnMask),
-    shutdown: extern "C" fn(InitFnMask),
+    init: extern fn(InitFnMask),
+    shutdown: extern fn(InitFnMask),
     init_order: u32,
     shutdown_order: u32,
     init_mask: InitFnMask,
@@ -67,8 +67,8 @@ struct InitFnGroup {
 
 #[repr(C)]
 struct UpdateFnVTable {
-    destructor: extern "C" fn(Box<UpdateFn>),
-    run: extern "C" fn(&UpdateFn)
+    destructor: extern fn(Box<UpdateFn>),
+    run: extern fn(&UpdateFn)
 }
 
 #[repr(C)]
@@ -96,7 +96,7 @@ impl UpdateFn {
             format!("0x{:08X}", self.hash.0)
         }
     }
-    extern "C" fn run_group(&mut self) {
+    extern fn run_group(&mut self) {
         let name = self.get_name();
         crate::info!("Running group update on {}", name);
         if let Some(ref child) = self.child {
@@ -116,7 +116,7 @@ struct UpdateFnGroup {
 
 #[repr(C)]
 struct GameSkeletonVTable {
-    destructor: extern "C" fn(Box<GameSkeleton>)
+    destructor: extern fn(Box<GameSkeleton>)
 }
 
 #[repr(C)]
@@ -135,7 +135,7 @@ pub struct GameSkeleton {
 }
 
 impl GameSkeleton {
-    extern "C" fn init(&mut self, mask: InitFnMask) {
+    extern fn init(&mut self, mask: InitFnMask) {
         crate::trace!("Running {:?} init functions", mask);
         for group in self.init_groups.iter() {
             if group.mask == mask {
@@ -157,7 +157,7 @@ impl GameSkeleton {
         crate::trace!("Done running {:?} init functions!", mask);
     }
 
-    extern "C" fn update(&mut self, ty: u32) {
+    extern fn update(&mut self, ty: u32) {
         for group in self.update_groups.iter() {
             if group.ty == ty {
                 for entry in group.entries.iter() {

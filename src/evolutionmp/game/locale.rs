@@ -11,7 +11,7 @@ bind_fn_detour_ip!(GET_TEXT2, "48 85 C0 75 34 8B 0D", -5, TranslationTable::get_
 pub enum TranslationTable {}
 
 impl TranslationTable {
-    extern "C" fn get_text(&self, hash: Hash) -> *const u8 {
+    extern fn get_text(&self, hash: Hash) -> *const u8 {
         let table = TRANSLATION_TABLE.lock().expect("mutex poisoned");
         if let Some(translation) = table.get(&hash) {
             return translation.as_bytes_with_nul().as_ptr();

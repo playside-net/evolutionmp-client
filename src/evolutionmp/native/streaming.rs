@@ -64,9 +64,9 @@ impl DataFileEntry {}
 #[repr(C)]
 pub struct PackFileMounterVTable {
     type_info: ManuallyDrop<Box<TypeInfo>>,
-    drop: extern "C" fn(this: *mut PackFileMounter),
-    mount: extern "C" fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
-    unmount: extern "C" fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
+    drop: extern fn(this: *mut PackFileMounter),
+    mount: extern fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
+    unmount: extern fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
 }
 
 #[repr(C)]

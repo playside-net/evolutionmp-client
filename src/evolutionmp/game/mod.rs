@@ -5,6 +5,7 @@ use jni_dynamic::{InitArgsBuilder, JavaVM, JNIVersion};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{add_dll_directory, bind_fn_detour_ip, launcher_dir};
+use crate::game::ui::FrontendButtons;
 
 pub mod audio;
 pub mod entity;
@@ -94,11 +95,11 @@ impl GameState {
 }
 
 
-/*extern "C" fn run_init_state() {
+/*extern fn run_init_state() {
     RUN_INIT_STATE()
 }*/
 
-/*extern "C" fn skip_init(stage: u32) -> bool {
+/*externfn skip_init(stage: u32) -> bool {
     info!("skipping init {}", stage);
     SKIP_INIT(stage)
 }*/

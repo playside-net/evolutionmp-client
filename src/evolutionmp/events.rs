@@ -11,15 +11,15 @@ use std::mem::ManuallyDrop;
 
 #[repr(C)]
 struct EventVTable {
-    destructor: extern "C" fn(this: *const Event),
-    m_8: extern "C" fn(this: *const Event),
-    equals: extern "C" fn(this: *const Event, other: *const Event) -> bool,
-    get_id: extern "C" fn(this: *const Event) -> u32,
-    m_20: extern "C" fn(this: *const Event) -> u32,
-    m_28: extern "C" fn(this: *const Event) -> u32,
-    get_arguments: extern "C" fn(this: *const Event, buffer: *mut *const (), len: usize) -> bool,
-    m_38: extern "C" fn(this: *const Event) -> bool,
-    m_40: extern "C" fn(this: *const Event, other: *const Event) -> bool
+    destructor: extern fn(this: *const Event),
+    m_8: extern fn(this: *const Event),
+    equals: extern fn(this: *const Event, other: *const Event) -> bool,
+    get_id: extern fn(this: *const Event) -> u32,
+    m_20: extern fn(this: *const Event) -> u32,
+    m_28: extern fn(this: *const Event) -> u32,
+    get_arguments: extern fn(this: *const Event, buffer: *mut *const (), len: usize) -> bool,
+    m_38: extern fn(this: *const Event) -> bool,
+    m_40: extern fn(this: *const Event, other: *const Event) -> bool
 }
 
 #[repr(C)]
@@ -209,7 +209,7 @@ macro_rules! native_event {
 
 bind_fn_detour_ip!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, "C", fn(*mut (), *mut Event) -> *mut ());
 
-pub unsafe extern "C" fn call_event(group: *mut (), event: *mut Event) -> *mut () {
+pub unsafe extern fn call_event(group: *mut (), event: *mut Event) -> *mut () {
     if !event.is_null() {
         let event = &*event;
         let mut arg_count = 0;

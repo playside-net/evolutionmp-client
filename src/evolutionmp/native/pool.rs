@@ -41,21 +41,21 @@ pub(crate) fn hook() {
     lazy_static::initialize(&PICKUP);
 }
 
-pub extern "C" fn is_global_full(_env: &JNIEnv, _class: JClass) -> bool {
+pub extern fn is_global_full(_env: &JNIEnv, _class: JClass) -> bool {
     let global = GLOBAL.as_ref().as_ref().expect("global pool is not initialized");
     global.is_full()
 }
 
-pub extern "C" fn request_handle(_env: &JNIEnv, _class: JClass, address: u64) -> u32 {
+pub extern fn request_handle(_env: &JNIEnv, _class: JClass, address: u64) -> u32 {
     ENTITY_ADD_TO_POOL(address as _)
 }
 
-pub extern "C" fn get_entity_pos(_env: &JNIEnv, _class: JClass, address: u64, buffer: u64) {
+pub extern fn get_entity_pos(_env: &JNIEnv, _class: JClass, address: u64, buffer: u64) {
     ENTITY_POS(address as _, buffer as _);
 }
 
-pub type GetHandleAddress = extern "C" fn(Handle) -> *mut u8;
-pub type GetAddressHandle = extern "C" fn(*mut u8) -> Handle;
+pub type GetHandleAddress = extern fn(Handle) -> *mut u8;
+pub type GetAddressHandle = extern fn(*mut u8) -> Handle;
 
 #[repr(C)]
 pub struct GlobalPool {

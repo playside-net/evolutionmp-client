@@ -181,7 +181,7 @@ macro_rules! proc_detour {
     };
 }
 
-unsafe extern "system" fn create_window(ex_style: DWORD, class_name: LPWSTR, window_name: LPWSTR,
+unsafe extern fn create_window(ex_style: DWORD, class_name: LPWSTR, window_name: LPWSTR,
                                         style: DWORD, x: i32, y: i32, w: i32, h: i32, parent: Window,
                                         menu: HMENU, instance: HINSTANCE, param: LPVOID) -> Window {
     let window = CREATE_WINDOW(ex_style, class_name, window_name, style, x, y, w, h, parent, menu, instance, param);
@@ -194,7 +194,7 @@ unsafe extern "system" fn create_window(ex_style: DWORD, class_name: LPWSTR, win
     window
 }
 
-proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window, "system",
+proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window, "C",
     fn(DWORD, LPWSTR, LPWSTR, DWORD, i32, i32, i32, i32, Window, HMENU, HINSTANCE, LPVOID) -> Window
 );
 
@@ -274,7 +274,7 @@ macro_rules! info_message {
 #[cfg(target_os = "windows")]
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "stdcall" fn DllMain(instance: HINSTANCE, reason: DllCallReason, _reserved: LPVOID) -> BOOL {
+pub extern "system" fn DllMain(instance: HINSTANCE, reason: DllCallReason, _reserved: LPVOID) -> BOOL {
     match reason {
         DllCallReason::ProcessAttach => {
             unsafe { DisableThreadLibraryCalls(instance) };

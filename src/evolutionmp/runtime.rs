@@ -79,13 +79,13 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
 
     macro_rules! pool {
         ($env:expr,$pool:expr,$class:literal) => {{
-            extern "C" fn capacity(_env: &JNIEnv, _class: JClass) -> u32 {
+            extern fn capacity(_env: &JNIEnv, _class: JClass) -> u32 {
                 $pool.capacity()
             }
-            extern "C" fn is_valid(_env: &JNIEnv, _class: JClass, index: u32) -> bool {
+            extern fn is_valid(_env: &JNIEnv, _class: JClass, index: u32) -> bool {
                 $pool.is_valid(index)
             }
-            extern "C" fn get_address(_env: &JNIEnv, _class: JClass, index: u32) -> u64 {
+            extern fn get_address(_env: &JNIEnv, _class: JClass, index: u32) -> u64 {
                 $pool.get_address(index) as u64
             }
             natives!($env, $class,
@@ -121,7 +121,7 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
 
     macro_rules! g {
         ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
-            extern "C" fn get(_env: &JNIEnv, obj: JObject) -> $ty {
+            extern fn get(_env: &JNIEnv, obj: JObject) -> $ty {
                 use $crate::native::pool::Handleable;
                 let handle = i32::from_java_field(&attach_thread(), obj, "handle");
                 <$handle>::from_handle(handle as u32).unwrap().$name()
@@ -132,7 +132,7 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
 
     macro_rules! s {
         ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
-            extern "C" fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
+            extern fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
                 use $crate::native::pool::Handleable;
                 let handle = i32::from_java_field(&attach_thread(), obj, "handle");
                 <$handle>::from_handle(handle as u32).unwrap().$name(value)
@@ -273,37 +273,37 @@ impl Script for ScriptJava {
     }
 }
 
-unsafe extern "C" fn put_string(_env: &JNIEnv, args: JObject, value: JString) {
+unsafe extern fn put_string(_env: &JNIEnv, args: JObject, value: JString) {
     let env = attach_thread();
     let buffer = env.get_field(args, "buffer", "Ljava/nio/ByteBuffer;").unwrap().l().unwrap();
     let ptr = env.get_string_utf_chars(value).unwrap();
     env.call_method(buffer, "putLong", "(J)Ljava/nio/ByteBuffer;", args![ptr as i64]).unwrap();
 }
 
-unsafe extern "C" fn get_string<'a>(_env: &'a JNIEnv, args: JObject) -> JString<'a> {
+unsafe extern fn get_string<'a>(_env: &'a JNIEnv, args: JObject) -> JString<'a> {
     let env = attach_thread();
     let buffer = env.get_field(args, "buffer", "Ljava/nio/ByteBuffer;").unwrap().l().unwrap();
     let ptr = env.call_method(buffer, "getLong", "()J", args![]).unwrap().j().unwrap() as u64 as *const i8;
     env.new_string(JNIStr::from_ptr(ptr).to_owned()).unwrap()
 }
 
-unsafe extern "C" fn propagate(_env: &JNIEnv, _script: JObject, _event: JObject<'static>) {
+unsafe extern fn propagate(_env: &JNIEnv, _script: JObject, _event: JObject<'static>) {
     unimplemented!()
 }
 
-unsafe extern "C" fn info(_env: &JNIEnv, _class: JClass, line: JObject) {
+unsafe extern fn info(_env: &JNIEnv, _class: JClass, line: JObject) {
     let env = attach_thread();
     let line = String::from_java_object(&env, line);
     crate::info!(target: "script", "{}", line);
 }
 
-unsafe extern "C" fn error(_env: &JNIEnv, _class: JClass, line: JObject) {
+unsafe extern fn error(_env: &JNIEnv, _class: JClass, line: JObject) {
     let env = attach_thread();
     let line = String::from_java_object(&env, line);
     crate::error!(target: "script", "{}", line);
 }
 
-unsafe extern "C" fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject, result: JObject) {
+unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject, result: JObject) {
     let env = attach_thread();
     if let Some(handler) = crate::native::get_handler_opt(hash) {
         let arg_count = env.call_method(args, "limit", "()I", &[]).unwrap().i().unwrap() as u32;

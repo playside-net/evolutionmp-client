@@ -235,7 +235,7 @@ impl Fiber {
     }
 }
 
-pub type FiberInitializer<T> = unsafe extern "system" fn(T);
+pub type FiberInitializer<T> = unsafe extern fn(T);
 
 pub unsafe fn seh<C, H, R>(call: C, handler: H) -> R where C: Fn() -> R, H: Fn(&mut EXCEPTION_RECORD) -> LONG + 'static {
     static mut SEH: Option<Box<dyn Fn(&mut EXCEPTION_RECORD) -> LONG>> = None;

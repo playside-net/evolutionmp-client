@@ -41,7 +41,7 @@ bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset,
 bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_no, "C", fn(&'static mut ScriptThread, u32) -> RageThreadState);
 bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_access, "C", fn(&'static mut ScriptThread, *mut ()) -> bool);
 
-unsafe extern "C" fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u8 {
+unsafe extern fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u8 {
     let result = SCRIPT_POST_INIT(name, p2, p3);
 
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
@@ -55,7 +55,7 @@ unsafe extern "C" fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u
     result
 }
 
-unsafe extern "C" fn script_startup() {
+unsafe extern fn script_startup() {
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
 
     for script in loaded_scripts.iter_mut() {
@@ -67,7 +67,7 @@ unsafe extern "C" fn script_startup() {
     SCRIPT_STARTUP();
 }
 
-unsafe extern "C" fn script_reset() {
+unsafe extern fn script_reset() {
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
 
     for script in loaded_scripts.iter_mut() {
@@ -76,7 +76,7 @@ unsafe extern "C" fn script_reset() {
     //SCRIPT_RESET(); //Story mode only
 }
 
-unsafe extern "C" fn script_no(script: &'static mut ScriptThread, ops: u32) -> RageThreadState {
+unsafe extern fn script_no(script: &'static mut ScriptThread, ops: u32) -> RageThreadState {
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
     if let Some(s) = loaded_scripts.iter_mut().find(|s| s.context.id == script.context.id) {
         s.run(ops);
@@ -84,7 +84,7 @@ unsafe extern "C" fn script_no(script: &'static mut ScriptThread, ops: u32) -> R
     script.context.state
 }
 
-unsafe extern "C" fn script_access(script: &'static mut ScriptThread, unk: *mut ()) -> bool {
+unsafe extern fn script_access(script: &'static mut ScriptThread, unk: *mut ()) -> bool {
     crate::info!("Script {} asked for access to {:p}", script.get_name().to_string_lossy(), unk);
     true
 }
@@ -136,17 +136,17 @@ fn with_thread<A>(thread: &mut ScriptThreadRuntime, mut action: A) where A: FnMu
 
 #[repr(C)]
 pub struct ScriptManagerVTable {
-    destructor: extern "C" fn(this: *mut ScriptManager),
-    fn1: extern "C" fn(this: *mut ScriptManager),
-    fn2: extern "C" fn(this: *mut ScriptManager),
-    fn3: extern "C" fn(this: *mut ScriptManager),
-    fn4: extern "C" fn(this: *mut ScriptManager),
-    fn5: extern "C" fn(this: *mut ScriptManager),
-    fn6: extern "C" fn(this: *mut ScriptManager),
-    fn7: extern "C" fn(this: *mut ScriptManager),
-    fn8: extern "C" fn(this: *mut ScriptManager),
-    fn9: extern "C" fn(this: *mut ScriptManager),
-    attach: extern "C" fn(this: *mut ScriptManager, thread: *mut ScriptThread),
+    destructor: extern fn(this: *mut ScriptManager),
+    fn1: extern fn(this: *mut ScriptManager),
+    fn2: extern fn(this: *mut ScriptManager),
+    fn3: extern fn(this: *mut ScriptManager),
+    fn4: extern fn(this: *mut ScriptManager),
+    fn5: extern fn(this: *mut ScriptManager),
+    fn6: extern fn(this: *mut ScriptManager),
+    fn7: extern fn(this: *mut ScriptManager),
+    fn8: extern fn(this: *mut ScriptManager),
+    fn9: extern fn(this: *mut ScriptManager),
+    attach: extern fn(this: *mut ScriptManager, thread: *mut ScriptThread),
 }
 
 #[repr(u32)]
@@ -197,12 +197,12 @@ pub struct RageThreadContext {
 
 #[repr(C)]
 pub struct RageThreadVTable {
-    drop: extern "C" fn(this: *mut ()),
-    reset: extern "C" fn(this: *mut (), id: u32, args: *const (), len: u32) -> RageThreadState,
-    run: extern "C" fn(this: *mut (), ops: u32) -> RageThreadState,
-    tick: extern "C" fn(this: *mut (), ops: u32) -> RageThreadState,
-    kill: extern "C" fn(this: *mut ()),
-    frame: extern "C" fn(this: *mut ()),
+    drop: extern fn(this: *mut ()),
+    reset: extern fn(this: *mut (), id: u32, args: *const (), len: u32) -> RageThreadState,
+    run: extern fn(this: *mut (), ops: u32) -> RageThreadState,
+    tick: extern fn(this: *mut (), ops: u32) -> RageThreadState,
+    kill: extern fn(this: *mut ()),
+    frame: extern fn(this: *mut ()),
 }
 
 #[repr(C)]
@@ -331,13 +331,13 @@ impl ScriptThreadRuntime {
         })
     }
 
-    extern "C" fn drop(self: Box<ScriptThreadRuntime>) {}
+    extern fn drop(self: Box<ScriptThreadRuntime>) {}
 
-    extern "C" fn kill(&mut self) {
+    extern fn kill(&mut self) {
         SCRIPT_THREAD_KILL(self)
     }
 
-    extern "C" fn run(&mut self, _ops: u32) -> RageThreadState {
+    extern fn run(&mut self, _ops: u32) -> RageThreadState {
         with_thread(self, move |script| {
             if script.context.state != RageThreadState::Killed {
                 script.frame();
@@ -346,7 +346,7 @@ impl ScriptThreadRuntime {
         self.context.state
     }
 
-    extern "C" fn reset(&mut self, hash: Hash, _args: *const (), _len: u32) -> RageThreadState {
+    extern fn reset(&mut self, hash: Hash, _args: *const (), _len: u32) -> RageThreadState {
         self.context = RageThreadContext {
             state: RageThreadState::Idle,
             script_hash: hash,
@@ -367,11 +367,11 @@ impl ScriptThreadRuntime {
         self.context.state
     }
 
-    extern "C" fn tick(&mut self, ops: u32) -> RageThreadState {
+    extern fn tick(&mut self, ops: u32) -> RageThreadState {
         SCRIPT_THREAD_TICK(self, ops)
     }
 
-    extern "C" fn frame(&mut self) {
+    extern fn frame(&mut self) {
         self.script.frame();
         while let Ok(event) = self.receiver.try_recv() {
             self.script.event(event);
