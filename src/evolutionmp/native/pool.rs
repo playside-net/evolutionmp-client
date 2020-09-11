@@ -14,12 +14,12 @@ use crate::game::prop::Prop;
 use crate::game::vehicle::Vehicle;
 use crate::native::ThreadSafe;
 
-bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, "C", fn(Handle) -> *mut u8);
-bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, "C", fn(Handle) -> *mut u8);
-bind_fn_ip!(PLAYER_ADDRESS, "B2 01 E8 ? ? ? ? 48 85 C0 74 1C 8A 88", 3, "C", fn(Handle) -> *mut u8);
-bind_fn!(ENTITY_ADD_TO_POOL, "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 8B 15 ? ? ? ? 48 8B F9 48 83 C1 10 33 DB", 0, "C", fn(*mut u8) -> Handle);
-//bind_fn!(ENTITY_ADD_TO_POOL, "48 F7 F9 49 8B 48 08 48 63 D0 C1 E0 08 0F B6 1C 11 03 D8", -0x68, "C", fn(*mut u8) -> Handle);
-bind_fn!(ENTITY_POS, "48 8B DA E8 ? ? ? ? F3 0F 10 44 24", -6, "C", fn(*mut u8, *mut f32) -> u64);
+bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, fn(Handle) -> *mut u8);
+bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, fn(Handle) -> *mut u8);
+bind_fn_ip!(PLAYER_ADDRESS, "B2 01 E8 ? ? ? ? 48 85 C0 74 1C 8A 88", 3, fn(Handle) -> *mut u8);
+bind_fn!(ENTITY_ADD_TO_POOL, "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 8B 15 ? ? ? ? 48 8B F9 48 83 C1 10 33 DB", 0, fn(*mut u8) -> Handle);
+//bind_fn!(ENTITY_ADD_TO_POOL, "48 F7 F9 49 8B 48 08 48 63 D0 C1 E0 08 0F B6 1C 11 03 D8", -0x68, fn(*mut u8) -> Handle);
+bind_fn!(ENTITY_POS, "48 8B DA E8 ? ? ? ? F3 0F 10 44 24", -6, fn(*mut u8, *mut f32) -> u64);
 
 bind_field_ip!(PED, "48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10", 3, Option<Box<GenericPool<Ped>>>);
 bind_field_ip!(PROP, "48 8B 05 ? ? ? ? 8B 78 10 85 FF", 3, Option<Box<GenericPool<Prop>>>);

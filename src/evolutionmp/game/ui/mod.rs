@@ -17,7 +17,7 @@ pub mod notification;
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
 
-bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, "C", fn(bool, u32) -> FrontendButtons);
+bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, fn(bool, u32) -> FrontendButtons);
 
 pub fn hook() {
     crate::info!("Hooking UI...");

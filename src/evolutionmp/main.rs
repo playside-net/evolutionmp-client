@@ -163,9 +163,9 @@ impl Window {
 }
 
 macro_rules! proc_detour {
-    ($name:ident,$module:literal,$proc:literal,$repl:expr,$abi:literal,fn($($arg:ty),*)->$ret:ty) => {
+    ($name:ident,$module:literal,$proc:literal,$repl:expr,fn($($arg:ty),*)->$ret:ty) => {
         lazy_static::lazy_static! {
-            static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+            static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let module = CString::new($module).unwrap();
                 let module = GetModuleHandleA(module.as_ptr());
                 let proc = CString::new($proc).unwrap();
@@ -194,7 +194,7 @@ unsafe extern fn create_window(ex_style: DWORD, class_name: LPWSTR, window_name:
     window
 }
 
-proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window, "C",
+proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window,
     fn(DWORD, LPWSTR, LPWSTR, DWORD, i32, i32, i32, i32, Window, HMENU, HINSTANCE, LPVOID) -> Window
 );
 

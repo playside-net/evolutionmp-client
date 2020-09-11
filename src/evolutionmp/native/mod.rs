@@ -65,9 +65,9 @@ static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe:
 
 #[macro_export]
 macro_rules! bind_fn_detour {
-    ($name:ident,$pattern:literal,$offset:literal,$detour:path,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:path,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
-            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+            pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
                 .expect(concat!("failed to find call for ", stringify!($name)))
                     .offset($offset).detour($detour as _);
@@ -79,9 +79,9 @@ macro_rules! bind_fn_detour {
 
 #[macro_export]
 macro_rules! bind_fn_detour_ip {
-    ($name:ident,$pattern:literal,$offset:literal,$detour:path,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:path,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
-            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+            pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
                 .expect(concat!("failed to find call for ", stringify!($name)))
                     .offset($offset).detour_ip($detour as _);
@@ -100,9 +100,9 @@ macro_rules! mem {
 
 #[macro_export]
 macro_rules! bind_fn {
-    ($name:ident,$pattern:literal,$offset:literal,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,fn($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
-            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+            pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let ptr = $crate::mem!($pattern)
                 .expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).as_ptr();
@@ -114,12 +114,12 @@ macro_rules! bind_fn {
 
 #[macro_export]
 macro_rules! bind_fn_ip {
-    ($name:ident,$pattern:literal,$offset:expr,$abi:literal,fn($($arg:ty),*) -> $ret:ty) => {
-        bind_fn_ip!($name,$pattern,$offset,$abi,fn($($arg),*) -> $ret,4);
+    ($name:ident,$pattern:literal,$offset:expr,fn($($arg:ty),*) -> $ret:ty) => {
+        bind_fn_ip!($name,$pattern,$offset,fn($($arg),*) -> $ret,4);
     };
-    ($name:ident,$pattern:literal,$offset:expr,$abi:literal,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
+    ($name:ident,$pattern:literal,$offset:expr,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
-            pub static ref $name: extern $abi fn($($arg),*) -> $ret = unsafe {
+            pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let ptr = $crate::mem!($pattern)
                     .expect(concat!("failed to bind call for ", stringify!($name)))
                     .offset($offset).read_ptr($ptr_len).as_ptr();
@@ -174,8 +174,8 @@ lazy_static! {
     pub static ref NATIVES: Natives = Natives::new();
 }
 
-bind_fn!(SET_VECTOR_RESULTS, "83 79 18 ? 48 8B D1 74 4A FF 4A 18", 0, "C", fn(*mut NativeCallContext) -> ());
-bind_fn!(GET_SCRIPT_ENTITY, "44 8B C1 49 8B 41 08 41 C1 F8 08 41 38 0C 00", -12, "C", fn(u32) -> *mut ());
+bind_fn!(SET_VECTOR_RESULTS, "83 79 18 ? 48 8B D1 74 4A FF 4A 18", 0, fn(*mut NativeCallContext) -> ());
+bind_fn!(GET_SCRIPT_ENTITY, "44 8B C1 49 8B 41 08 41 C1 F8 08 41 38 0C 00", -12, fn(u32) -> *mut ());
 
 bind_field!(EXPANDED_RADAR, "33 C0 0F 57 C0 ? 0D", 7, bool);
 bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
