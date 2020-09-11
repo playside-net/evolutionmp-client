@@ -1,10 +1,13 @@
-use laminar::{ErrorKind, Packet, Socket, SocketEvent, DeliveryGuarantee, OrderingGuarantee};
-use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
-use evolutionmp::network::{PORT, Message, PlayerData, VehicleData, STREAMING_RANGE};
 use std::collections::HashMap;
-use evolutionmp::hash::Hashable;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::time::Duration;
 use std::time::Instant;
+
 use cgmath::{MetricSpace, Vector3, Zero};
+use laminar::{Config, DeliveryGuarantee, ErrorKind, OrderingGuarantee, Packet, Socket, SocketEvent};
+
+use evolutionmp::hash::Hashable;
+use evolutionmp::network::{Message, PlayerData, PORT, STREAMING_RANGE, VehicleData};
 
 pub fn main() -> Result<(), ErrorKind> {
     Server::start()
@@ -14,18 +17,18 @@ pub struct Session {
     id: u32,
     address: SocketAddr,
     social_club: String,
-    pid: u32
+    pid: u32,
 }
 
 pub struct SyncedVehicle {
     streamer: Option<u32>,
     data: VehicleData,
-    last_sync: Instant
+    last_sync: Instant,
 }
 
 pub struct SyncedPlayer {
     data: PlayerData,
-    last_sync: Instant
+    last_sync: Instant,
 }
 
 pub struct Server {
@@ -34,12 +37,15 @@ pub struct Server {
     sender: Box<dyn Fn(Packet) -> Result<(), Packet>>,
     connections: HashMap<SocketAddr, Session>,
     vehicles: HashMap<u32, SyncedVehicle>,
-    players: HashMap<u32, SyncedPlayer>
+    players: HashMap<u32, SyncedPlayer>,
 }
 
 impl Server {
     pub fn start() -> Result<(), ErrorKind> {
-        let mut socket = Socket::bind(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, PORT)))?;
+        let mut socket = Socket::bind_with_config(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, PORT)), Config {
+            idle_connection_timeout: Duration::from_secs(15),
+            ..Default::default()
+        })?;
         let sender = socket.get_packet_sender();
         let receiver = socket.get_event_receiver();
 
@@ -50,10 +56,10 @@ impl Server {
         let mut server = Server {
             next_player_id: 0,
             next_vehicle_id: 0,
-            sender: Box::new(move |packet| sender.send(packet).map_err(|e|e.into_inner())),
+            sender: Box::new(move |packet| sender.send(packet).map_err(|e| e.into_inner())),
             connections: HashMap::new(),
             vehicles: HashMap::new(),
-            players: HashMap::new()
+            players: HashMap::new(),
         };
 
         loop {
@@ -65,7 +71,7 @@ impl Server {
                         match bincode::deserialize(packet.payload()) {
                             Ok(message) => {
                                 server.on_message(address, message)
-                            },
+                            }
                             Err(e) => {
                                 eprintln!("Received broken message from {:?}: {:?}", address, e);
                             }
@@ -105,13 +111,11 @@ impl Server {
                 self.next_player_id += 1;
                 let session = Session { id, address, social_club, pid };
                 self.create_player(session, Vector3::zero());
-            },
+            }
             other => {
                 if let Some(session) = self.connections.get(&address) {
                     match other {
-                        Message::Payload { channel, data } => {
-
-                        },
+                        Message::Payload { channel, data } => {}
                         Message::UpdateVehicle { id, data } => {
                             if let Some(vehicle) = self.vehicles.get_mut(&id) {
                                 if vehicle.streamer.is_none() || vehicle.streamer.as_ref() == Some(&session.id) {
@@ -121,7 +125,7 @@ impl Server {
                                 }
                             }
                         }
-                        Message::Disconnect { reason } => {},
+                        Message::Disconnect { reason } => {}
                         _ => {}
                     }
                 }
@@ -137,8 +141,8 @@ impl Server {
                 position: spawn_pos,
                 rotation: Vector3::zero(),
                 heading: 0.0,
-                model: "mp_m_freemode_01".joaat()
-            }
+                model: "mp_m_freemode_01".joaat(),
+            },
         };
         println!("Created ped for player {} ({})", session.social_club, session.id);
         self.broadcast_reliable_sequenced(spawn_pos, STREAMING_RANGE, Some(session.address), &message, Some(0));
@@ -153,14 +157,13 @@ impl Server {
         match (self.sender)(packet) {
             Err(_) => {
                 eprintln!("Failed to send packet to {:?}", address);
-            },
+            }
             _ => {}
         }
     }
 
     fn broadcast_raw<P>(&self, center: Vector3<f32>, range: f32, omit: Option<SocketAddr>, packet: P)
         where P: Fn(SocketAddr) -> Packet {
-
         for (addr, session) in self.connections.iter() {
             if omit.is_none() || omit.as_ref() != Some(addr) {
                 if let Some(player) = self.players.get(&session.id) {
@@ -178,7 +181,7 @@ impl Server {
             Err(e) => {
                 eprintln!("Failed to serialize message: {:?}", e);
                 None
-            },
+            }
         }
     }
 

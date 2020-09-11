@@ -2,15 +2,15 @@ use std::net::SocketAddr;
 use std::sync::Mutex;
 
 use bimap::BiMap;
-use laminar::{ErrorKind, EventReceiver, Packet, PacketSender, Socket, SocketEvent};
+use laminar::{EventReceiver, Packet, PacketSender, Socket, Config};
 
 use crate::events::ScriptEvent;
 use crate::game::ped::Ped;
 use crate::game::ui::FrontendButtons;
 use crate::game::vehicle::Vehicle;
-use crate::hash::Hashable;
 use crate::network::Message;
 use crate::runtime::Script;
+use std::time::Duration;
 
 lazy_static! {
     static ref PLAYERS: Mutex<BiMap<u32, Ped>> = Mutex::new(BiMap::new());
@@ -98,9 +98,20 @@ impl Script for ScriptNetwork {
         if let Some(receiver) = self.receiver.as_mut() {
             let local_player = Ped::local();
             if let Some(local_vehicle) = local_player.get_in_vehicle(false) {}
+            if let Ok(event) = receiver.try_recv() {
+                crate::info!("Received net event: {:?}", event);
+                /*if self.connection_failed("Timed out") {
+                    self.receiver = None;
+                    return;
+                }*/
+            }
         } else if crate::game::is_loaded() {
             loop {
-                match Socket::bind_any_with_config(Default::default()) {
+                match Socket::bind_any_with_config(Config {
+                    idle_connection_timeout: Duration::from_secs(15),
+                    heartbeat_interval: Some(Duration::from_secs(10)),
+                    .. Default::default()
+                }) {
                     Ok(mut socket) => {
                         let sender = socket.get_packet_sender();
                         let receiver = socket.get_event_receiver();
@@ -110,7 +121,7 @@ impl Script for ScriptNetwork {
                         if !self.send_reliable_ordered(&Message::Handshake {
                             social_club,
                             pid: std::process::id(),
-                        }, Some(0)) || socket.connections_count() == 0 {
+                        }, Some(0)) {
                             crate::error!("Handshake failed");
                             /*if self.connection_failed("Handshake failed") {
                                 continue;
@@ -121,9 +132,9 @@ impl Script for ScriptNetwork {
                     }
                     Err(e) => {
                         crate::error!("Server connection failed: {}", e);
-                        if self.connection_failed(&format!("Socket error: {}", e)) {
+                        /*if self.connection_failed(&format!("Socket error: {}", e)) {
                             continue;
-                        }
+                        }*/
                     }
                 }
             }
