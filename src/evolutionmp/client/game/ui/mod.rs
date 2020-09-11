@@ -9,7 +9,7 @@ use crate::{invoke, native};
 use crate::{bind_fn, mem};
 use crate::game::Rgba;
 use crate::hash::Hashable;
-use crate::pattern::{NOP, RET, XOR_32_64};
+use crate::pattern::XOR_32_64;
 use crate::win::input::{InputEvent, KeyboardEvent};
 
 pub mod notification;
@@ -33,7 +33,7 @@ pub fn init() {
 
         //no_slowmo.add(8).nop(5); //Vignetting call patch
 
-        no_slowmo.add(34).write_bytes(&[XOR_32_64, 0xD2]); //Timescale override patch
+        no_slowmo.add(34).write_bytes(&[0x31, 0xD2]); //Timescale override patch
     }
 }
 
@@ -52,7 +52,7 @@ pub fn show_subtitle(text: &str, duration: i32, immediately: bool) {
 pub fn show_help(text: &str, looping: bool, beep: bool, duration: Option<u32>) {
     invoke!((), 0x8509B634FBE7DA11, "STRING");
     push_string(text);
-    invoke!((), 0x238FFE5C7B0498A6, 0, looping, beep, duration.map_or(-1, |d|d as i32))
+    invoke!((), 0x238FFE5C7B0498A6, 0, looping, beep, duration.unwrap_or(u32::MAX))
 }
 
 pub fn show_help_this_frame(text: &str) {

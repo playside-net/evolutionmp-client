@@ -4,8 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use jni_dynamic::{InitArgsBuilder, JavaVM, JNIVersion};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{add_dll_directory, bind_fn_detour_ip, launcher_dir};
-use crate::game::ui::FrontendButtons;
+use crate::client::add_dll_directory;
+use crate::{bind_fn_detour_ip, launcher_dir};
+
 
 pub mod audio;
 pub mod entity;

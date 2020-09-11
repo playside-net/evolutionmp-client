@@ -140,7 +140,13 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
         _ => {}
     }
 
-    CallWindowProcW(WND_PROC, hwnd, msg, wparam, lparam)
+    let start = Instant::now();
+    let ret = CallWindowProcW(WND_PROC, hwnd, msg, wparam, lparam);
+    let elapsed = start.elapsed();
+    if elapsed > Duration::from_millis(20) {
+        crate::warn!("Window event 0x{:08X} took {} ms. Result was 0x{:08X}", msg, elapsed.as_millis(), ret);
+    }
+    ret
 }
 
 

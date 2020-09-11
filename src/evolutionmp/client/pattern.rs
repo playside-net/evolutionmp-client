@@ -10,7 +10,6 @@ use winapi::um::winnt::{MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_EX
 
 pub const RET: u8 = 0xC3;
 pub const NOP: u8 = 0x90;
-pub const XOR_32_64: u8 = 0x31;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, PartialOrd, PartialEq, Eq, Hash)]
 pub struct Pattern {
