@@ -7,6 +7,8 @@ extern crate bitflags;
 extern crate lazy_static;
 #[macro_use]
 extern crate byte_strings;
+#[macro_use]
+extern crate log;
 
 use std::io::stdout;
 use std::panic::PanicInfo;
@@ -16,7 +18,6 @@ use backtrace::Backtrace;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
-use log::{debug, error, info, trace, warn};
 
 #[cfg(target_os = "windows")]
 pub use client::*;

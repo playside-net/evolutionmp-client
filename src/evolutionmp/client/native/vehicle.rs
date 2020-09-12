@@ -22,7 +22,7 @@ pub(crate) static OIL_VOLUME: VehicleField<f32> = NativeField::new(0x0104);
 pub(crate) static HELICOPTER_BLADES_SPEED: VehicleField<f32> = NativeField::new(0x1AE4);
 
 pub fn hook() {
-    crate::info!("Hooking vehicle offsets...");
+    info!("Hooking vehicle offsets...");
     lazy_static::initialize(&NEXT_GEAR);
     lazy_static::initialize(&CURRENT_GEAR);
     lazy_static::initialize(&HIGH_GEAR);

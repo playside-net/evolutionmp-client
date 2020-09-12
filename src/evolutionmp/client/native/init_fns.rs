@@ -41,7 +41,7 @@ impl InitFnData {
         let name = self.get_name();
         seh(|| (self.init)(mask), move |rec| {
             if (rec.ExceptionCode & 0x80000000) != 0 {
-                crate::error!(
+                error!(
                     "An exception occurred (0x{:08X} at {:p}) during execution of {:?} function for {}. The game will be terminated.",
                     rec.ExceptionCode,
                     rec.ExceptionAddress,
@@ -84,9 +84,9 @@ pub struct UpdateFn {
 impl UpdateFn {
     fn run(&self) {
         let name = self.get_name();
-        crate::info!("Running update on {}", name);
+        info!("Running update on {}", name);
         (self.v_table.run)(self);
-        crate::info!("Done update");
+        info!("Done update");
     }
 
     fn get_name(&self) -> String {
@@ -98,13 +98,13 @@ impl UpdateFn {
     }
     extern fn run_group(&mut self) {
         let name = self.get_name();
-        crate::info!("Running group update on {}", name);
+        info!("Running group update on {}", name);
         if let Some(ref child) = self.child {
             for child in child.iter() {
                 child.run();
             }
         }
-        crate::info!("Done group update");
+        info!("Done group update");
     }
 }
 
@@ -136,25 +136,25 @@ pub struct GameSkeleton {
 
 impl GameSkeleton {
     extern fn init(&mut self, mask: InitFnMask) {
-        crate::trace!("Running {:?} init functions", mask);
+        trace!("Running {:?} init functions", mask);
         for group in self.init_groups.iter() {
             if group.mask == mask {
                 for entry in group.entries.iter() {
                     let total_fns = entry.fns.len();
-                    crate::trace!("Running functions init functions of order {} ({} total)", entry.order, total_fns);
+                    trace!("Running functions init functions of order {} ({} total)", entry.order, total_fns);
                     for index in entry.fns.iter().cloned() {
                         let index = index as usize;
                         let func = &self.init_fns[index];
-                        crate::trace!("Invoking {} {:?} init ({} out of {}) init functions", func.get_name(), mask, index + 1, total_fns);
+                        trace!("Invoking {} {:?} init ({} out of {}) init functions", func.get_name(), mask, index + 1, total_fns);
                         unsafe {
                             func.try_init(mask);
                         }
-                        crate::trace!("Done");
+                        trace!("Done");
                     }
                 }
             }
         }
-        crate::trace!("Done running {:?} init functions!", mask);
+        trace!("Done running {:?} init functions!", mask);
     }
 
     extern fn update(&mut self, ty: u32) {
@@ -182,7 +182,7 @@ bind_fn_detour_ip!(RUN_UPDATE, "48 8D 0D ? ? ? ? BA 01 00 00 00 E8 ? ? ? ? E8 ? 
 bind_fn_detour!(RUN_UPDATE_GROUP, "40 53 48 83 EC 20 48 8B 59 20 EB 0D 48 8B 03 48", 0, UpdateFn::run_group, (&mut UpdateFn) -> ());
 
 pub fn hook() {
-    crate::info!("Hooking init functions...");
+    info!("Hooking init functions...");
     lazy_static::initialize(&FN_MAP);
     lazy_static::initialize(&RUN_INIT);
     /*lazy_static::initialize(&RUN_UPDATE);

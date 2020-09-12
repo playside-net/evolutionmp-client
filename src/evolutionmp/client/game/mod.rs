@@ -131,7 +131,7 @@ pub fn is_loaded() -> bool {
 
 unsafe fn load_game_now(u: u8) -> u32 {
     crate::native::init();
-    crate::info!("Loading game...");
+    info!("Loading game...");
     let r = LOAD_GAME_NOW(u);
     done_loading_game();
     LOADED.store(true, Ordering::SeqCst);
@@ -141,7 +141,7 @@ unsafe fn load_game_now(u: u8) -> u32 {
 fn done_loading_game() {
     dlc::load_mp_maps();
 
-    crate::info!("Searching for script candidates...");
+    info!("Searching for script candidates...");
 
     let mut script_candidates = Vec::new();
 
@@ -159,7 +159,7 @@ fn done_loading_game() {
         }
     }
 
-    crate::info!("Found {} potential vm scripts", script_candidates.len());
+    info!("Found {} potential vm scripts", script_candidates.len());
 
     let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
     add_dll_directory(&dll_path);
@@ -168,13 +168,13 @@ fn done_loading_game() {
         .option(&format!("-XX:ErrorFile={}\\hs_err_pid_%%p.log", launcher_dir().display()))
         .option(&format!("-Duser.dir={}", launcher_dir().display()))
         .build().expect("failed to build jvm args");
-    crate::info!("Initializing VM... working dir is {:?}", std::env::current_dir());
+    info!("Initializing VM... working dir is {:?}", std::env::current_dir());
 
-    crate::info!("Starting VM...");
+    info!("Starting VM...");
     let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
     crate::runtime::start(script_candidates, vm);
 
-    crate::info!("Shutting down loading screen...");
+    info!("Shutting down loading screen...");
 
     script::shutdown_loading_screen();
     camera::fade_in(5000);

@@ -65,7 +65,17 @@ bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, D
 bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVTable);
 
 pub(crate) fn hook() {
-    crate::info!("Hooking filesystem...");
+    info!("Hooking filesystem...");
+    lazy_static::initialize(&GET_DEVICE);
+    lazy_static::initialize(&MOUNT_GLOBAL);
+    lazy_static::initialize(&UNMOUNT);
+    lazy_static::initialize(&PACK_FILE_INIT);
+    lazy_static::initialize(&PACK_FILE_OPEN);
+    lazy_static::initialize(&PACK_FILE_MOUNT);
+    lazy_static::initialize(&RELATIVE_DEVICE_SET_PATH);
+    lazy_static::initialize(&RELATIVE_DEVICE_MOUNT);
+    lazy_static::initialize(&KEY_STATE_INIT);
+
     lazy_static::initialize(&INITIAL_MOUNT);
 
     lazy_static::initialize(&DEVICE_VTABLE);
@@ -75,9 +85,17 @@ pub(crate) fn hook() {
 }
 
 extern fn initial_mount() {
-    crate::info!("Initial mount");
+    crate::info_message!("KEK", "Initial mount");
+    info!("Initial mount");
 
     INITIAL_MOUNT();
+
+    if let Some(pf) = PackFile::open("update.rpf", 4) {
+        info!("opened packfile: {}", pf.get_name());
+        for entry in pf.entries("/") {
+            info!("entry: {}", entry.get_name());
+        }
+    }
 }
 
 #[repr(C)]

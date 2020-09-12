@@ -152,7 +152,7 @@ macro_rules! bind_inner_field {
                             .get_box::<i32>()
                     };
                     let offset = *pattern + $offset;
-                    crate::info!("Got offset for {}.{}: 0x{:X} (0x{:X} + {})", stringify!($host), stringify!($name), offset, *pattern, $offset);
+                    info!("Got offset for {}.{}: 0x{:X} (0x{:X} + {})", stringify!($host), stringify!($name), offset, *pattern, $offset);
                     NativeField::new(offset)
                 };
             )*
@@ -221,7 +221,7 @@ pub(crate) fn hook() {
     vehicle::hook();
     init_fns::hook();
 
-    crate::info!("Hooking generic natives...");
+    info!("Hooking generic natives...");
     lazy_static::initialize(&EXPANDED_RADAR);
     lazy_static::initialize(&REVEAL_FULL_MAP);
     lazy_static::initialize(&CURSOR_SPRITE);
@@ -229,7 +229,7 @@ pub(crate) fn hook() {
 }
 
 pub(crate) fn init() {
-    crate::info!("Initializing natives...");
+    info!("Initializing natives...");
     lazy_static::initialize(&NATIVES);
     vehicle::init();
     HOOKS.replace(Some(HashMap::new()));
@@ -357,7 +357,7 @@ impl<'a> Iterator for NativeGroupIterator<'a> {
         if index < self.group.len() {
             self.index += 1;
             let hash = self.group.get_hash(index);
-            //crate::info!("Native: 0x{:016X}", hash);
+            //info!("Native: 0x{:016X}", hash);
             let handler = self.group.handlers[index];
             Some((hash, handler))
         } else {

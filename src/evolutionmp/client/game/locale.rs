@@ -16,15 +16,15 @@ impl TranslationTable {
         if let Some(translation) = table.get(&hash) {
             return translation.as_bytes_with_nul().as_ptr();
         }
-        //crate::info!("getting text for hash 0x{:08X}", hash.0);
+        //info!("getting text for hash 0x{:08X}", hash.0);
         let result = GET_TEXT(self, hash);
-        //crate::info!("got text {} for hash 0x{:08X}", CStr::from_ptr(result as _).to_string_lossy(), hash.0);
+        //info!("got text {} for hash 0x{:08X}", CStr::from_ptr(result as _).to_string_lossy(), hash.0);
         result
     }
 }
 
 pub fn hook() {
-    crate::info!("Hooking locales...");
+    info!("Hooking locales...");
     lazy_static::initialize(&GET_TEXT);
     lazy_static::initialize(&GET_TEXT2);
 }

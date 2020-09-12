@@ -85,12 +85,12 @@ unsafe extern fn script_no(script: &'static mut ScriptThread, ops: u32) -> RageT
 }
 
 unsafe extern fn script_access(script: &'static mut ScriptThread, unk: *mut ()) -> bool {
-    crate::info!("Script {} asked for access to {:p}", script.get_name().to_string_lossy(), unk);
+    info!("Script {} asked for access to {:p}", script.get_name().to_string_lossy(), unk);
     true
 }
 
 pub(crate) fn hook() {
-    crate::info!("Hooking scripts...");
+    info!("Hooking scripts...");
     lazy_static::initialize(&THREAD_COLLECTION);
     lazy_static::initialize(&THREAD_ID);
     lazy_static::initialize(&THREAD_COUNT);

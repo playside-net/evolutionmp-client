@@ -56,7 +56,7 @@ impl ScriptNetwork {
         match bincode::serialize(message) {
             Ok(data) => Some(data),
             Err(e) => {
-                crate::error!("Error serializing message `{:?}`: {:?}", message, e);
+                error!("Error serializing message `{:?}`: {:?}", message, e);
                 None
             }
         }
@@ -82,11 +82,11 @@ impl ScriptNetwork {
             true,
         ) {
             FrontendButtons::Retry => {
-                crate::info!("Trying to reconnect...");
+                info!("Trying to reconnect...");
                 true
             }
             _ => {
-                crate::info!("Exiting game");
+                info!("Exiting game");
                 std::process::exit(-1);
             }
         }
@@ -99,7 +99,7 @@ impl Script for ScriptNetwork {
             let local_player = Ped::local();
             if let Some(local_vehicle) = local_player.get_in_vehicle(false) {}
             if let Ok(event) = receiver.try_recv() {
-                crate::info!("Received net event: {:?}", event);
+                info!("Received net event: {:?}", event);
                 /*if self.connection_failed("Timed out") {
                     self.receiver = None;
                     return;
@@ -122,7 +122,7 @@ impl Script for ScriptNetwork {
                             social_club,
                             pid: std::process::id(),
                         }, Some(0)) {
-                            crate::error!("Handshake failed");
+                            error!("Handshake failed");
                             /*if self.connection_failed("Handshake failed") {
                                 continue;
                             }*/
@@ -131,7 +131,7 @@ impl Script for ScriptNetwork {
                         break;
                     }
                     Err(e) => {
-                        crate::error!("Server connection failed: {}", e);
+                        error!("Server connection failed: {}", e);
                         /*if self.connection_failed(&format!("Socket error: {}", e)) {
                             continue;
                         }*/

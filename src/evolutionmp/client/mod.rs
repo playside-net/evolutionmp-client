@@ -1,4 +1,4 @@
-use std::ffi::{CString, OsString};
+use std::ffi::{CString, OsString, CStr};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -15,15 +15,16 @@ use winapi::um::winbase::{
     FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_HMODULE,
     FORMAT_MESSAGE_FROM_SYSTEM, FormatMessageW, LocalFree,
 };
-use winapi::um::winnt::{EXCEPTION_POINTERS, LANG_NEUTRAL, LONG, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, SUBLANG_DEFAULT, EXCEPTION_RECORD, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR};
+use winapi::um::winnt::{EXCEPTION_POINTERS, LANG_NEUTRAL, LONG, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, SUBLANG_DEFAULT, EXCEPTION_RECORD, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR, LPCSTR};
 use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC};
 use wio::wide::FromWide;
 
 use game::GameState;
 
-use crate::{bind_field, bind_field_ip, debug, error, info, LOG_PANIC, mem};
+use crate::{bind_field, bind_field_ip, LOG_PANIC, mem};
 use crate::client::pattern::RET;
 use crate::network::PORT;
+use widestring::WideCStr;
 
 pub mod win;
 pub mod native;
@@ -179,7 +180,7 @@ impl Window {
 }
 
 macro_rules! proc_detour {
-    ($name:ident,$module:literal,$proc:literal,$repl:expr,fn($($arg:ty),*)->$ret:ty) => {
+    ($name:ident,$module:literal,$proc:literal,$repl:expr,($($arg:ty),*)->$ret:ty) => {
         lazy_static::lazy_static! {
             static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let module = CString::new($module).unwrap();
@@ -211,8 +212,26 @@ unsafe extern fn create_window(ex_style: DWORD, class_name: LPWSTR, window_name:
 }
 
 proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window,
-    fn(DWORD, LPWSTR, LPWSTR, DWORD, i32, i32, i32, i32, Window, HMENU, HINSTANCE, LPVOID) -> Window
+    (DWORD, LPWSTR, LPWSTR, DWORD, i32, i32, i32, i32, Window, HMENU, HINSTANCE, LPVOID) -> Window
 );
+
+proc_detour!(OUTPUT_DEBUG_STRING_A, "kernel32.dll", "OutputDebugStringA", debug_a,
+    (LPCSTR) -> ()
+);
+
+proc_detour!(OUTPUT_DEBUG_STRING_W, "kernel32.dll", "OutputDebugStringW", debug_w,
+    (LPWSTR) -> ()
+);
+
+unsafe extern fn debug_a(text: LPCSTR) {
+    let text = CStr::from_ptr(text);
+    info!("Debugger output: {}", text.to_string_lossy())
+}
+
+unsafe extern fn debug_w(text: LPWSTR) {
+    let text = WideCStr::from_ptr_str(text);
+    info!("Debugger output: {}", text.to_string_lossy())
+}
 
 unsafe fn initialize(window: &Window) {
     console::attach();
@@ -259,6 +278,8 @@ fn attach() {
         if AddVectoredExceptionHandler(0, Some(except)).is_null() {
             panic!("Unable to set exception handler");
         }
+        lazy_static::initialize(&OUTPUT_DEBUG_STRING_A);
+        lazy_static::initialize(&OUTPUT_DEBUG_STRING_W);
         lazy_static::initialize(&CREATE_WINDOW);
     }
 }
@@ -312,7 +333,7 @@ pub extern "system" fn DllMain(instance: HINSTANCE, reason: DllCallReason, _rese
             detach();
         }
         _ => {
-            //crate::info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })
+            //info!("{:?}: {:?}", other, unsafe { GetCurrentThreadId() })
         }
     }
     TRUE

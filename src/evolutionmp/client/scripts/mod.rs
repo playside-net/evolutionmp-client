@@ -10,7 +10,7 @@ pub mod fishing;
 pub mod network;
 
 pub fn init(server: SocketAddr) {
-    crate::info!("Initializing scripts");
+    info!("Initializing scripts");
 
     crate::native::script::run("clean_world", ScriptCleanWorld::new());
     crate::native::script::run("java", ScriptJava::new());

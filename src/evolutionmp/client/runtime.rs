@@ -308,13 +308,13 @@ unsafe extern fn propagate(_env: &JNIEnv, _script: JObject, _event: JObject<'sta
 unsafe extern fn info(_env: &JNIEnv, _class: JClass, line: JObject) {
     let env = attach_thread();
     let line = String::from_java_object(&env, line);
-    crate::info!(target: "script", "{}", line);
+    info!(target: "script", "{}", line);
 }
 
 unsafe extern fn error(_env: &JNIEnv, _class: JClass, line: JObject) {
     let env = attach_thread();
     let line = String::from_java_object(&env, line);
-    crate::error!(target: "script", "{}", line);
+    error!(target: "script", "{}", line);
 }
 
 unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject, result: JObject) {

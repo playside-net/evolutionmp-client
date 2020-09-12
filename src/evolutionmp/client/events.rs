@@ -190,7 +190,7 @@ impl NativeEvent {
 pub(crate) static EVENTS: ThreadSafe<RefCell<Option<VecDeque<NativeEvent>>>> = ThreadSafe::new(RefCell::new(None));
 
 pub fn push_native_event(event: NativeEvent) {
-    crate::info!("Got native event: {:?}", event);
+    info!("Got native event: {:?}", event);
     if let Ok(mut events) = EVENTS.try_borrow_mut() {
         if let Some(events) = events.as_mut() {
             events.push_back(event);
@@ -219,13 +219,13 @@ pub unsafe extern fn call_event(group: &(), event: Option<&Event>) -> *mut () {
                 break;
             }
         }
-        crate::info!("Called event id {} ({} args: {:?})", event.get_id(), arg_count, &args[..arg_count]);
+        info!("Called event id {} ({} args: {:?})", event.get_id(), arg_count, &args[..arg_count]);
     }
     CALL_EVENT(group, event)
 }
 
 pub fn init() {
-    crate::info!("Intializing native events...");
+    info!("Intializing native events...");
     EVENTS.replace(Some(VecDeque::new()));
 
     //lazy_static::initialize(&CALL_EVENT);
