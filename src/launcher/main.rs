@@ -48,7 +48,7 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
         .expect(&format!("{} not found", gta_exe));
     println!("Found GTA5.exe process with pid: {} ({:p})", proc.get_pid(), proc.inner());
     loop {
-        match proc.inject_library(&client_dll) {
+        match proc.inject_library(client_dll) {
             Ok(exit_code) => {
                 match exit_code {
                     0 | 1 => {
@@ -78,6 +78,6 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Pa
 }
 
 fn is_process_alive<S>(file_name: S) -> bool where S: AsRef<str> {
-    ProcessIterator::new(TH32CS_SNAPPROCESS).unwrap().any(move |p| &p.get_name().to_string_lossy() == file_name.as_ref())
+    ProcessIterator::new(TH32CS_SNAPPROCESS).unwrap().any(move |p| &p.get_name() == file_name.as_ref())
 }
 

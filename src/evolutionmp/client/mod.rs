@@ -1,4 +1,4 @@
-use std::ffi::{CString, OsString, CStr};
+use std::ffi::{CString, OsString, CStr, OsStr};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -24,7 +24,6 @@ use game::GameState;
 use crate::{bind_field, bind_field_ip, LOG_PANIC, mem};
 use crate::client::pattern::RET;
 use crate::network::PORT;
-use widestring::WideCStr;
 
 pub mod win;
 pub mod native;
@@ -50,12 +49,12 @@ unsafe fn print_address_info(addr: *mut c_void, line: Option<u32>, symbol_name: 
         let mut name = [0; MAX_PATH];
         let len = GetModuleFileNameW(mbi.AllocationBase.cast(), name.as_mut_ptr(), MAX_PATH as u32);
         if len != 0 {
-            let name = widestring::WideCStr::from_ptr_with_nul(name.as_ptr(), len as usize).to_string_lossy();
+            let name = OsString::from_wide_ptr(name.as_ptr(), len as usize);
             let offset = addr as u64 - mbi.AllocationBase as u64;
             if let Some(line) = line {
-                debug!(target: LOG_PANIC, " at {} (line: {}) in '{}' + 0x{:X}", symbol_name, line, name, offset)
+                debug!(target: LOG_PANIC, " at {} (line: {}) in '{}' + 0x{:X}", symbol_name, line, name.to_string_lossy(), offset)
             } else {
-                debug!(target: LOG_PANIC, " at {} in '{}' + 0x{:X}", symbol_name, name, offset)
+                debug!(target: LOG_PANIC, " at {} in '{}' + 0x{:X}", symbol_name, name.to_string_lossy(), offset)
             }
         }
     }
@@ -229,7 +228,7 @@ unsafe extern fn debug_a(text: LPCSTR) {
 }
 
 unsafe extern fn debug_w(text: LPWSTR) {
-    let text = WideCStr::from_ptr_str(text);
+    let text = OsString::from_wide_ptr_null(text);
     info!("Debugger output: {}", text.to_string_lossy())
 }
 
@@ -289,24 +288,6 @@ fn detach() {
     unsafe {
         crate::win::input::unhook();
     }
-}
-
-#[cfg(target_os = "windows")]
-#[macro_export]
-macro_rules! error_message {
-    ($caption:expr,$($arg:tt)*) => {
-        use crate::win::user::*;
-        unsafe { message_box(None, format!($($arg)*), $caption, MessageBoxButtons::Ok, Some(MessageBoxIcon::Error)) };
-    };
-}
-
-#[cfg(target_os = "windows")]
-#[macro_export]
-macro_rules! info_message {
-    ($caption:expr,$($arg:tt)*) => {
-        use crate::win::user::*;
-        unsafe { message_box(None, format!($($arg)*), $caption, MessageBoxButtons::Ok, Some(MessageBoxIcon::Information)) };
-    };
 }
 
 #[repr(u32)]

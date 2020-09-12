@@ -1,19 +1,18 @@
 use std::cell::UnsafeCell;
 use std::error::Error;
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, OsString, OsStr};
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr::null_mut;
 
-use widestring::{WideCStr, WideCString};
 use winapi::ctypes::c_void;
 use winapi::shared::basetsd::SIZE_T;
 use winapi::shared::minwindef::{DWORD, FALSE, FARPROC, HINSTANCE, HMODULE, LPVOID, MAX_PATH, TRUE};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress};
+use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress, GetModuleHandleA};
 use winapi::um::memoryapi::{ReadProcessMemory, VirtualAllocEx, VirtualFreeEx, WriteProcessMemory};
 use winapi::um::processthreadsapi::{CreateRemoteThreadEx, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess, OpenProcessToken};
 use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
@@ -23,6 +22,7 @@ use winapi::um::winbase::{INFINITE, LookupPrivilegeValueW, THREAD_PRIORITY_HIGHE
 use winapi::um::winnt::{LUID_AND_ATTRIBUTES, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY};
 
 use crate::win::thread::ThreadHandle;
+use wio::wide::{FromWide, ToWide};
 
 pub fn get_current_process() -> ProcessHandle {
     ProcessHandle::from(unsafe { GetCurrentProcess() })
@@ -37,47 +37,21 @@ pub fn get_process<S>(file_name: S, desired_access: DWORD) -> Option<ProcessHand
     None
 }
 
-unsafe fn set_privilege(privilege: &str, value: bool) -> bool {
-    let privilege = WideCString::from_str(privilege).unwrap();
-    let mut token: HANDLE = null_mut();
-    if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, &mut token) == TRUE {
-        let mut token_privileges = TOKEN_PRIVILEGES {
-            PrivilegeCount: 1,
-            Privileges: [LUID_AND_ATTRIBUTES {
-                Attributes: if value { SE_PRIVILEGE_ENABLED } else { 0 },
-                ..Default::default()
-            }],
-        };
-        if LookupPrivilegeValueW(null_mut(), privilege.as_ptr(), &mut token_privileges.Privileges[0].Luid) == TRUE {
-            if AdjustTokenPrivileges(token, FALSE, &mut token_privileges, std::mem::size_of::<TOKEN_PRIVILEGES>() as u32, null_mut(), null_mut()) == TRUE {
-                CloseHandle(token);
-                return true;
-            }
-        }
-    } else {
-        panic!("Process token opening failed: {}", GetLastError());
-    }
-    CloseHandle(token);
-    false
-}
-
-pub fn get_procedure_address(module: &str, procedure: &str) -> Result<FARPROC, InjectionError> {
-    let module_str = WideCString::from_str(module).unwrap();
-    let procedure_str = CString::new(procedure).unwrap();
+pub fn get_procedure_address<'a>(module_str: &'a CStr, procedure_str: &'a CStr) -> Result<FARPROC, InjectionError<'a>> {
     let module: HMODULE = unsafe {
-        GetModuleHandleW(module_str.as_ptr())
+        GetModuleHandleA(module_str.as_ptr())
     };
 
     if module.is_null() {
-        return Err(InjectionError::MissingModule(module_str.to_string_lossy()));
+        return Err(InjectionError::MissingModule(module_str));
     }
 
     let procedure = unsafe {
-        GetProcAddress(module, procedure_str.as_ptr() as _)
+        GetProcAddress(module, procedure_str.as_ptr())
     };
 
     if procedure.is_null() {
-        Err(InjectionError::MissingModuleProcedure(module_str.to_string_lossy(), String::from(procedure_str.to_str().unwrap())))
+        Err(InjectionError::MissingModuleProcedure(module_str, procedure_str))
     } else {
         Ok(procedure)
     }
@@ -89,38 +63,9 @@ pub unsafe fn create_elevated_thread(thread: ElevatedThread) -> bool {
     CloseHandle(CreateThread(null_mut(), 0, Some(thread), null_mut(), THREAD_PRIORITY_HIGHEST, null_mut())) == TRUE
 }
 
-pub struct ModuleHandle {
-    inner: HINSTANCE
-}
-
-impl ModuleHandle {
-    pub fn get_current() -> ModuleHandle {
-        let inner = unsafe { GetModuleHandleW(null_mut()) };
-        ModuleHandle { inner }
-    }
-
-    pub fn find_by_name(name: String) -> Option<ModuleHandle> {
-        let name = WideCString::from_str(&name).unwrap();
-        let inner = unsafe { GetModuleHandleW(name.as_ptr()) };
-        if inner.is_null() {
-            None
-        } else {
-            Some(ModuleHandle { inner })
-        }
-    }
-}
-
-impl std::ops::Deref for ModuleHandle {
-    type Target = HMODULE;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
 pub struct ModuleEntry {
     instance: HMODULE,
-    name: String,
+    name: OsString,
 }
 
 impl ModuleEntry {
@@ -128,7 +73,7 @@ impl ModuleEntry {
         self.instance
     }
 
-    pub fn get_name(&self) -> &String {
+    pub fn get_name(&self) -> &OsString {
         &self.name
     }
 
@@ -167,7 +112,7 @@ impl ProcessHandle {
                 for i in 0..(count as usize / size_of::<HMODULE>()) {
                     let module = modules[i];
                     if GetModuleFileNameExW(self.inner, module, mod_name.as_mut_ptr(), MAX_PATH as DWORD) != 0 {
-                        let name = WideCStr::from_ptr_str(mod_name.as_mut_ptr()).to_string_lossy();
+                        let name = OsString::from_wide_ptr_null(mod_name.as_ptr());
                         result.push(ModuleEntry {
                             instance: module,
                             name,
@@ -179,13 +124,13 @@ impl ProcessHandle {
         result
     }
 
-    pub fn inject_library(&self, dll_path: &Path) -> Result<u32, InjectionError> {
+    pub fn inject_library(&self, dll_path: PathBuf) -> Result<u32, InjectionError> {
         if !dll_path.exists() {
             return Err(InjectionError::FileDoesntExist);
         }
 
-        let load_library_address = get_procedure_address("Kernel32.dll", "LoadLibraryW")?;
-        let dll_path = WideCString::from_str(dll_path.to_string_lossy()).unwrap();
+        let load_library_address = get_procedure_address(c_str!("Kernel32.dll"), c_str!("LoadLibraryW"))?;
+        let dll_path = dll_path.into_os_string().to_wide_null();
         let alloc = self.virtual_alloc(&dll_path, null_mut(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE).unwrap();
 
         match self.create_thread(load_library_address, &alloc) {
@@ -330,8 +275,8 @@ impl From<PROCESSENTRY32W> for ProcessEntry {
 }
 
 impl ProcessEntry {
-    pub fn get_name(&self) -> WideCString {
-        WideCString::from_vec_with_nul(self.inner.szExeFile.iter().cloned().collect::<Vec<_>>()).unwrap()
+    pub fn get_name(&self) -> OsString {
+        OsString::from_wide_null(&self.inner.szExeFile[..])
     }
 
     pub fn open(&self, desired_access: DWORD, inherit_handle: bool) -> Result<ProcessHandle, DWORD> {
@@ -436,13 +381,13 @@ impl VirtualData for CString {
     }
 }
 
-impl VirtualData for WideCString {
+impl VirtualData for Vec<u16> {
     fn get_ptr(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr() as _
     }
 
     fn get_mut_ptr(&mut self) -> *mut c_void {
-        UnsafeCell::new(self.as_slice_with_nul().as_ptr()).get() as *mut c_void
+        self.as_mut_ptr() as _
     }
 
     fn get_size(&self) -> usize {
@@ -450,7 +395,7 @@ impl VirtualData for WideCString {
     }
 
     fn read(data: Vec<u8>) -> Self {
-        WideCString::from(unsafe { WideCStr::from_slice_with_nul_unchecked(std::mem::transmute(data.as_slice())) })
+        OsString::from_wide_null(unsafe { std::mem::transmute(data.as_slice()) }).to_wide_null()
     }
 }
 
@@ -522,7 +467,7 @@ impl std::fmt::Display for CreateThreadError {
 }
 
 #[derive(Debug)]
-pub enum InjectionError {
+pub enum InjectionError<'a> {
     InvalidProcessHandle,
     FileDoesntExist,
     AllocationFailed(VirtualAllocError),
@@ -534,8 +479,8 @@ pub enum InjectionError {
     LdrLoadDllMissing,
     LdrpLoadDllMissing,
     InvalidFlags,
-    MissingModule(String),
-    MissingModuleProcedure(String, String),
+    MissingModule(&'a CStr),
+    MissingModuleProcedure(&'a CStr, &'a CStr),
     Unknown(u32),
     CantCreateThread(CreateThreadError),
     Th32Fail,
@@ -543,7 +488,7 @@ pub enum InjectionError {
     AlreadyInjected,
 }
 
-impl std::fmt::Display for InjectionError {
+impl<'a> std::fmt::Display for InjectionError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             InjectionError::InvalidProcessHandle => f.write_str("Invalid process handle"),
@@ -557,8 +502,8 @@ impl std::fmt::Display for InjectionError {
             InjectionError::LdrLoadDllMissing => f.write_str("ldrloaddll is missing"),
             InjectionError::LdrpLoadDllMissing => f.write_str("ldrploaddll is missing"),
             InjectionError::InvalidFlags => f.write_str("Invalid flags"),
-            InjectionError::MissingModule(module) => f.write_fmt(format_args!("Missing module `{}`", module)),
-            InjectionError::MissingModuleProcedure(module, proc) => f.write_fmt(format_args!("Missing procedure `{}` in module `{}`", module, proc)),
+            InjectionError::MissingModule(module) => f.write_fmt(format_args!("Missing module `{}`", module.to_string_lossy())),
+            InjectionError::MissingModuleProcedure(module, proc) => f.write_fmt(format_args!("Missing procedure `{}` in module `{}`", module.to_string_lossy(), proc.to_string_lossy())),
             InjectionError::Unknown(code) => f.write_fmt(format_args!("Unknown error: {}", code)),
             InjectionError::CantCreateThread(err) => f.write_fmt(format_args!("Cannot create thread: {}", err)),
             InjectionError::Th32Fail => f.write_str("TH32 failed"),

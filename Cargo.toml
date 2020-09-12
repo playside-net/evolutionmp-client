@@ -20,7 +20,6 @@ dirs = "*"
 lazy_static = "*"
 field-offset = "*"
 cgmath = { version = "*", features = ["serde"] }
-widestring = "*"
 jni-dynamic = { git = "https://github.com/Radviger/jni-dynamic-rs", features = ["invocation"] }
 chrono = "*"
 log = "*"

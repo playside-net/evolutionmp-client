@@ -85,7 +85,6 @@ pub(crate) fn hook() {
 }
 
 extern fn initial_mount() {
-    crate::info_message!("KEK", "Initial mount");
     info!("Initial mount");
 
     INITIAL_MOUNT();

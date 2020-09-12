@@ -1,12 +1,12 @@
-use std::ffi::CString;
+use std::ffi::{CString, OsString};
 use std::ptr::null_mut;
 use std::sync::mpsc::{channel, Sender};
 use std::time::{Duration, Instant};
 
-use widestring::WideCStr;
 use winapi::shared::minwindef::{HKL, LPARAM, LRESULT, UINT, WPARAM};
 use winapi::shared::windef::HWND;
 use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC};
+use wio::wide::FromWide;
 
 use crate::events::ScriptEvent;
 use crate::Window;
@@ -116,7 +116,7 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
             GetKeyboardState(key_state.as_mut_ptr());
             let mut buf = [0u16; 2];
             let len = ToUnicodeEx(vk, scan_code as u32, key_state.as_mut_ptr(), buf.as_mut_ptr(), 2, 0, layout);
-            let chars = WideCStr::from_ptr_with_nul(buf.as_ptr(), len as usize).to_string().expect("chars conversation failed");
+            let chars = OsString::from_wide_ptr(buf.as_ptr(), len as usize).into_string().expect("chars conversation failed");
             if len == 1 {
                 let chr = chars.chars().next().unwrap();
                 push_event(InputEvent::Keyboard(KeyboardEvent::Char(chr)))
