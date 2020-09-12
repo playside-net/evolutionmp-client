@@ -31,15 +31,15 @@ bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
 bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B F9", 2, u32);
 bind_field_ip!(SCRIPT_MANAGER, "74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D", 13, ScriptManager);
 
-bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, fn(&mut ScriptThread) -> ());
-bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, fn(&mut ScriptThread) -> ());
-bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, fn(&mut ScriptThread, u32) -> RageThreadState);
+bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, (&mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, (&mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, (&mut ScriptThread, u32) -> RageThreadState);
 
-bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, fn(*mut u8, u32, u32) -> *mut u8);
-bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, fn() -> ());
-bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, fn() -> ());
-bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_no, fn(&'static mut ScriptThread, u32) -> RageThreadState);
-bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_access, fn(&'static mut ScriptThread, *mut ()) -> bool);
+bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, (*mut u8, u32, u32) -> *mut u8);
+bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, () -> ());
+bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, () -> ());
+bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_no, (&'static mut ScriptThread, u32) -> RageThreadState);
+bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_access, (&'static mut ScriptThread, *mut ()) -> bool);
 
 unsafe extern fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u8 {
     let result = SCRIPT_POST_INIT(name, p2, p3);
@@ -137,7 +137,7 @@ fn with_thread<A>(thread: &mut ScriptThreadRuntime, mut action: A) where A: FnMu
 #[repr(C)]
 pub struct ScriptManagerVTable {
     destructor: extern fn(this: *mut ScriptManager),
-    fn1: extern fn(this: *mut ScriptManager),
+    fn1: extern fn(this: &mut ScriptManager),
     fn2: extern fn(this: *mut ScriptManager),
     fn3: extern fn(this: *mut ScriptManager),
     fn4: extern fn(this: *mut ScriptManager),
@@ -358,7 +358,7 @@ impl ScriptThreadRuntime {
         SCRIPT_THREAD_INIT(self);
         self.net_flag = true;
         self.can_remove_blips_from_other_scripts = true;
-        self.sz_exit_message = b"Normal exit\0".as_ptr() as _;
+        self.sz_exit_message = c_str!("Normal exit").as_ptr();
         if self.context.id == 0 {
             self.context.id = **THREAD_ID;
             unsafe { *THREAD_ID.as_mut() += 1; }

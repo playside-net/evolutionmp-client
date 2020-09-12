@@ -30,7 +30,7 @@ impl AsRef<Path> for RagePath {
 impl std::fmt::Display for RagePath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let path = <Self as AsRef<Path>>::as_ref(self);
-        f.pad(&format!("{}", path.display()))
+        f.write_fmt(format_args!("{}", path.display()))
     }
 }
 
@@ -47,17 +47,17 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
     }
 }
 
-bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, fn(RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
-bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, fn(RagePath, *const Device, bool) -> bool);
-bind_fn!(UNMOUNT, "E8 ? ? ? ? 85 C0 75 23 48 83", -0x22, fn(RagePath) -> ());
-bind_fn!(PACK_FILE_INIT, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E, fn(*mut PackFile) -> ());
-bind_fn!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, fn(*mut PackFile, RagePath, bool, i32, bool) -> bool);
-bind_fn!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, fn(*mut PackFile, RagePath) -> ());
-bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, fn(*mut RelativeDevice, RagePath, bool, Option<&Device>) -> ());
-bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, fn(*mut RelativeDevice, RagePath, bool) -> ());
-bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, fn(*mut KeyState, *const u8) -> ());
+bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, (RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
+bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, (RagePath, &Device, bool) -> bool);
+bind_fn!(UNMOUNT, "E8 ? ? ? ? 85 C0 75 23 48 83", -0x22, (RagePath) -> ());
+bind_fn!(PACK_FILE_INIT, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E, (&mut PackFile) -> ());
+bind_fn!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, (&mut PackFile, RagePath, bool, i32, bool) -> bool);
+bind_fn!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, (&mut PackFile, RagePath) -> ());
+bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, (&mut RelativeDevice, RagePath, bool, Option<&Device>) -> ());
+bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, (&mut RelativeDevice, RagePath, bool) -> ());
+bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, (&mut KeyState, *const u8) -> ());
 
-bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, fn() -> ());
+bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, () -> ());
 
 bind_field_ip!(DEVICE_VTABLE, "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15, DeviceVTable);
 bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15, DeviceVTable);

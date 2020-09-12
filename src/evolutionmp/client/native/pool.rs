@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use cgmath::{Array, Vector3, Zero};
+use cgmath::{Vector3, Zero};
 use jni_dynamic::JNIEnv;
 use jni_dynamic::objects::JClass;
 
@@ -14,12 +14,22 @@ use crate::game::prop::Prop;
 use crate::game::vehicle::Vehicle;
 use crate::native::ThreadSafe;
 
-bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, fn(Handle) -> *mut u8);
-bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, fn(Handle) -> *mut u8);
-bind_fn_ip!(PLAYER_ADDRESS, "B2 01 E8 ? ? ? ? 48 85 C0 74 1C 8A 88", 3, fn(Handle) -> *mut u8);
-bind_fn!(ENTITY_ADD_TO_POOL, "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 8B 15 ? ? ? ? 48 8B F9 48 83 C1 10 33 DB", 0, fn(*mut u8) -> Handle);
-//bind_fn!(ENTITY_ADD_TO_POOL, "48 F7 F9 49 8B 48 08 48 63 D0 C1 E0 08 0F B6 1C 11 03 D8", -0x68, fn(*mut u8) -> Handle);
-bind_fn!(ENTITY_POS, "48 8B DA E8 ? ? ? ? F3 0F 10 44 24", -6, fn(*mut u8, *mut f32) -> u64);
+pub enum CCamera {}
+pub enum CBlip {}
+pub enum CParticle {}
+pub enum CEntity {}
+pub enum CVehicle {}
+pub enum CPlayer {}
+pub enum CPed {}
+pub enum CProp {}
+pub enum CPickup {}
+
+bind_fn_ip!(PARTICLE_ADDRESS, "74 21 48 8B 48 20 48 85 C9 74 18 48 8B D6 E8", -10, (Handle) -> *mut u8);
+bind_fn_ip!(ENTITY_ADDRESS, "E8 ? ? ? ? 48 8B D8 48 85 C0 74 2E 48 83 3D", 1, (Handle) -> *mut u8);
+bind_fn_ip!(PLAYER_ADDRESS, "B2 01 E8 ? ? ? ? 48 85 C0 74 1C 8A 88", 3, (Handle) -> *mut u8);
+bind_fn!(ENTITY_ADD_TO_POOL, "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 8B 15 ? ? ? ? 48 8B F9 48 83 C1 10 33 DB", 0, (*mut u8) -> Handle);
+//bind_fn!(ENTITY_ADD_TO_POOL, "48 F7 F9 49 8B 48 08 48 63 D0 C1 E0 08 0F B6 1C 11 03 D8", -0x68, (*mut u8) -> Handle);
+bind_fn!(ENTITY_POS, "48 8B DA E8 ? ? ? ? F3 0F 10 44 24", -6, (*mut u8, &mut Vector3<f32>) -> u64);
 
 bind_field_ip!(PED, "48 8B 05 ? ? ? ? 41 0F BF C8 0F BF 40 10", 3, Option<Box<GenericPool<Ped>>>);
 bind_field_ip!(PROP, "48 8B 05 ? ? ? ? 8B 78 10 85 FF", 3, Option<Box<GenericPool<Prop>>>);
@@ -50,8 +60,8 @@ pub extern fn request_handle(_env: &JNIEnv, _class: JClass, address: u64) -> u32
     ENTITY_ADD_TO_POOL(address as _)
 }
 
-pub extern fn get_entity_pos(_env: &JNIEnv, _class: JClass, address: u64, buffer: u64) {
-    ENTITY_POS(address as _, buffer as _);
+pub extern fn get_entity_pos(_env: &JNIEnv, _class: JClass, address: u64, buffer: &mut Vector3<f32>) {
+    ENTITY_POS(address as _, buffer);
 }
 
 pub type GetHandleAddress = extern fn(Handle) -> *mut u8;
@@ -71,7 +81,7 @@ impl GlobalPool {
     }
 }
 
-pub trait Pool<T: Handleable> {
+pub trait Pool<T: Native> {
     fn is_valid(&self, index: u32) -> bool;
 
     fn get_address(&self, index: u32) -> *mut u8;
@@ -116,7 +126,7 @@ impl Pool<Vehicle> for VehiclePool {
 }
 
 #[repr(C)]
-pub struct GenericPool<T: Handleable> {
+pub struct GenericPool<T: Native> {
     start_address: u64,
     byte_array: ThreadSafe<*mut u8>,
     capacity: u32,
@@ -124,14 +134,14 @@ pub struct GenericPool<T: Handleable> {
     _ty: PhantomData<T>,
 }
 
-impl<T> GenericPool<T> where T: Handleable {
+impl<T> GenericPool<T> where T: Native {
     pub fn mask(&self, index: u32) -> u64 {
         let num1 = unsafe { (self.byte_array.add(index as usize).read() & 0x80) as i64 };
         !((num1 | -num1) >> 63) as u64
     }
 }
 
-impl<T> Pool<T> for GenericPool<T> where T: Handleable {
+impl<T> Pool<T> for GenericPool<T> where T: Native {
     fn is_valid(&self, index: u32) -> bool {
         self.mask(index) != 0
     }
@@ -175,7 +185,7 @@ impl Pool<Camera> for CameraPool {
     }
 }
 
-pub struct PoolEntry<T: Handleable> {
+pub struct PoolEntry<T: Native> {
     address: *mut u8,
     _ty: PhantomData<T>,
 }
@@ -183,7 +193,7 @@ pub struct PoolEntry<T: Handleable> {
 impl<E> PoolEntry<E> where E: Entity {
     pub fn get_position(&self) -> Vector3<f32> {
         let mut pos = Vector3::zero();
-        ENTITY_POS(self.address, pos.as_mut_ptr());
+        ENTITY_POS(self.address, &mut pos);
         pos
     }
 
@@ -197,12 +207,12 @@ impl<E> PoolEntry<E> where E: Entity {
     }
 }
 
-pub struct PoolIterator<'a, T: Handleable> {
+pub struct PoolIterator<'a, T: Native> {
     pool: &'a dyn Pool<T>,
     index: u32,
 }
 
-impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
+impl<'a, T> Iterator for PoolIterator<'a, T> where T: Native {
     type Item = PoolEntry<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -222,13 +232,17 @@ impl<'a, T> Iterator for PoolIterator<'a, T> where T: Handleable {
     }
 }
 
-impl<'a, T> PoolIterator<'a, T> where T: Handleable {
-    pub fn new(pool: &dyn Pool<T>) -> PoolIterator<T> {
+impl<'a, N> PoolIterator<'a, N> where N: Native {
+    pub fn new(pool: &dyn Pool<N>) -> PoolIterator<N> {
         PoolIterator {
             pool,
             index: 0,
         }
     }
+}
+
+pub trait Native: Handleable {
+    type Repr;
 }
 
 pub trait Handleable {
@@ -251,6 +265,17 @@ macro_rules! impl_handle {
             fn get_handle(&self) -> crate::game::Handle {
                 self.handle
             }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_native {
+    ($ty:ident,$repr:ident) => {
+        crate::impl_handle!($ty);
+
+        impl crate::native::pool::Native for $ty {
+            type Repr = $repr;
         }
     };
 }

@@ -516,7 +516,7 @@ pub enum CreateThreadError {
 impl std::fmt::Display for CreateThreadError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            CreateThreadError::Unknown(code) => f.pad(&format!("Unknown error: {}", code))
+            CreateThreadError::Unknown(code) => f.write_fmt(format_args!("Unknown error: {}", code))
         }
     }
 }
@@ -546,24 +546,24 @@ pub enum InjectionError {
 impl std::fmt::Display for InjectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            InjectionError::InvalidProcessHandle => f.pad("Invalid process handle"),
-            InjectionError::FileDoesntExist => f.pad("File doesn't exist"),
-            InjectionError::AllocationFailed(err) => f.pad(&format!("Allocation failed: {}", err)),
-            InjectionError::InvalidFile => f.pad("Invalid file"),
-            InjectionError::NoX64File => f.pad("Not an x64 file"),
-            InjectionError::NoX86File => f.pad("Not an x86 file"),
-            InjectionError::ImageCantReloc => f.pad("Image cannot be relocated"),
-            InjectionError::NtdllMissing => f.pad("ntdll is missing"),
-            InjectionError::LdrLoadDllMissing => f.pad("ldrloaddll is missing"),
-            InjectionError::LdrpLoadDllMissing => f.pad("ldrploaddll is missing"),
-            InjectionError::InvalidFlags => f.pad("Invalid flags"),
-            InjectionError::MissingModule(module) => f.pad(&format!("Missing module `{}`", module)),
-            InjectionError::MissingModuleProcedure(module, proc) => f.pad(&format!("Missing procedure `{}` in module `{}`", module, proc)),
-            InjectionError::Unknown(code) => f.pad(&format!("Unknown error: {}", code)),
-            InjectionError::CantCreateThread(err) => f.pad(&format!("Cannot create thread: {}", err)),
-            InjectionError::Th32Fail => f.pad("TH32 failed"),
-            InjectionError::CantGetPeb => f.pad("Cannot get peb."),
-            InjectionError::AlreadyInjected => f.pad("Already injected"),
+            InjectionError::InvalidProcessHandle => f.write_str("Invalid process handle"),
+            InjectionError::FileDoesntExist => f.write_str("File doesn't exist"),
+            InjectionError::AllocationFailed(err) => f.write_fmt(format_args!("Allocation failed: {}", err)),
+            InjectionError::InvalidFile => f.write_str("Invalid file"),
+            InjectionError::NoX64File => f.write_str("Not an x64 file"),
+            InjectionError::NoX86File => f.write_str("Not an x86 file"),
+            InjectionError::ImageCantReloc => f.write_str("Image cannot be relocated"),
+            InjectionError::NtdllMissing => f.write_str("ntdll is missing"),
+            InjectionError::LdrLoadDllMissing => f.write_str("ldrloaddll is missing"),
+            InjectionError::LdrpLoadDllMissing => f.write_str("ldrploaddll is missing"),
+            InjectionError::InvalidFlags => f.write_str("Invalid flags"),
+            InjectionError::MissingModule(module) => f.write_fmt(format_args!("Missing module `{}`", module)),
+            InjectionError::MissingModuleProcedure(module, proc) => f.write_fmt(format_args!("Missing procedure `{}` in module `{}`", module, proc)),
+            InjectionError::Unknown(code) => f.write_fmt(format_args!("Unknown error: {}", code)),
+            InjectionError::CantCreateThread(err) => f.write_fmt(format_args!("Cannot create thread: {}", err)),
+            InjectionError::Th32Fail => f.write_str("TH32 failed"),
+            InjectionError::CantGetPeb => f.write_str("Cannot get peb."),
+            InjectionError::AlreadyInjected => f.write_str("Already injected"),
         }
     }
 }
@@ -582,11 +582,11 @@ impl Error for VirtualAllocError {}
 impl std::fmt::Display for VirtualAllocError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            VirtualAllocError::AllocationFailed(code) => f.pad(&format!("Virtual allocation failed: {}", code)),
-            VirtualAllocError::WriteFailed(code) => f.pad(&format!("Virtual write failed: {}", code)),
-            VirtualAllocError::WriteBytesMismatch(expected, written) => f.pad(&format!("Virtual write bytes mismatch: {} expected but {} written", expected, written)),
-            VirtualAllocError::ReadFailed(code) => f.pad(&format!("Virtual read failed: {}", code)),
-            VirtualAllocError::ReadBytesMismatch(expected, read) => f.pad(&format!("Virtual read bytes mismatch: {} expected but {} read", expected, read))
+            VirtualAllocError::AllocationFailed(code) => f.write_fmt(format_args!("Virtual allocation failed: {}", code)),
+            VirtualAllocError::WriteFailed(code) => f.write_fmt(format_args!("Virtual write failed: {}", code)),
+            VirtualAllocError::WriteBytesMismatch(expected, written) => f.write_fmt(format_args!("Virtual write bytes mismatch: {} expected but {} written", expected, written)),
+            VirtualAllocError::ReadFailed(code) => f.write_fmt(format_args!("Virtual read failed: {}", code)),
+            VirtualAllocError::ReadBytesMismatch(expected, read) => f.write_fmt(format_args!("Virtual read bytes mismatch: {} expected but {} read", expected, read))
         }
     }
 }

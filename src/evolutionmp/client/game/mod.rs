@@ -106,9 +106,9 @@ impl GameState {
 }*/
 
 //bind_field_ip!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
-//bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, fn() -> ());
-//bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, fn(u32) -> bool);
-bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, fn(u8) -> u32);
+//bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, () -> ());
+//bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, (u32) -> bool);
+bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, (u8) -> u32);
 
 pub fn hook() {
     locale::hook();
@@ -165,7 +165,7 @@ fn done_loading_game() {
     add_dll_directory(&dll_path);
     let args = InitArgsBuilder::new()
         .version(JNIVersion::V8)
-        .option(&format!("-XX:ErrorFile={}/hs_err_pid_%p.log", launcher_dir().join("crash-reports").display()))
+        .option(&format!("-XX:ErrorFile={}\\hs_err_pid_%%p.log", launcher_dir().display()))
         .option(&format!("-Duser.dir={}", launcher_dir().display()))
         .build().expect("failed to build jvm args");
     crate::info!("Initializing VM... working dir is {:?}", std::env::current_dir());

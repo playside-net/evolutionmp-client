@@ -8,6 +8,7 @@ use crate::hash::Hashable;
 use crate::game::streaming::{AnimDict, PedPhoto};
 use crate::native::{NativeStackValue, NativeVector3};
 use cgmath::{Vector3, MetricSpace, Zero};
+use crate::client::native::pool::CPed;
 
 pub fn get_pool() -> &'static GenericPool<Ped> {
     crate::native::pool::PED.as_ref().as_ref().expect("ped pool is not initialized")
@@ -174,7 +175,7 @@ impl Entity for Ped {
     }
 }
 
-crate::impl_handle!(Ped);
+crate::impl_native!(Ped, CPed);
 
 pub struct PedAppearance<'a> {
     ped: &'a Ped

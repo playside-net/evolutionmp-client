@@ -1,12 +1,13 @@
 use cgmath::{Quaternion, Vector3};
 
+use crate::client::native::pool::Native;
 use crate::game::streaming::AnimDict;
 use crate::hash::Hash;
 use crate::invoke;
 use crate::native::Addressable;
-use crate::native::pool::{self, Handleable};
+use crate::native::pool;
 
-pub trait Entity: Handleable {
+pub trait Entity: Native {
     fn exists(&self) -> bool {
         invoke!(bool, 0x7239B21A38F536BA, self.get_handle())
     }
@@ -171,7 +172,7 @@ impl<'a, E> Bone<'a, E> where E: Entity {
         self.entity
     }
 
-    pub fn attach(&self, entity: &dyn Entity, pos: Vector3<f32>, rotation: Vector3<f32>) {
+    pub fn attach<R>(&self, entity: &dyn Entity<Repr=R>, pos: Vector3<f32>, rotation: Vector3<f32>) {
         invoke!((), 0x6B9BBD38AB0796DF, entity.get_handle(), self.entity.get_handle(), self.index, pos, rotation, false, false, false, false, 2, true)
     }
 

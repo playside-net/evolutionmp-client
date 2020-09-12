@@ -1,14 +1,19 @@
 use super::Handle;
-use crate::{invoke, impl_handle};
+use crate::invoke;
 use crate::game::entity::Entity;
 use crate::game::ped::Ped;
 use crate::game::streaming::{Model, Resource};
 use crate::game::radio::RadioStation;
 use crate::game::worldprobe::ProbeEntity;
 use crate::hash::{Hashable, Hash};
-use crate::native::vehicle::{CURRENT_GEAR, CURRENT_RPM, HIGH_GEAR, WHEEL_SPEED, ACCELERATION, STEERING_SCALE, STEERING_ANGLE, GEARS, CLUTCH, TURBO, BRAKE_POWER, THROTTLE, THROTTLE_POWER, TRAIN_TRACK_NODE, LIGHTS, FUEL_LEVEL, ENGINE_TEMPERATURE, OIL_LEVEL, OIL_VOLUME, DASHBOARD_SPEED, HANDBRAKE, ENGINE_POWER};
+use crate::native::vehicle::{
+    RPM, WHEEL_SPEED, STEERING_SCALE, STEERING_ANGLE, NEXT_GEAR, CURRENT_GEAR, HIGH_GEAR, ALARM_TIME,
+    CLUTCH, TURBO, BRAKE_POWER, TRAIN_TRACK_NODE, LIGHTS, FUEL_LEVEL, THROTTLE, THROTTLE_POWER,
+    ENGINE_TEMPERATURE, OIL_LEVEL, OIL_VOLUME, DASHBOARD_SPEED, HANDBRAKE, ENGINE_POWER
+};
 use crate::native::pool::{Handleable, VehiclePool};
-use cgmath::{Vector3, Rad, Vector2};
+use cgmath::{Vector3, Vector2};
+use crate::client::native::pool::CVehicle;
 
 pub fn get_pool() -> &'static Box<VehiclePool> {
     crate::native::pool::VEHICLE.as_ref().as_ref().expect("vehicle pool is not initialized")
@@ -185,28 +190,36 @@ impl Vehicle {
         invoke!((), 0x4F1D4BE3A7F24601, self.handle, primary, secondary)
     }
 
-    pub fn get_current_gear(&self) -> i32 {
+    pub fn get_next_gear(&self) -> u8 {
+        NEXT_GEAR.get(self)
+    }
+
+    pub fn set_next_gear(&self, gear: u8) {
+        NEXT_GEAR.set(self, gear)
+    }
+
+    pub fn get_current_gear(&self) -> u8 {
         CURRENT_GEAR.get(self)
     }
 
-    pub fn set_current_gear(&self, gear: i32) {
+    pub fn set_current_gear(&self, gear: u8) {
         CURRENT_GEAR.set(self, gear)
     }
 
-    pub fn get_high_gear(&self) -> i32 {
+    pub fn get_high_gear(&self) -> u8 {
         HIGH_GEAR.get(self)
     }
 
-    pub fn set_high_gear(&self, high_gear: i32) {
-        HIGH_GEAR.set(self, high_gear)
+    pub fn set_high_gear(&self, gear: u8) {
+        HIGH_GEAR.set(self, gear)
     }
 
-    pub fn get_current_rpm(&self) -> f32 {
-        CURRENT_RPM.get(self)
+    pub fn get_rpm(&self) -> f32 {
+        RPM.get(self)
     }
 
-    pub fn set_current_rpm(&self, rpm: f32) {
-        CURRENT_RPM.set(self, rpm)
+    pub fn set_rpm(&self, rpm: f32) {
+        RPM.set(self, rpm)
     }
 
     pub fn get_dashboard_speed(&self) -> f32 {
@@ -221,12 +234,20 @@ impl Vehicle {
         WHEEL_SPEED.set(self, speed)
     }
 
-    pub fn get_acceleration(&self) -> f32 {
-        ACCELERATION.get(self)
+    pub fn get_throttle(&self) -> f32 {
+        THROTTLE.get(self)
     }
 
-    pub fn set_acceleration(&self, acceleration: f32) {
-        ACCELERATION.set(self, acceleration)
+    pub fn set_throttle(&self, throttle: f32) {
+        THROTTLE.set(self, throttle)
+    }
+
+    pub fn get_throttle_power(&self) -> f32 {
+        THROTTLE_POWER.get(self)
+    }
+
+    pub fn set_throttle_power(&self, power: f32) {
+        THROTTLE_POWER.set(self, power)
     }
 
     pub fn get_fuel(&self) -> f32 {
@@ -257,8 +278,20 @@ impl Vehicle {
         ENGINE_TEMPERATURE.set(self, temperature)
     }
 
+    pub fn get_alarm_time(&self) -> u16 {
+        ALARM_TIME.get(self)
+    }
+
+    pub fn set_alarm_time(&self, alarm_time: u16) {
+        ALARM_TIME.set(self, alarm_time)
+    }
+
     pub fn get_engine_power(&self) -> f32 {
         ENGINE_POWER.get(self)
+    }
+
+    pub fn set_engine_power(&self, power: f32) {
+        invoke!((), 0x93A3996368C94158, self.handle, power)
     }
 
     pub fn get_brake_power(&self) -> f32 {
@@ -273,20 +306,12 @@ impl Vehicle {
         STEERING_SCALE.set(self, scale)
     }
 
-    pub fn get_steering_angle(&self) -> Rad<f32> {
-        Rad(STEERING_ANGLE.get(self))
+    pub fn get_steering_angle(&self) -> f32 {
+        STEERING_ANGLE.get(self)
     }
 
-    pub fn set_steering_angle(&self, angle: Rad<f32>) {
-        STEERING_ANGLE.set(self, angle.0)
-    }
-
-    pub fn get_gears(&self) -> i32 {
-        GEARS.get(self)
-    }
-
-    pub fn set_gears(&self, gears: i32) {
-        GEARS.set(self, gears)
+    pub fn set_steering_angle(&self, angle: f32) {
+        STEERING_ANGLE.set(self, angle)
     }
 
     pub fn get_clutch(&self) -> f32 {
@@ -303,22 +328,6 @@ impl Vehicle {
 
     pub fn set_turbo(&self, turbo: f32) {
         TURBO.set(self, turbo)
-    }
-
-    pub fn get_throttle(&self) -> f32 {
-        THROTTLE.get(self)
-    }
-
-    pub fn set_throttle(&self, throttle: f32) {
-        THROTTLE.set(self, throttle)
-    }
-
-    pub fn get_throttle_power(&self) -> f32 {
-        THROTTLE_POWER.get(self)
-    }
-
-    pub fn set_throttle_power(&self, power: f32) {
-        THROTTLE_POWER.set(self, power)
     }
 
     pub fn is_handbrake(&self) -> bool {
@@ -447,6 +456,10 @@ impl Vehicle {
         invoke!(Option<Ped>, 0x83F969AA1EE2A664, self.handle, seat)
     }
 
+    pub fn get_light_flags(&self) -> u32 {
+        LIGHTS.get(self)
+    }
+
     pub fn is_interior_light(&self) -> bool {
         let lights = LIGHTS.get(self);
         (lights & 0b01000000) > 0
@@ -459,6 +472,11 @@ impl Vehicle {
     pub fn get_indicator_light(&self) -> u8 {
         let lights = LIGHTS.get(self);
         lights.to_ne_bytes()[0]
+    }
+
+    pub fn is_engine_starting(&self) -> bool {
+        let lights = LIGHTS.get(self);
+        (lights >> 8 & 0b00100000) > 0
     }
 
     pub fn as_cargobob(&self) -> Option<VehicleCargobob> {
@@ -578,7 +596,7 @@ impl Entity for Vehicle {
     }
 }
 
-impl_handle!(Vehicle);
+crate::impl_native!(Vehicle, CVehicle);
 
 pub struct VehicleRadio<'a> {
     vehicle: &'a Vehicle
@@ -713,7 +731,7 @@ pub struct VehicleCargobob<'a> {
 }
 
 impl<'a> VehicleCargobob<'a> {
-    pub fn attach_entity(&self, entity: &dyn Entity, p2: i32, hook_offset: Vector3<f32>) {
+    pub fn attach_entity<R>(&self, entity: &dyn Entity<Repr=R>, p2: i32, hook_offset: Vector3<f32>) {
         invoke!((), 0xA1DD82F3CCF9A01E, self.vehicle.handle, entity.get_handle(), p2, hook_offset)
     }
 
@@ -753,7 +771,7 @@ impl<'a> VehicleCargobob<'a> {
         invoke!(bool, 0x6E08BF5B3722BAC9, self.vehicle.handle)
     }
 
-    pub fn detach_entity(&self, entity: &dyn Entity) {
+    pub fn detach_entity<R>(&self, entity: &dyn Entity<Repr=R>) {
         invoke!((), 0xAF03011701811146, self.vehicle.handle, entity.get_handle())
     }
 

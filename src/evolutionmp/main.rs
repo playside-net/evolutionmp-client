@@ -1,10 +1,12 @@
-#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics)]
+#![feature(llvm_asm, core_intrinsics, link_llvm_intrinsics, const_fn)]
 
 extern crate backtrace;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate byte_strings;
 
 use std::io::stdout;
 use std::panic::PanicInfo;

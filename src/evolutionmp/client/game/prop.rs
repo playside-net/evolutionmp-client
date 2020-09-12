@@ -1,11 +1,12 @@
 use cgmath::Vector3;
 
-use crate::{impl_handle, invoke};
+use crate::invoke;
 use crate::game::{Handle, Rgb};
 use crate::game::entity::Entity;
 use crate::game::streaming::{Model, Resource};
 use crate::hash::Hashable;
 use crate::native::pool::GenericPool;
+use crate::client::native::pool::CProp;
 
 pub fn get_pool() -> &'static GenericPool<Prop> {
     crate::native::pool::PROP.as_ref().as_ref().expect("prop pool is not initialized")
@@ -86,4 +87,4 @@ impl Entity for Prop {
     }
 }
 
-impl_handle!(Prop);
+crate::impl_native!(Prop, CProp);

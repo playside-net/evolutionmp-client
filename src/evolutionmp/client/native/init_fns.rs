@@ -177,9 +177,9 @@ lazy_static! {
     static ref FN_MAP: HashMap<Hash, &'static str> = KNOWN_INIT_FNS.iter().map(|f| (f.joaat(), *f)).collect();
 }
 
-bind_fn_detour_ip!(RUN_INIT, "BA 04 00 00 00 E8 ? ? ? ? E8 ? ? ? ? E8", 5, GameSkeleton::init, fn(&mut GameSkeleton, InitFnMask) -> ());
-bind_fn_detour_ip!(RUN_UPDATE, "48 8D 0D ? ? ? ? BA 01 00 00 00 E8 ? ? ? ? E8 ? ? ? ?", 12, GameSkeleton::update, fn(&mut GameSkeleton, u32) -> ());
-bind_fn_detour!(RUN_UPDATE_GROUP, "40 53 48 83 EC 20 48 8B 59 20 EB 0D 48 8B 03 48", 0, UpdateFn::run_group, fn(&mut UpdateFn) -> ());
+bind_fn_detour_ip!(RUN_INIT, "BA 04 00 00 00 E8 ? ? ? ? E8 ? ? ? ? E8", 5, GameSkeleton::init, (&mut GameSkeleton, InitFnMask) -> ());
+bind_fn_detour_ip!(RUN_UPDATE, "48 8D 0D ? ? ? ? BA 01 00 00 00 E8 ? ? ? ? E8 ? ? ? ?", 12, GameSkeleton::update, (&mut GameSkeleton, u32) -> ());
+bind_fn_detour!(RUN_UPDATE_GROUP, "40 53 48 83 EC 20 48 8B 59 20 EB 0D 48 8B 03 48", 0, UpdateFn::run_group, (&mut UpdateFn) -> ());
 
 pub fn hook() {
     crate::info!("Hooking init functions...");

@@ -4,11 +4,14 @@ use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::os::raw::c_char;
-use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::Mutex;
 
 use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3};
 use detour::{GenericDetour, RawDetour};
 
+use crate::client::native::pool::{CEntity, Native};
+use crate::client::pattern::{MemoryRegion, RageBox};
 use crate::game::{Handle, Rgb, Rgba};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
@@ -65,7 +68,7 @@ static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe:
 
 #[macro_export]
 macro_rules! bind_fn_detour {
-    ($name:ident,$pattern:literal,$offset:literal,$detour:path,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:path,($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
@@ -79,7 +82,7 @@ macro_rules! bind_fn_detour {
 
 #[macro_export]
 macro_rules! bind_fn_detour_ip {
-    ($name:ident,$pattern:literal,$offset:literal,$detour:path,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,$detour:path,($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
@@ -93,14 +96,21 @@ macro_rules! bind_fn_detour_ip {
 
 #[macro_export]
 macro_rules! mem {
-    ($pat:literal) => {
-        $crate::pattern::Pattern::from($pat).find()
-    };
+    ($pat:literal) => {{
+        let mut cache = crate::native::PATTERN_CACHE.lock().expect("mutex poisoned");
+        if let Some(region) = cache.get($pat).cloned() {
+            region
+        } else {
+            let region = $crate::pattern::Pattern::from($pat).find();
+            cache.insert($pat, region.clone());
+            region
+        }
+    }};
 }
 
 #[macro_export]
 macro_rules! bind_fn {
-    ($name:ident,$pattern:literal,$offset:literal,fn($($arg:ty),*) -> $ret:ty) => {
+    ($name:ident,$pattern:literal,$offset:literal,($($arg:ty),*) -> $ret:ty) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let ptr = $crate::mem!($pattern)
@@ -114,10 +124,10 @@ macro_rules! bind_fn {
 
 #[macro_export]
 macro_rules! bind_fn_ip {
-    ($name:ident,$pattern:literal,$offset:expr,fn($($arg:ty),*) -> $ret:ty) => {
-        bind_fn_ip!($name,$pattern,$offset,fn($($arg),*) -> $ret,4);
+    ($name:ident,$pattern:literal,$offset:expr,($($arg:ty),*) -> $ret:ty) => {
+        bind_fn_ip!($name,$pattern,$offset,($($arg),*) -> $ret,4);
     };
-    ($name:ident,$pattern:literal,$offset:expr,fn($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
+    ($name:ident,$pattern:literal,$offset:expr,($($arg:ty),*) -> $ret:ty,$ptr_len:literal) => {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let ptr = $crate::mem!($pattern)
@@ -125,6 +135,27 @@ macro_rules! bind_fn_ip {
                     .offset($offset).read_ptr($ptr_len).as_ptr();
                 std::mem::transmute(ptr)
             };
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! bind_inner_field {
+    ($host:ident,$pattern:literal,$(($pat_offset:literal, $name:ident,$ty:ty,$offset:literal)),*) => {
+        lazy_static::lazy_static! {
+            $(
+                pub static ref $name: crate::native::NativeField<$host, $ty> = {
+                    let pattern = unsafe {
+                        $crate::mem!($pattern)
+                            .expect(concat!("failed to find field pattern `", $pattern, "` for ", stringify!($host)))
+                            .offset($pat_offset)
+                            .get_box::<i32>()
+                    };
+                    let offset = *pattern + $offset;
+                    crate::info!("Got offset for {}.{}: 0x{:X} (0x{:X} + {})", stringify!($host), stringify!($name), offset, *pattern, $offset);
+                    NativeField::new(offset)
+                };
+            )*
         }
     };
 }
@@ -172,10 +203,11 @@ macro_rules! redirect {
 lazy_static! {
     pub static ref OBJECT_HASHES: HashMap<i32, &'static str> = object_hashes::HASHES.iter().cloned().collect::<_>();
     pub static ref NATIVES: Natives = Natives::new();
+    pub static ref PATTERN_CACHE: Mutex<HashMap<&'static str, Option<MemoryRegion>>> = Mutex::new(HashMap::new());
 }
 
-bind_fn!(SET_VECTOR_RESULTS, "83 79 18 ? 48 8B D1 74 4A FF 4A 18", 0, fn(*mut NativeCallContext) -> ());
-bind_fn!(GET_SCRIPT_ENTITY, "44 8B C1 49 8B 41 08 41 C1 F8 08 41 38 0C 00", -12, fn(u32) -> *mut ());
+bind_fn!(SET_VECTOR_RESULTS, "83 79 18 ? 48 8B D1 74 4A FF 4A 18", 0, (&mut NativeCallContext) -> ());
+bind_fn!(GET_SCRIPT_ENTITY, "44 8B C1 49 8B 41 08 41 C1 F8 08 41 38 0C 00", -12, (u32) -> RageBox<CEntity>);
 
 bind_field!(EXPANDED_RADAR, "33 C0 0F 57 C0 ? 0D", 7, bool);
 bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
@@ -730,51 +762,45 @@ impl NativeStackValue for Hash {}
 
 impl NativeStackValue for &mut Hash {}
 
-pub struct EntityField<T> where T: Sized {
-    offset: AtomicI32,
-    _ty: PhantomData<T>,
+pub struct NativeField<A, T> where A: Addressable, T: Sized {
+    offset: i32,
+    _ty_a: PhantomData<A>,
+    _ty_t: PhantomData<T>,
 }
 
-pub trait Addressable {
+pub trait Addressable: Native {
     fn get_address(&self) -> *mut u8;
 }
 
-impl<T> EntityField<T> where T: Sized {
-    pub const fn unset() -> EntityField<T> {
-        Self::predefined(0)
-    }
-
-    pub const fn predefined(offset: i32) -> EntityField<T> {
-        EntityField {
-            offset: AtomicI32::new(offset),
-            _ty: PhantomData,
+impl<A, T> NativeField<A, T> where A: Addressable, T: Sized {
+    pub(crate) const fn new(offset: i32) -> NativeField<A, T> {
+        NativeField {
+            offset,
+            _ty_a: PhantomData,
+            _ty_t: PhantomData,
         }
     }
 
-    pub(crate) fn set_offset(&self, offset: i32) {
-        self.offset.store(offset, Ordering::SeqCst)
-    }
-
     pub(crate) fn get_offset(&self) -> isize {
-        let offset = self.offset.load(Ordering::SeqCst) as isize;
+        let offset = self.offset as isize;
         assert_ne!(offset, 0, "field uninitialized");
         offset
     }
 
-    pub(crate) fn get_ptr(&self, target: &dyn Addressable) -> *mut T {
+    pub(crate) fn get_ptr(&self, target: &A) -> *mut T {
         let offset = self.get_offset();
         unsafe {
             target.get_address().offset(offset).cast::<T>()
         }
     }
 
-    pub fn set(&self, target: &dyn Addressable, value: T) {
+    pub fn set(&self, target: &A, value: T) {
         unsafe {
             self.get_ptr(target).write(value)
         }
     }
 
-    pub fn get(&self, target: &dyn Addressable) -> T {
+    pub fn get(&self, target: &A) -> T {
         unsafe {
             self.get_ptr(target).read()
         }

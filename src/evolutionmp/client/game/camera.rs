@@ -4,6 +4,7 @@ use crate::game::Handle;
 use crate::hash::{Hash, Hashable};
 use crate::{invoke, invoke_option};
 use crate::native::pool::Handleable;
+use crate::client::native::pool::CCamera;
 
 pub enum CameraShake {
     DeathFailInEffect,
@@ -334,4 +335,4 @@ impl Camera {
     }
 }
 
-crate::impl_handle!(Camera);
+crate::impl_native!(Camera, CCamera);

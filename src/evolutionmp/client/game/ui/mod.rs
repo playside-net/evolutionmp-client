@@ -9,7 +9,6 @@ use crate::{invoke, native};
 use crate::{bind_fn, mem};
 use crate::game::Rgba;
 use crate::hash::Hashable;
-use crate::pattern::XOR_32_64;
 use crate::win::input::{InputEvent, KeyboardEvent};
 
 pub mod notification;
@@ -17,7 +16,7 @@ pub mod notification;
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
 
-bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, fn(bool, u32) -> FrontendButtons);
+bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, (bool, u32) -> FrontendButtons);
 
 pub fn hook() {
     crate::info!("Hooking UI...");

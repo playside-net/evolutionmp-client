@@ -97,9 +97,9 @@ impl std::fmt::Display for Pattern {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for b in &self.nibbles {
             if let Some(b) = b {
-                f.pad(&format!("{:02X} ", *b))?;
+                f.write_fmt(format_args!("{:02X} ", *b))?;
             } else {
-                f.pad("? ")?;
+                f.write_str("? ")?;
             }
         }
         Ok(())
@@ -291,7 +291,7 @@ unsafe impl Send for MemoryRegion {}
 impl std::fmt::Display for MemoryRegion {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for i in 0..self.size {
-            f.pad(&format!("{:016X} ", unsafe { self.base.add(i).read() }))?;
+            f.write_fmt(format_args!("{:016X} ", unsafe { self.base.add(i).read() }))?;
         }
         Ok(())
     }

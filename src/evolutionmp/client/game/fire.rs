@@ -69,7 +69,7 @@ impl Fire {
         invoke!(Option<Self>, 0x6B83617E04503888, pos, max_children, gas)
     }
 
-    pub fn new_from_entity(entity: &dyn Entity) -> Option<Self> {
+    pub fn new_from_entity<R>(entity: &dyn Entity<Repr=R>) -> Option<Self> {
         invoke!(Option<Self>, 0xF6A9D9708F6F23DF, entity.get_handle())
     }
 

@@ -207,11 +207,10 @@ macro_rules! native_event {
     };
 }
 
-bind_fn_detour_ip!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, fn(*mut (), *mut Event) -> *mut ());
+bind_fn_detour_ip!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, (&(), Option<&Event>) -> *mut ());
 
-pub unsafe extern fn call_event(group: *mut (), event: *mut Event) -> *mut () {
-    if !event.is_null() {
-        let event = &*event;
+pub unsafe extern fn call_event(group: &(), event: Option<&Event>) -> *mut () {
+    if let Some(event) = event {
         let mut arg_count = 0;
         let mut args = [std::ptr::null::<()>(); 48];
         for i in 0..48 {

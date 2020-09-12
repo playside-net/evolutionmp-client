@@ -1,16 +1,21 @@
 use std::ffi::{CString, OsString};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use backtrace::{Backtrace, SymbolName};
 use detour::RawDetour;
 use winapi::ctypes::c_void;
-use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, LPVOID, MAX_PATH, TRUE};
+use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, HLOCAL, LPVOID, MAX_PATH, TRUE, HMODULE};
 use winapi::shared::windef::{HMENU, HWND};
-use winapi::um::errhandlingapi::AddVectoredExceptionHandler;
-use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress};
+use winapi::um::errhandlingapi::{AddVectoredExceptionHandler, GetLastError};
+use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress, LoadLibraryA};
 use winapi::um::memoryapi::VirtualQuery;
-use winapi::um::winnt::{EXCEPTION_POINTERS, LONG, LPWSTR, MEMORY_BASIC_INFORMATION};
+use winapi::um::winbase::{
+    FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_HMODULE,
+    FORMAT_MESSAGE_FROM_SYSTEM, FormatMessageW, LocalFree,
+};
+use winapi::um::winnt::{EXCEPTION_POINTERS, LANG_NEUTRAL, LONG, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, SUBLANG_DEFAULT, EXCEPTION_RECORD, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR};
 use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC};
 use wio::wide::FromWide;
 
@@ -18,7 +23,6 @@ use game::GameState;
 
 use crate::{bind_field, bind_field_ip, debug, error, info, LOG_PANIC, mem};
 use crate::client::pattern::RET;
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use crate::network::PORT;
 
 pub mod win;
@@ -38,7 +42,7 @@ bind_field_ip!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bo
 bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
 bind_field_ip!(HEAP_SIZE, "83 C8 01 48 8D 0D ? ? ? ? 41 B1 01 45 33 C0", 17, u32);
 
-unsafe fn print_address_info(addr: *mut c_void, line: u32, filename: Option<&Path>, symbol_name: SymbolName) {
+unsafe fn print_address_info(addr: *mut c_void, line: Option<u32>, symbol_name: SymbolName) {
     let mut mbi = MEMORY_BASIC_INFORMATION::default();
     let size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
     if VirtualQuery(addr, &mut mbi, size) == size {
@@ -47,10 +51,61 @@ unsafe fn print_address_info(addr: *mut c_void, line: u32, filename: Option<&Pat
         if len != 0 {
             let name = widestring::WideCStr::from_ptr_with_nul(name.as_ptr(), len as usize).to_string_lossy();
             let offset = addr as u64 - mbi.AllocationBase as u64;
-            if let Some(filename) = filename {
-                debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({} in {}:{})", name, offset, symbol_name, filename.display(), line)
+            if let Some(line) = line {
+                debug!(target: LOG_PANIC, " at {} (line: {}) in '{}' + 0x{:X}", symbol_name, line, name, offset)
             } else {
-                debug!(target: LOG_PANIC, " at '{}' + 0x{:X} ({})", name, offset, symbol_name)
+                debug!(target: LOG_PANIC, " at {} in '{}' + 0x{:X}", symbol_name, name, offset)
+            }
+        }
+    }
+}
+
+fn get_op(code: usize) -> &'static str {
+    match code {
+        0 => "reading",
+        8 => "DEP",
+        _ => "writing"
+    }
+}
+
+unsafe fn get_error_code_message(ntdll: HMODULE, rec: &EXCEPTION_RECORD) -> String {
+    match rec.ExceptionCode {
+        STATUS_ACCESS_VIOLATION => {
+            let address = rec.ExceptionInformation[1];
+            if rec.NumberParameters == 3 {
+                let op = get_op(rec.ExceptionInformation[0]);
+                format!("STATUS_ACCESS_VIOLATION {} 0x{:08X}", op, address)
+            } else {
+                String::from("STATUS_ACCESS_VIOLATION")
+            }
+        },
+        STATUS_IN_PAGE_ERROR => {
+            let address = rec.ExceptionInformation[1];
+            if rec.NumberParameters == 3 {
+                let op = get_op(rec.ExceptionInformation[0]);
+                let code = rec.ExceptionInformation[3];
+                format!("STATUS_IN_PAGE_ERROR {} 0x{:08X} with code 0x{:08X}", op, address, code)
+            } else {
+                String::from("STATUS_IN_PAGE_ERROR")
+            }
+        },
+        code => {
+            let mut buffer: LPWSTR = std::ptr::null_mut();
+            let strlen = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_HMODULE,
+                                        ntdll as _,
+                                        code,
+                                        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT) as _,
+                                        (&mut buffer as *mut LPWSTR) as LPWSTR,
+                                        0,
+                                        std::ptr::null_mut());
+
+            if buffer.is_null() {
+                let err = GetLastError();
+                format!("UNKNOWN (FormatMessageW() returned 0x{:08X})", err)
+            } else {
+                let message = OsString::from_wide_ptr(buffer, strlen as usize);
+                LocalFree(buffer as HLOCAL);
+                message.to_string_lossy().trim_matches(|c| c == '\r' || c == '\n').to_string()
             }
         }
     }
@@ -62,22 +117,22 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let rec = &mut *info.ExceptionRecord;
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
-        if code != 0x40010006 /*Debugger shit*/ && code != 0xE06D7363 /*NVIDIA shit*/ && code != 0x406D1388 {
-            let native = crate::native::CURRENT_NATIVE.load(Ordering::SeqCst);
-            if native != 0 {
-                error!(target: LOG_PANIC, "Error occurred while invoking native `0x{:016X}` (address: {:p}, code: 0x{:X})", native, addr, code);
-            } else {
-                error!(target: LOG_PANIC, "Unhandled exception occurred at address {:p} (code: 0x{:X})", addr, code);
-            }
-            print_address_info(addr, 0, None, SymbolName::new(b"<unknown>\0"));
-            let backtrace = Backtrace::new();
+        let ntdll = LoadLibraryA(c_str!("ntdll.dll").as_ptr());
+        let message = get_error_code_message(ntdll, rec);
+        let native = crate::native::CURRENT_NATIVE.load(Ordering::SeqCst);
+        if native != 0 {
+            error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X} caused by native invocation `0x{:016X}`: 0x{:08X} ({})", native, addr as u64, code, message);
+        } else {
+            error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X}: 0x{:08X} ({})", addr as u64, code, message);
+        }
 
-            for frame in backtrace.frames().iter()/*.skip_while(|f| f.symbol_address() != addr)*/ {
-                for symbol in frame.symbols() {
-                    let name = symbol.name().unwrap_or(SymbolName::new(b"<unknown>\0"));
-                    let addr = symbol.addr().unwrap_or(std::ptr::null_mut());
-                    let line = symbol.lineno().unwrap_or(0);
-                    print_address_info(addr, line, symbol.filename(), name);
+        let backtrace = Backtrace::new_starting_from(addr as _, false);
+
+        for frame in backtrace.frames().iter() {
+            for symbol in frame.symbols() {
+                if let Some(addr) = symbol.addr().clone() {
+                    let name = symbol.name().unwrap_or_else(|| SymbolName::new(b"<unknown>"));
+                    print_address_info(addr, symbol.lineno(), name);
                 }
             }
         }

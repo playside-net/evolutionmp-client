@@ -1,5 +1,6 @@
 use cgmath::Vector3;
 
+use crate::client::native::pool::CEntity;
 use crate::game::entity::Entity;
 use crate::game::Handle;
 use crate::hash::Hash;
@@ -12,7 +13,7 @@ pub struct Probe {
 }
 
 impl Probe {
-    pub fn new_ray(start: Vector3<f32>, end: Vector3<f32>, flags: i32, entity: &dyn Entity, p8: u32) -> Probe {
+    pub fn new_ray<R>(start: Vector3<f32>, end: Vector3<f32>, flags: i32, entity: &dyn Entity<Repr=R>, p8: u32) -> Probe {
         invoke!(Probe, 0x377906D8A31E5586, start, end, flags, entity.get_handle(), p8)
     }
 
@@ -62,4 +63,4 @@ impl Entity for ProbeEntity {
     }
 }
 
-crate::impl_handle!(ProbeEntity);
+crate::impl_native!(ProbeEntity, CEntity);

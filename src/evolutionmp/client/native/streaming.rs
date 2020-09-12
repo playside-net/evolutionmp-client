@@ -4,11 +4,11 @@ use crate::{bind_field, bind_field_ip, bind_fn};
 use crate::hash::Hash;
 use crate::native::TypeInfo;
 
-bind_fn!(INIT_MANIFEST_CHUNK, "48 8D 4F 10 B2 01 48 89 2F", -0x2E, fn(*const ()) -> ());
-bind_fn!(LOAD_MANIFEST_CHUNK, "45 38 AE C0 00 00 00 0F 95 C3 E8", -5, fn(*const ()) -> ());
-bind_fn!(CLEAR_MANIFEST_CHUNK, "33 FF 48 8D 4B 10 B2 01", -0x15, fn(*const ()) -> ());
-bind_fn!(ADD_PACK_FILE, "EB 15 48 8B 0B 40 38 7B 0C 74 07 E8", 11, fn(*const DataFileEntry) -> ());
-bind_fn!(REMOVE_PACK_FILE, "EB 15 48 8B 0B 40 38 7B 0C 74 07 E8", 18, fn(*const DataFileEntry) -> ());
+bind_fn!(INIT_MANIFEST_CHUNK, "48 8D 4F 10 B2 01 48 89 2F", -0x2E, (&()) -> ());
+bind_fn!(LOAD_MANIFEST_CHUNK, "45 38 AE C0 00 00 00 0F 95 C3 E8", -5, (&()) -> ());
+bind_fn!(CLEAR_MANIFEST_CHUNK, "33 FF 48 8D 4B 10 B2 01", -0x15, (&()) -> ());
+bind_fn!(ADD_PACK_FILE, "EB 15 48 8B 0B 40 38 7B 0C 74 07 E8", 11, (&DataFileEntry) -> ());
+bind_fn!(REMOVE_PACK_FILE, "EB 15 48 8B 0B 40 38 7B 0C 74 07 E8", 18, (&DataFileEntry) -> ());
 
 bind_field!(MANIFEST_CHUNK, "83 F9 08 75 43 48 8D 0D", 8, ());
 bind_field_ip!(MOUNTERS, "48 63 82 90 00 00 00 49 8B 8C C0 ? ? ? ? 48", 11, [PackFileMounter; 255]);

@@ -3,6 +3,7 @@ use cgmath::{Vector2, Vector3};
 use crate::game::entity::Entity;
 use crate::game::Handle;
 use crate::invoke;
+use crate::client::native::pool::CBlip;
 
 pub fn get_pool() -> BlipIterator {
     BlipIterator::new()
@@ -13,7 +14,7 @@ pub struct Blip {
     handle: Handle
 }
 
-crate::impl_handle!(Blip);
+crate::impl_native!(Blip, CBlip);
 
 pub enum BlipName<'a, 'b, 'c> {
     Localized(&'a str, &'b [&'c str]),
@@ -33,7 +34,7 @@ impl Blip {
         invoke!(Blip, 0x5A039BB0BCA604B6, pos)
     }
 
-    pub fn new_for_entity(entity: &dyn Entity) -> Blip {
+    pub fn new_for_entity<R>(entity: &dyn Entity<Repr=R>) -> Blip {
         invoke!(Blip, 0x5CDE92C702A8FCE7, entity.get_handle())
     }
 
@@ -41,7 +42,7 @@ impl Blip {
         invoke!(Blip, 0x46818D79B1F7499A, pos, radius)
     }
 
-    pub fn from_entity(entity: &dyn Entity) -> Option<Blip> {
+    pub fn from_entity<R>(entity: &dyn Entity<Repr=R>) -> Option<Blip> {
         invoke!(Option<Blip>, 0xBC8DBDCA2436F7E8, entity.get_handle())
     }
 

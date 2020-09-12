@@ -18,7 +18,7 @@ impl Interior {
         invoke!(Option<Interior>, 0xE7D267EC6CA966C3)
     }
 
-    pub fn from_entity(entity: &dyn Entity) -> Option<Interior> {
+    pub fn from_entity<R>(entity: &dyn Entity<Repr=R>) -> Option<Interior> {
         invoke!(Option<Interior>, 0x2107BA504071A6BB, entity.get_handle())
     }
 

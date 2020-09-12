@@ -10,9 +10,9 @@ impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let raw = self.0 as i32;
         if let Some(name) = crate::native::OBJECT_HASHES.get(&raw) {
-            f.pad(name)
+            f.write_str(name)
         } else {
-            f.pad(&format!("0x{:08X}", self.0))
+            f.write_fmt(format_args!("0x{:08X}", self.0))
         }
     }
 }
