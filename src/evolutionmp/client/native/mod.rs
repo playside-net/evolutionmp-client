@@ -152,7 +152,7 @@ macro_rules! bind_inner_field {
                             .get_box::<i32>()
                     };
                     let offset = *pattern + $offset;
-                    info!("Got offset for {}.{}: 0x{:X} (0x{:X} + {})", stringify!($host), stringify!($name), offset, *pattern, $offset);
+                    trace!("Got offset for {}.{}: 0x{:X} (0x{:X} + {})", stringify!($host), stringify!($name), offset, *pattern, $offset);
                     NativeField::new(offset)
                 };
             )*
@@ -235,6 +235,11 @@ pub(crate) fn init() {
     HOOKS.replace(Some(HashMap::new()));
 
     crate::events::init();
+    detour(0x745711A75AB09277, |ctx| {
+        let active: bool = ctx.get_args().read();
+        info!("called frontend({})", active);
+        call_trampoline(0x745711A75AB09277, ctx)
+    });
 }
 
 fn get_trampoline(hash: u64) -> NativeFunction {
@@ -244,7 +249,7 @@ fn get_trampoline(hash: u64) -> NativeFunction {
     unsafe { std::mem::transmute(detour.trampoline()) }
 }
 
-pub fn call_trampoline(hash: u64, context: *mut NativeCallContext) {
+pub fn call_trampoline(hash: u64, context: &mut NativeCallContext) {
     let trampoline = get_trampoline(hash);
     trampoline(context);
 }

@@ -14,10 +14,6 @@ use crate::Window;
 static mut EVENT_POOL: Option<Sender<InputEvent>> = None;
 static mut WND_PROC: WNDPROC = None;
 
-struct EventPool {
-    sender: Sender<InputEvent>
-}
-
 #[derive(Debug, Clone)]
 pub enum InputEvent {
     Keyboard(KeyboardEvent),

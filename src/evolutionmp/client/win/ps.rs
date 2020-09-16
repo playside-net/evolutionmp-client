@@ -1,28 +1,27 @@
 use std::cell::UnsafeCell;
 use std::error::Error;
-use std::ffi::{CStr, CString, OsString, OsStr};
+use std::ffi::{CStr, CString, OsString};
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::ptr::null_mut;
 
 use winapi::ctypes::c_void;
 use winapi::shared::basetsd::SIZE_T;
-use winapi::shared::minwindef::{DWORD, FALSE, FARPROC, HINSTANCE, HMODULE, LPVOID, MAX_PATH, TRUE};
+use winapi::shared::minwindef::{DWORD, FARPROC, HMODULE, LPVOID, MAX_PATH, TRUE};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-use winapi::um::libloaderapi::{GetModuleHandleW, GetProcAddress, GetModuleHandleA};
+use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
 use winapi::um::memoryapi::{ReadProcessMemory, VirtualAllocEx, VirtualFreeEx, WriteProcessMemory};
-use winapi::um::processthreadsapi::{CreateRemoteThreadEx, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess, OpenProcessToken};
+use winapi::um::processthreadsapi::{CreateRemoteThreadEx, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess};
 use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
-use winapi::um::securitybaseapi::AdjustTokenPrivileges;
 use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
-use winapi::um::winbase::{INFINITE, LookupPrivilegeValueW, THREAD_PRIORITY_HIGHEST};
-use winapi::um::winnt::{LUID_AND_ATTRIBUTES, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY};
+use winapi::um::winbase::{INFINITE, THREAD_PRIORITY_HIGHEST};
+use winapi::um::winnt::{MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE};
+use wio::wide::{FromWide, ToWide};
 
 use crate::win::thread::ThreadHandle;
-use wio::wide::{FromWide, ToWide};
 
 pub fn get_current_process() -> ProcessHandle {
     ProcessHandle::from(unsafe { GetCurrentProcess() })
@@ -30,7 +29,7 @@ pub fn get_current_process() -> ProcessHandle {
 
 pub fn get_process<S>(file_name: S, desired_access: DWORD) -> Option<ProcessHandle> where S: AsRef<str> {
     for process in ProcessIterator::new(TH32CS_SNAPPROCESS)? {
-        if &process.get_name().to_string_lossy() == file_name.as_ref() {
+        if &process.get_name() == file_name.as_ref() {
             return Some(process.open(desired_access, false).expect(&format!("Error opening process `{}`", file_name.as_ref())));
         }
     }
@@ -280,7 +279,7 @@ impl ProcessEntry {
     }
 
     pub fn open(&self, desired_access: DWORD, inherit_handle: bool) -> Result<ProcessHandle, DWORD> {
-        let handle = unsafe { OpenProcess(desired_access, if inherit_handle { TRUE } else { FALSE }, self.inner.th32ProcessID) };
+        let handle = unsafe { OpenProcess(desired_access, inherit_handle as _, self.inner.th32ProcessID) };
         if handle != NULL {
             Ok(ProcessHandle::from(handle))
         } else {

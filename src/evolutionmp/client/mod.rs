@@ -1,4 +1,4 @@
-use std::ffi::{CString, OsString, CStr, OsStr};
+use std::ffi::{CString, OsString, CStr};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -121,7 +121,7 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let message = get_error_code_message(ntdll, rec);
         let native = crate::native::CURRENT_NATIVE.load(Ordering::SeqCst);
         if native != 0 {
-            error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X} caused by native invocation `0x{:016X}`: 0x{:08X} ({})", native, addr as u64, code, message);
+            error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X} caused by native invocation `0x{:016X}`: 0x{:08X} ({})", addr as u64, native, code, message);
         } else {
             error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X}: 0x{:08X} ({})", addr as u64, code, message);
         }
@@ -253,7 +253,7 @@ unsafe fn initialize(window: &Window) {
     focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
     focus_pause.nop(7);
     bind_field!(DEVICE_LIMIT, "C7 05 ? ? ? ? 64 00 00 00 48 8B", 6, u32);
-    *DEVICE_LIMIT.as_mut() *= 5;
+    *DEVICE_LIMIT.as_mut() *= 15;
     mem!("C6 80 F0 00 00 00 01 E8 ? ? ? ? E8").expect("no relative device sorting")
         .add(12).nop(5);
     /*mem!("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
@@ -266,6 +266,7 @@ unsafe fn initialize(window: &Window) {
 
     game::hook();
     game::init();
+    native::fs::init();
 
     let server = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), PORT);
     crate::scripts::init(server);

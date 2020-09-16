@@ -141,26 +141,6 @@ unsafe fn load_game_now(u: u8) -> u32 {
 fn done_loading_game() {
     dlc::load_mp_maps();
 
-    info!("Searching for script candidates...");
-
-    let mut script_candidates = Vec::new();
-
-    if let Ok(entries) = launcher_dir().join("scripts").read_dir() {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Ok(ty) = entry.file_type() {
-                    let name = entry.file_name();
-                    let name = name.to_string_lossy();
-                    if ty.is_file() && name.ends_with(".jar") {
-                        script_candidates.push(name.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    info!("Found {} potential vm scripts", script_candidates.len());
-
     let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
     add_dll_directory(&dll_path);
     let args = InitArgsBuilder::new()
@@ -172,7 +152,7 @@ fn done_loading_game() {
 
     info!("Starting VM...");
     let vm = Arc::new(JavaVM::new(&dll_path, args).expect("vm initialization failed"));
-    crate::runtime::start(script_candidates, vm);
+    crate::runtime::start(vm);
 
     info!("Shutting down loading screen...");
 

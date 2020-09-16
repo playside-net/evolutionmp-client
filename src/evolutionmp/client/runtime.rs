@@ -2,19 +2,22 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::Ordering;
 
-use jni_dynamic::{AttachGuard, JavaVM, JNIEnv, NativeMethod};
+use jni_dynamic::{JavaVM, JNIEnv, NativeMethod};
 use jni_dynamic::errors::ErrorKind;
 use jni_dynamic::objects::{JClass, JObject, JString};
 use jni_dynamic::strings::JNIStr;
 
-use crate::args;
+use crate::{args, java_static_method};
 use crate::events::ScriptEvent;
 use crate::game::vehicle::Vehicle;
 use crate::jni::{JavaObject, JavaValue};
+use crate::jni::attach_thread;
 use crate::launcher_dir;
 use crate::native::NativeCallContext;
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
+
+java_static_method!(set_system_property, "java/lang/System", "setProperty", fn(property: &str, value: &str) -> Option<String>);
 
 pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
     let exception = env.exception_occurred().unwrap();
@@ -30,16 +33,19 @@ pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
         .unwrap())
 }
 
-static mut VM: Option<Arc<JavaVM>> = None;
-
-fn attach_thread() -> AttachGuard<'static> {
-    unsafe { VM.as_ref().expect("VM not initialized").attach_current_thread().expect("attach failed") }
-}
-
-pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
-    unsafe { VM = Some(vm) };
+pub(crate) fn start(vm: Arc<JavaVM>) {
+    unsafe { crate::jni::set_vm(vm); };
 
     let env = attach_thread();
+
+    set_system_property("user.dir", &launcher_dir().display().to_string());
+
+    env.set_static_field("java/lang/ClassLoader", "sys_paths", "[Ljava/lang/String;", JObject::null()).unwrap();
+    let fs_holder_class = env.find_class("java/nio/file/FileSystems$DefaultFileSystemHolder").unwrap();
+    let fs = env.call_static_method(fs_holder_class, "defaultFileSystem", "()Ljava/nio/file/FileSystem;", &[])
+        .unwrap().l().unwrap();
+    env.set_static_field("java/nio/file/FileSystems$DefaultFileSystemHolder", "defaultFileSystem", "Ljava/nio/file/FileSystem;", fs)
+        .unwrap();
 
     let thread_class = env.find_class("java/lang/Thread").unwrap();
 
@@ -184,29 +190,19 @@ pub(crate) fn start(script_candidates: Vec<String>, vm: Arc<JavaVM>) {
     pool!(env, crate::game::prop::get_pool(), "mp/evolution/game/entity/prop/PropPool");
     pool!(env, crate::game::ped::get_pool(), "mp/evolution/game/entity/ped/PedPool");
 
-    let launcher_dir = launcher_dir().to_string_lossy().to_java_object(&env);
-    let arr = script_candidates.to_java_object(&env);
+    let _ = get_runtime(&env);
+}
 
+fn get_runtime<'a>(env: &'a JNIEnv) -> JObject<'a> {
     let main_class = env.find_class("mp/evolution/runtime/Runtime")
         .expect("Unable to find main class");
 
-    let count = match env.call_static_method(main_class, "start", "(Ljava/lang/String;[Ljava/lang/String;)I", args![launcher_dir, arr]) {
+    match env.get_static_field(main_class, "INSTANCE", "Lmp/evolution/runtime/Runtime;") {
         Err(e) if matches!(e.kind(), ErrorKind::JavaException) => {
             panic!("{}", get_last_exception(&env));
         }
-        other => other.expect("Error invoking main function").i().unwrap(),
-    };
-
-    std::mem::forget(env);
-
-    let mut java_scripts = JAVA_SCRIPTS.lock().unwrap();
-    for id in 0..count {
-        java_scripts.push(id);
+        other => other.expect("Error instantiating runtime").l().unwrap(),
     }
-}
-
-lazy_static::lazy_static! {
-    pub static ref JAVA_SCRIPTS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
 }
 
 pub struct ScriptJava {}
@@ -215,25 +211,14 @@ impl ScriptJava {
     pub fn new() -> ScriptJava {
         ScriptJava {}
     }
-
-    fn get_java_object<'a>(&self, id: i32) -> JObject<'a> {
-        let env = attach_thread();
-        let main_class = env.find_class("mp/evolution/runtime/Runtime").unwrap();
-        env.call_static_method(main_class, "getContainer", "(I)Lmp/evolution/script/ScriptContainer;", args![id])
-            .unwrap().l().unwrap()
-    }
 }
 
 impl Script for ScriptJava {
     fn frame(&mut self) {
         if crate::game::is_loaded() {
             let env = attach_thread();
-            let scripts = JAVA_SCRIPTS.lock().unwrap();
-
-            for id in scripts.iter() {
-                let script = self.get_java_object(*id);
-                env.call_method(script, "frame", "()V", args![]).expect("error calling `frame` on vm script");
-            }
+            let runtime = get_runtime(&env);
+            env.call_method(runtime, "frame", "()V", args![]).expect("error calling `frame`");
         }
     }
 
@@ -246,14 +231,8 @@ impl Script for ScriptJava {
                         InputEvent::Keyboard(event) => {
                             match event {
                                 KeyboardEvent::Key {
-                                    key,
-                                    repeats,
-                                    scan_code,
-                                    is_extended,
-                                    alt,
-                                    shift,
-                                    control,
-                                    was_down_before,
+                                    key, repeats, scan_code, is_extended,
+                                    alt, shift, control, was_down_before,
                                     is_up
                                 } => {
                                     env.new_object("mp/evolution/script/event/ScriptEventKeyboardKey", "(ISBZZZZZZ)V", args![
@@ -276,13 +255,8 @@ impl Script for ScriptJava {
                 }
                 _ => return
             };
-            let mut result = false;
-            for id in JAVA_SCRIPTS.lock().unwrap().iter() {
-                let script = self.get_java_object(*id);
-                if !result {
-                    result |= env.call_method(script, "event", "(Lmp/evolution/script/event/ScriptEvent;)Z", args![event]).unwrap().z().unwrap()
-                }
-            }
+            let runtime = get_runtime(&env);
+            env.call_method(runtime, "event", "(Lmp/evolution/script/event/ScriptEvent;)V", args![event]).expect("error calling `event`");
         }
     }
 }
@@ -329,6 +303,9 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject,
             arg_count,
         );
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
+        if (handler as *const ()).is_null() {
+            error!("Native 0x{:016X} handler null!", hash);
+        }
         handler(&mut context);
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
         std::mem::forget(context);
