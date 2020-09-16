@@ -16,6 +16,8 @@ use crate::game::{Handle, Rgb, Rgba};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
 use crate::native::pool::Handleable;
+use std::sync::atomic::Ordering;
+use crate::client::jni::attach_thread;
 
 pub mod vehicle;
 pub mod pool;
@@ -237,7 +239,13 @@ pub(crate) fn init() {
     crate::events::init();
     detour(0x745711A75AB09277, |ctx| {
         let active: bool = ctx.get_args().read();
-        info!("called frontend({})", active);
+        if CURRENT_NATIVE.load(Ordering::SeqCst) == 0x745711A75AB09277 {
+            if active {
+                let env = attach_thread();
+                env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
+            }
+        }
+        ctx.args[0] = 0;
         call_trampoline(0x745711A75AB09277, ctx)
     });
 }

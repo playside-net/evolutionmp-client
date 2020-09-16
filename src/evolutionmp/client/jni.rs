@@ -22,12 +22,6 @@ pub(crate) fn attach_thread() -> AttachGuard<'static> {
     }
 }
 
-pub(crate) fn get_env() -> JNIEnv<'static> {
-    unsafe {
-        VM.as_ref().expect("VM not initialized").get_env().expect("env missing")
-    }
-}
-
 #[macro_export]
 macro_rules! java_static_method {
     ($name:ident, $class:literal, $java_name:literal, fn($($arg:ident: $arg_ty:ty),*)) => {
