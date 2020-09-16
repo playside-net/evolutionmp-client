@@ -238,15 +238,20 @@ pub(crate) fn init() {
 
     crate::events::init();
     detour(0x745711A75AB09277, |ctx| {
-        let active: bool = ctx.get_args().read();
-        if CURRENT_NATIVE.load(Ordering::SeqCst) == 0x745711A75AB09277 {
-            if active {
-                let env = attach_thread();
-                env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
-            }
+        if CURRENT_NATIVE.load(Ordering::SeqCst) == 0x745711A75AB09277 && ctx.args[0] == 1 {
+            let env = attach_thread();
+            env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
         }
         ctx.args[0] = 0;
         call_trampoline(0x745711A75AB09277, ctx)
+    });
+    detour(0xEF01D36B9C9D0C7B, |ctx| {
+        if CURRENT_NATIVE.load(Ordering::SeqCst) == 0xEF01D36B9C9D0C7B && ctx.args[1] == 1 {
+            let env = attach_thread();
+            env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
+        }
+        ctx.args[1] = 0;
+        call_trampoline(0xEF01D36B9C9D0C7B, ctx)
     });
 }
 

@@ -115,8 +115,7 @@ impl Script for ScriptCleanWorld {
         };
         game::ui::set_ability_bar_visible(has_special_ability);
 
-        if game::controls::is_just_pressed(ControlGroup::Wheel, Control::FrontendPauseAlternate){
-            game::ui::set_frontend_active(false);
+        if game::controls::is_disabled_just_pressed(ControlGroup::Wheel, Control::FrontendPauseAlternate) && game::controls::is_enabled(ControlGroup::Wheel, Control::FrontendSelect) {
             game::ui::activate_frontend_menu("FE_MENU_VERSION_SP_PAUSE", false, -1);
         }
     }
@@ -166,11 +165,11 @@ impl ScriptCleanWorld {
     }
 }
 
-pub(crate) const CONTROLS_TO_DISABLE: [Control; 19] = [
+pub(crate) const CONTROLS_TO_DISABLE: [Control; 20] = [
     Control::Cover,
     Control::EnterCheatCode,
     Control::FrontendPause,
-    //Control::FrontendPauseAlternate,
+    Control::FrontendPauseAlternate,
     Control::FrontendSocialClub,
     Control::FrontendSocialClubSecondary,
     Control::SpecialAbilityPC,
