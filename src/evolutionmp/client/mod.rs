@@ -38,7 +38,6 @@ pub mod scripts;
 pub mod jni;
 pub mod console;
 
-bind_field_ip!(DIGITAL_DISTRIBUTION, "BA 07 00 00 00 8D 41 FC 83 F8 01", -26, bool);
 bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
 bind_field_ip!(HEAP_SIZE, "83 C8 01 48 8D 0D ? ? ? ? 41 B1 01 45 33 C0", 17, u32);
 

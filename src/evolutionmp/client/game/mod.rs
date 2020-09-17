@@ -5,7 +5,7 @@ use jni_dynamic::{InitArgsBuilder, JavaVM, JNIVersion};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::client::add_dll_directory;
-use crate::{bind_fn_detour_ip, launcher_dir};
+use crate::{bind_fn_detour_ip, bind_field_ip, launcher_dir};
 
 
 pub mod audio;
@@ -95,34 +95,62 @@ impl GameState {
     }
 }
 
+pub static LOADED: AtomicBool = AtomicBool::new(false);
+pub static SHOULD_RELOAD: AtomicBool = AtomicBool::new(false);
+pub static DIGITAL_DISTRIBUTION: AtomicBool = AtomicBool::new(false);
 
-/*extern fn run_init_state() {
-    RUN_INIT_STATE()
-}*/
+fn map_init_state(state: u32) -> u32 {
+    if state >= 7 && DIGITAL_DISTRIBUTION.load(Ordering::SeqCst) {
+        state + 1
+    } else {
+        state
+    }
+}
 
-/*externfn skip_init(stage: u32) -> bool {
-    info!("skipping init {}", stage);
-    SKIP_INIT(stage)
-}*/
+pub fn restart() {
+    SHOULD_RELOAD.store(true, Ordering::SeqCst);
+}
 
-//bind_field_ip!(INIT_STATE, "BA 07 00 00 00 8D 41 FC 83 F8 01", 2, u32);
-//bind_fn!(RUN_INIT_STATE, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, () -> ());
-//bind_fn!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, (u32) -> bool);
+extern fn main_frame() {
+    if SHOULD_RELOAD.compare_and_swap(true, false, Ordering::SeqCst) {
+        unsafe { *INIT_STATE.as_mut() = map_init_state(2) };
+    }
+    MAIN_FRAME()
+}
+
+extern fn skip_init(state: u32) -> bool {
+    let result = SKIP_INIT(state);
+    if SHOULD_RELOAD.load(Ordering::SeqCst) {
+        info!("restarting...");
+        //false
+    }// else {
+        result
+    //}
+}
+
+bind_field_ip!(INIT_STATE, "BA 08 00 00 00 8D 41 FC 83 F8 01", 16, u32);
+bind_fn_detour_ip!(MAIN_FRAME, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, main_frame, () -> ());
+bind_fn_detour_ip!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, skip_init, (u32) -> bool);
 bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, (u8) -> u32);
 
 pub fn hook() {
     locale::hook();
     ui::hook();
+    lazy_static::initialize(&INIT_STATE);
+    lazy_static::initialize(&MAIN_FRAME);
+    lazy_static::initialize(&SKIP_INIT);
     lazy_static::initialize(&LOAD_GAME_NOW);
+
+    unsafe {
+        let dd = crate::mem!("BA 08 00 00 00 8D 41 FC 83 F8 01")
+            .expect("dd pos").offset(-12).as_ptr().read() == 3;
+        DIGITAL_DISTRIBUTION.store(dd, Ordering::SeqCst);
+    }
 }
 
 pub fn init() {
     locale::init();
     ui::init();
-}
-
-lazy_static! {
-    static ref LOADED: AtomicBool = AtomicBool::new(false);
 }
 
 pub fn is_loaded() -> bool {

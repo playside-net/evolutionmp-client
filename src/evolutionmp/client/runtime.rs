@@ -102,6 +102,11 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         }};
     }
 
+    extern fn restart(_env: &JNIEnv, _obj: JObject) {
+        info!("restart requested");
+        crate::game::restart();
+    }
+
     natives!(env, "mp/evolution/invoke/NativeArgs",
         NativeMethod::new("push", "(Ljava/lang/String;)V", put_string as _)
     );
@@ -189,6 +194,10 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
     pool!(env, crate::game::vehicle::get_pool(), "mp/evolution/game/entity/vehicle/VehiclePool");
     pool!(env, crate::game::prop::get_pool(), "mp/evolution/game/entity/prop/PropPool");
     pool!(env, crate::game::ped::get_pool(), "mp/evolution/game/entity/ped/PedPool");
+
+    natives!(env, "mp/evolution/runtime/Runtime",
+        NativeMethod::new("restart", "()V", restart as _)
+    );
 
     let _ = get_runtime(&env);
 }
