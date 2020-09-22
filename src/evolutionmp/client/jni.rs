@@ -130,7 +130,7 @@ impl JavaValue<i32> for i32 {
         value.i().expect("java value is not an integer") as _
     }
 
-    fn to_java_value<'a>(&self, env: &'a JNIEnv<'a>) -> JValue<'a> {
+    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
         JValue::Int(*self)
     }
 }

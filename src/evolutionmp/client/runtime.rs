@@ -312,14 +312,11 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject,
             arg_count,
         );
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
-        if (handler as *const ()).is_null() {
-            error!("Native 0x{:016X} handler null!", hash);
-        }
         handler(&mut context);
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
         std::mem::forget(context);
     } else {
-        env.throw_new("Ljava/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
+        env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
     }
 }
 

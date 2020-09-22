@@ -1,9 +1,7 @@
-use std::net::SocketAddr;
-
+use crate::client::scripts::cleanup::ScriptWeaponStats;
+use crate::client::scripts::fishing::ScriptFishing;
 use crate::runtime::ScriptJava;
 use crate::scripts::cleanup::ScriptCleanWorld;
-use crate::client::scripts::fishing::ScriptFishing;
-use crate::client::scripts::cleanup::ScriptWeaponStats;
 
 pub mod cleanup;
 pub mod pointing;

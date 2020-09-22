@@ -8,7 +8,6 @@ use std::path::Path;
 
 use alignas::AlignAs;
 use cgmath::Zero;
-use minidom::{Element, NSChoice};
 use winapi::shared::minwindef::{DWORD, FILETIME};
 use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use winapi::um::winbase::{FILE_BEGIN, FILE_CURRENT, FILE_END};
