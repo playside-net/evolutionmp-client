@@ -498,10 +498,6 @@ impl Vehicle {
             None
         }
     }
-
-    pub fn get_remote_id(&self) -> Option<u32> {
-        crate::scripts::network::get_vehicle_remote_id(self)
-    }
 }
 
 #[repr(C)]

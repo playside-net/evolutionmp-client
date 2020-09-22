@@ -2,17 +2,18 @@ use std::net::SocketAddr;
 
 use crate::runtime::ScriptJava;
 use crate::scripts::cleanup::ScriptCleanWorld;
-use crate::scripts::network::ScriptNetwork;
+use crate::client::scripts::fishing::ScriptFishing;
+use crate::client::scripts::cleanup::ScriptWeaponStats;
 
 pub mod cleanup;
 pub mod pointing;
 pub mod fishing;
-pub mod network;
 
-pub fn init(server: SocketAddr) {
+pub fn init() {
     info!("Initializing scripts");
 
     crate::native::script::run("clean_world", ScriptCleanWorld::new());
+    crate::native::script::run("weapon_stats", ScriptWeaponStats);
+    crate::native::script::run("fishing", ScriptFishing::new());
     crate::native::script::run("java", ScriptJava::new());
-    crate::native::script::run("net", ScriptNetwork::new(server));
 }

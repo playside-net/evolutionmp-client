@@ -23,7 +23,6 @@ use game::GameState;
 
 use crate::{bind_field, bind_field_ip, LOG_PANIC, mem};
 use crate::client::pattern::RET;
-use crate::network::PORT;
 
 pub mod win;
 pub mod native;
@@ -243,6 +242,7 @@ unsafe fn initialize(window: &Window) {
     //mem!("E8 ? ? ? ? 84 C0 75 0C B2 01 B9 2F").expect("launcher").nop(21); //Disable launcher check
     /*mem.find_str("platform:/movies").expect("movie")
         .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie*/
+
     mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[RET]); //Disable movie
     /*mem!("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
         .nop(2); //Disable legals*/
@@ -267,8 +267,7 @@ unsafe fn initialize(window: &Window) {
     game::init();
     native::fs::init();
 
-    let server = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), PORT);
-    crate::scripts::init(server);
+    crate::scripts::init();
 }
 
 #[cfg(target_os = "windows")]

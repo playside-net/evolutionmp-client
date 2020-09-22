@@ -236,7 +236,7 @@ impl ScriptThread {
     pub fn new(name: &str, v_table: RageThreadVTable) -> ScriptThread {
         assert!(name.len() < 64, "script name too long");
         let mut script_name = [0; 64];
-        unsafe { std::ptr::copy_nonoverlapping(name.as_ptr(), script_name.as_mut_ptr(), name.len()) };
+        script_name[0..name.len()].copy_from_slice(name.as_bytes());
         ScriptThread {
             parent: RageThread {
                 v_table: ManuallyDrop::new(Box::new(v_table)),
@@ -283,15 +283,14 @@ impl ScriptThread {
                     slot += 1;
                 }
             }
-            if slot == collection.len() {
-                return;
+            if slot < collection.len() {
+                let thread_id = THREAD_ID.max(1);
+                self.context.id = thread_id;
+                self.context.script_hash = Hash(THREAD_COUNT.add(1));
+                *THREAD_COUNT.as_mut() += 1;
+                *THREAD_ID.as_mut() = thread_id + 1;
+                collection[slot as usize] = ManuallyDrop::new(std::mem::transmute(self));
             }
-            let thread_id = THREAD_ID.max(1);
-            self.context.id = thread_id;
-            self.context.script_hash = Hash(THREAD_COUNT.add(1));
-            *THREAD_COUNT.as_mut() += 1;
-            *THREAD_ID.as_mut() = thread_id + 1;
-            collection[slot as usize] = ManuallyDrop::new(std::mem::transmute(self));
         }
     }
 

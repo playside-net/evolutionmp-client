@@ -24,7 +24,6 @@ pub use client::*;
 
 #[cfg(target_os = "windows")]
 mod client;
-pub mod network;
 pub mod hash;
 
 pub const LOG_ROOT: &'static str = "root";

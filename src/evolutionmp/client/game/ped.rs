@@ -162,10 +162,6 @@ impl Ped {
             ped: self
         }
     }
-
-    pub fn get_remote_id(&self) -> Option<u32> {
-        crate::scripts::network::get_player_remote_id(self)
-    }
 }
 
 impl Entity for Ped {

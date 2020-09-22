@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use jni_dynamic::{JavaVM, JNIEnv, NativeMethod};

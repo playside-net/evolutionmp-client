@@ -1,22 +1,21 @@
-use std::ffi::{CStr, OsStr, OsString, CString};
-use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Seek, SeekFrom, Write, BufReader};
+use std::ffi::{CStr, OsStr};
+use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Seek, SeekFrom, Write};
 use std::iter::once;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
+use std::os::raw::c_char;
+use std::path::Path;
 
 use alignas::AlignAs;
+use cgmath::Zero;
+use minidom::{Element, NSChoice};
 use winapi::shared::minwindef::{DWORD, FILETIME};
 use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use winapi::um::winbase::{FILE_BEGIN, FILE_CURRENT, FILE_END};
 use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
 
-use crate::{bind_field_ip, bind_fn, bind_fn_detour_ip, bind_fn_detour};
+use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip};
 use crate::pattern::RageBox;
-use std::fs::File;
-use minidom::{Element, NSChoice};
-use std::os::raw::c_char;
-use cgmath::Zero;
 
 bind_fn_detour!(OPEN_PACK_FILES, "41 B0 01 BA 1B E6 DA 93 E8", -12, open_pack_files, () -> ());
 bind_fn_detour!(ADD_COLLISION, "48 8B FA 89 44 24 30 48 8B D9 E8 ? ? ? ? 0F", 10, add_collision, (*mut u8, &mut u32, &u32) -> ());
@@ -200,7 +199,7 @@ struct ResourceFlags {
 pub struct FileEntry {
     header: u64,
     virtual_flags: u32,
-    physical_flags: u32
+    physical_flags: u32,
 }
 
 impl FileEntry {
@@ -247,7 +246,7 @@ pub struct CollectionVTable {
 #[repr(C)]
 pub struct Collection {
     device: Device,
-    v_table: RageBox<CollectionVTable>
+    v_table: RageBox<CollectionVTable>,
 }
 
 pub struct CollectionExt {
@@ -255,7 +254,7 @@ pub struct CollectionExt {
     m_pad: [u8; 184],
     child_pack_file: [u8; 192],
     child_pack_file_const: [u8; 192],
-    parent: Option<Box<Collection>>
+    parent: Option<Box<Collection>>,
 }
 
 #[repr(C)]
@@ -346,7 +345,7 @@ impl Device {
                 len,
                 handle,
                 base_offset,
-                offset: 0
+                offset: 0,
             })
         } else {
             None
@@ -539,7 +538,7 @@ pub struct DeviceOpenBulkGuard<'a> {
     len: u64,
     handle: u64,
     base_offset: usize,
-    offset: isize
+    offset: isize,
 }
 
 impl<'a> DeviceOpenBulkGuard<'a> {
@@ -584,11 +583,11 @@ impl<'a> Seek for DeviceOpenBulkGuard<'a> {
         match from {
             SeekFrom::Start(offset) => {
                 self.offset = offset as isize;
-            },
+            }
             SeekFrom::End(offset) => {
                 let len = self.len();
                 self.offset = (len as i64 - offset) as isize
-            },
+            }
             SeekFrom::Current(offset) => {
                 self.offset = offset as isize;
             }
@@ -659,7 +658,7 @@ struct PackFileHeader {
     toc_size: u32,
     num_entries: u32,
     unk_flag: u32,
-    crypto_flag: u32
+    crypto_flag: u32,
 }
 
 impl RelativeDevice {
