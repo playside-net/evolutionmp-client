@@ -5,11 +5,12 @@ use std::time::{Duration, Instant};
 
 use winapi::shared::minwindef::{HKL, LPARAM, LRESULT, UINT, WPARAM};
 use winapi::shared::windef::HWND;
-use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC};
+use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC, WM_NCHITTEST, WM_SETCURSOR, WM_GETICON};
 use wio::wide::FromWide;
 
 use crate::events::ScriptEvent;
 use crate::Window;
+use std::convert::TryFrom;
 
 static mut EVENT_POOL: Option<Sender<InputEvent>> = None;
 static mut WND_PROC: WNDPROC = None;
@@ -33,7 +34,7 @@ pub enum KeyboardEvent {
         was_down_before: bool,
         is_up: bool,
     },
-    Char(char),
+    Char(String),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -79,7 +80,7 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
             push_event(InputEvent::Keyboard(event));
 
             if wparam as i32 == VK_DELETE && !is_up {
-                push_event(InputEvent::Keyboard(KeyboardEvent::Char('\u{007F}')));
+                push_event(InputEvent::Keyboard(KeyboardEvent::Char(String::from("\u{007F}"))));
             }
         }
         WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN | WM_MBUTTONUP => {
@@ -113,9 +114,13 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
             let mut buf = [0u16; 2];
             let len = ToUnicodeEx(vk, scan_code as u32, key_state.as_mut_ptr(), buf.as_mut_ptr(), 2, 0, layout);
             let chars = OsString::from_wide_ptr(buf.as_ptr(), len as usize).into_string().expect("chars conversation failed");
-            if len == 1 {
-                let chr = chars.chars().next().unwrap();
-                push_event(InputEvent::Keyboard(KeyboardEvent::Char(chr)))
+            if len != 0 {
+                push_event(InputEvent::Keyboard(KeyboardEvent::Char(chars)))
+            } else {
+                match char::try_from(wparam as u32) {
+                    Ok(c) => push_event(InputEvent::Keyboard(KeyboardEvent::Char(c.to_string()))),
+                    Err(e) => error!("Invalid character input: {:?}", e)
+                }
             }
         }
         WM_INPUTLANGCHANGE => {

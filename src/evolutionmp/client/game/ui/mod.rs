@@ -573,10 +573,10 @@ impl TextInput {
                         }
                     }
                     KeyboardEvent::Char(c) => {
-                        match c {
-                            &'\u{0008}' => self.erase_left(),
-                            &'\u{007F}' => self.erase_right(),
-                            c if !c.is_control() => self.enter_char(*c),
+                        match c.as_str() {
+                            "\u{0008}" => self.erase_left(),
+                            "\u{007F}" => self.erase_right(),
+                            c => self.enter_char(c),
                             _ => {}
                         }
                     }
@@ -651,10 +651,10 @@ impl TextInput {
         }
     }
 
-    fn enter_char(&mut self, c: char) {
+    fn enter_char(&mut self, c: &str) {
         let start = self.selection.start;
         let end = self.selection.end;
-        self.replace_chars(start, end, &format!("{}", c));
+        self.replace_chars(start, end, c);
         let pos = start.min(end) + 1;
         self.selection = pos..pos;
     }

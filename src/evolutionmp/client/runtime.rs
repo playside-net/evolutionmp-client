@@ -260,8 +260,9 @@ impl Script for ScriptJava {
                                     ]).unwrap()
                                 }
                                 KeyboardEvent::Char(c) => {
-                                    env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(C)V", args![
-                                        c as u16
+                                    let c = c.to_java_object(&env);
+                                    env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(Ljava/lang/String;)V", args![
+                                        c
                                     ]).unwrap()
                                 }
                             }
