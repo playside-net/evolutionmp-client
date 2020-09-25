@@ -63,8 +63,18 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
 
     let ucp = env.get_field(system_loader, "ucp", "Lsun/misc/URLClassPath;").unwrap().l().unwrap();
 
-    {
-        let path = launcher_dir().join("client-rt.jar").to_string_lossy().to_java_object(&env);
+    let bin_dir = launcher_dir().join("bin");
+
+    const LIBS: [&'static str; 5] = [
+        "commons-io-2.5.jar",
+        "json-simple-1.1.1.jar",
+        "netty-all-4.1.30.Final.jar",
+        "shared.jar",
+        "csl.jar"
+    ];
+
+    for lib in &LIBS {
+        let path = bin_dir.join(lib).to_string_lossy().to_java_object(&env);
         let file = env.new_object("java/io/File", "(Ljava/lang/String;)V", args![path]).unwrap();
         let uri = env.call_method(file, "toURI", "()Ljava/net/URI;", &[]).unwrap().l().unwrap();
         let url = env.call_method(uri, "toURL", "()Ljava/net/URL;", &[]).unwrap().l().unwrap();
@@ -314,7 +324,7 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject,
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
         handler(&mut context);
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
-        std::mem::forget(context);
+        std::mem::forget(context); //Do not free java nio buffers
     } else {
         env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
     }

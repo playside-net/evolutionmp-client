@@ -29,6 +29,7 @@ pub mod streaming;
 pub mod grc;
 pub mod assets;
 pub mod init_fns;
+pub mod vtables;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -191,17 +192,6 @@ macro_rules! bind_field_ip {
     };
 }
 
-#[macro_export]
-macro_rules! redirect {
-    ($from:ident,$to:ident) => {
-        let d = detour::RawDetour::new($from,$to as _).expect(concat!("failed to create redirect from ", stringify!($from), " to ", stringify!($to)));
-        d.enable().expect(concat!("error redirecting from ", stringify!($from), " to ", stringify!($to)));
-        let t = d.trampoline() as *const ();
-        std::mem::forget(d);
-        t
-    };
-}
-
 lazy_static! {
     pub static ref OBJECT_HASHES: HashMap<i32, &'static str> = object_hashes::HASHES.iter().cloned().collect::<_>();
     pub static ref NATIVES: Natives = Natives::new();
@@ -253,6 +243,11 @@ pub(crate) fn init() {
         ctx.args[1] = 0;
         call_trampoline(0xEF01D36B9C9D0C7B, ctx)
     });
+    /*detour(0x4EDE34FBADD967A6, |ctx| {
+        let name = crate::invoke!(String, 0x442E0A7EDE4A738A);
+        info!("Script {} asked to wait for {} ms", name, ctx.get_args().read::<u32>());
+        call_trampoline(0x4EDE34FBADD967A6, ctx)
+    });*/
 }
 
 fn get_trampoline(hash: u64) -> NativeFunction {
@@ -343,7 +338,7 @@ impl NativeGroup {
     }
 
     pub fn get_next_group(&self) -> Option<&NativeGroup> {
-        unsafe { std::mem::transmute(self.next_group.get()) }
+        unsafe { (self.next_group.get() as *mut NativeGroup).as_ref() }
     }
 
     pub fn len(&self) -> usize {
@@ -637,8 +632,7 @@ impl NativeStackValue for &str {
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         let native = CString::new(self).expect("Failed to write C string");
-        stack.write_u64(native.as_ptr() as u64);
-        std::mem::forget(native);
+        stack.write_u64(native.into_raw() as u64);
     }
 }
 
@@ -649,7 +643,6 @@ impl NativeStackValue for String {
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         self.as_str().write_to_stack(stack);
-        std::mem::forget(self);
     }
 }
 

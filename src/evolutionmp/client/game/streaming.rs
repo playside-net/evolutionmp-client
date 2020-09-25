@@ -252,7 +252,6 @@ impl NativeStackValue for Texture {
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
         stack.write(self.dict.as_str());
         stack.write(self.name.as_str());
-        std::mem::forget(self)
     }
 }
 
@@ -269,7 +268,7 @@ impl NativeStackValue for Option<Texture> {
     }
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
-        let (dict, name) = self.map_or((None, None), |s| (Some(s.dict), Some(s.name)));
+        let (dict, name) = self.map(|s| (Some(s.dict), Some(s.name))).unwrap_or_default();
         stack.write_option(dict);
         stack.write_option(name);
     }

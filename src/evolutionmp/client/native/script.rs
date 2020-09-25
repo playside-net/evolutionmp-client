@@ -35,19 +35,26 @@ bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, (&m
 bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, (&mut ScriptThread) -> ());
 bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, (&mut ScriptThread, u32) -> RageThreadState);
 
-bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, (*mut u8, u32, u32) -> *mut u8);
+bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, (&(), Hash, u32) -> *mut u8);
 bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, () -> ());
 bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, () -> ());
-bind_fn_detour!(SCRIPT_NO, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_no, (&'static mut ScriptThread, u32) -> RageThreadState);
+bind_fn_detour!(SCRIPT_RUN, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_run, (&'static mut ScriptThread, u32) -> RageThreadState);
 bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_access, (&'static mut ScriptThread, *mut ()) -> bool);
 
-unsafe extern fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u8 {
-    let result = SCRIPT_POST_INIT(name, p2, p3);
+
+/**
+    Probably something related to pool allocation/offsets ?
+ */
+unsafe extern fn script_post_init(arg: &(), ty: Hash, p3: u32) -> *mut u8 {
+    let fn_name = crate::native::vtables::V_TABLES.get(&ty).map(|f| format!("{} ({})", f, ty)).unwrap_or_else(|| format!("({})", ty));
+    let result = SCRIPT_POST_INIT(arg, ty, p3);
+    info!("called post_init on {:p}, {}, {} -> {:p}", arg, fn_name, p3, result);
 
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
 
     for script in loaded_scripts.iter_mut() {
         if script.context.id == 0 {
+            info!("Spawning own script {} on post_init", script.get_name().to_string_lossy());
             script.spawn();
         }
     }
@@ -56,36 +63,47 @@ unsafe extern fn script_post_init(name: *mut u8, p2: u32, p3: u32) -> *mut u8 {
 }
 
 unsafe extern fn script_startup() {
+    SCRIPT_STARTUP();
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
 
     for script in loaded_scripts.iter_mut() {
         if script.context.id == 0 {
+            info!("Spawning own script {} on startup", script.get_name().to_string_lossy());
             script.spawn();
         }
     }
-    std::mem::drop(loaded_scripts);
-    SCRIPT_STARTUP();
 }
 
 unsafe extern fn script_reset() {
+    info!("Resetting GTA scripts");
+
+    SCRIPT_RESET(); //Story mode only
+
+    for thread in crate::game::script::get_all_threads() {
+        warn!("Scr thread {}", thread.get_name());
+    }
+
+    info!("Now resetting owned scripts");
+
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
 
     for script in loaded_scripts.iter_mut() {
         script.reset(script.context.script_hash, std::ptr::null(), 0);
     }
-    //SCRIPT_RESET(); //Story mode only
 }
 
-unsafe extern fn script_no(script: &'static mut ScriptThread, ops: u32) -> RageThreadState {
+unsafe extern fn script_run(script: &'static mut ScriptThread, ops: u32) -> RageThreadState {
     let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
     if let Some(s) = loaded_scripts.iter_mut().find(|s| s.context.id == script.context.id) {
         s.run(ops);
+        return script.context.state;
     }
-    script.context.state
+    RageThreadState::Killed
+    //SCRIPT_RUN(script, ops)
 }
 
-unsafe extern fn script_access(script: &'static mut ScriptThread, unk: *mut ()) -> bool {
-    info!("Script {} asked for access to {:p}", script.get_name().to_string_lossy(), unk);
+unsafe extern fn script_access(script: &'static mut RageThread, unk: *mut ()) -> bool {
+    info!("Script {} asked for access to {:p}", script.context.script_hash, unk);
     true
 }
 
@@ -96,11 +114,11 @@ pub(crate) fn hook() {
     lazy_static::initialize(&THREAD_COUNT);
     lazy_static::initialize(&SCRIPT_MANAGER);
 
-    lazy_static::initialize(&SCRIPT_POST_INIT);
+    //lazy_static::initialize(&SCRIPT_POST_INIT);
     lazy_static::initialize(&SCRIPT_STARTUP);
     lazy_static::initialize(&SCRIPT_RESET);
-    lazy_static::initialize(&SCRIPT_NO);
-    lazy_static::initialize(&SCRIPT_ACCESS);
+    lazy_static::initialize(&SCRIPT_RUN);
+    //lazy_static::initialize(&SCRIPT_ACCESS);
 
     lazy_static::initialize(&SCRIPT_THREAD_INIT);
     lazy_static::initialize(&SCRIPT_THREAD_KILL);
@@ -267,23 +285,11 @@ impl ScriptThread {
     pub fn spawn(&mut self) {
         unsafe {
             let collection = THREAD_COLLECTION.as_mut();
-            let mut slot = 0;
-            for t in collection.iter() {
-                if t.as_ref() as *const _ as u64 == self as *const _ as u64 {
-                    break;
-                }
-                slot += 1;
-            }
-            if slot == collection.len() {
-                slot = 0;
-                for t in collection.iter() {
-                    if t.context.id == 0 {
-                        break;
-                    }
-                    slot += 1;
-                }
-            }
-            if slot < collection.len() {
+            let slot = collection.iter()
+                .position(|t| t.script_name == self.script_name)
+                .or_else(|| collection.iter().position(|t| t.context.id == 0));
+
+            if let Some(slot) = slot {
                 let thread_id = THREAD_ID.max(1);
                 self.context.id = thread_id;
                 self.context.script_hash = Hash(THREAD_COUNT.add(1));
@@ -346,6 +352,7 @@ impl ScriptThreadRuntime {
     }
 
     extern fn reset(&mut self, hash: Hash, _args: *const (), _len: u32) -> RageThreadState {
+        info!("Called reset on script {}", self.get_name().to_string_lossy());
         self.context = RageThreadContext {
             state: RageThreadState::Idle,
             script_hash: hash,

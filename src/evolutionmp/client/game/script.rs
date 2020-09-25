@@ -63,6 +63,6 @@ pub fn get_all_threads() -> Vec<ScriptThread> {
     threads
 }
 
-pub fn wait(millis: u64) {
+pub fn wait(millis: u32) {
     invoke!((), 0x4EDE34FBADD967A6, millis)
 }

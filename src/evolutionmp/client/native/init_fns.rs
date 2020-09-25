@@ -174,7 +174,7 @@ impl GameSkeleton {
 }
 
 lazy_static! {
-    static ref FN_MAP: HashMap<Hash, &'static str> = KNOWN_INIT_FNS.iter().map(|f| (f.joaat(), *f)).collect();
+    pub static ref FN_MAP: HashMap<Hash, &'static str> = KNOWN_INIT_FNS.iter().map(|f| (f.joaat(), *f)).collect();
 }
 
 bind_fn_detour_ip!(RUN_INIT, "BA 04 00 00 00 E8 ? ? ? ? E8 ? ? ? ? E8", 5, GameSkeleton::init, (&mut GameSkeleton, InitFnMask) -> ());
