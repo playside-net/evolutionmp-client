@@ -215,6 +215,14 @@ pub fn push_int(value: u32) {
     invoke!((), 0x03B504CF259931BC, value)
 }
 
+pub fn is_pause_menu_active() -> bool {
+    invoke!(bool, 0xB0034A223497FFCB)
+}
+
+pub fn set_pause_menu_active(active: bool) {
+    invoke!((), 0xDF47FC56C71569CF, active)
+}
+
 pub fn set_frontend_active(active: bool) {
     invoke!((), 0x745711A75AB09277, active)
 }

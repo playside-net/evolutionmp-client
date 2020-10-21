@@ -14,9 +14,9 @@ pub trait Resource {
 
     fn request_and_wait(&self) {
         self.request();
-        while !self.is_loaded() {
+        /*while !self.is_loaded() {
             super::script::wait(1);
-        }
+        }*/
     }
 }
 

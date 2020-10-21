@@ -39,9 +39,10 @@ impl Script for ScriptFishing {
             let scale = Vector2::from_value(0.35);
             let color = Rgba::WHITE;
 
+            game::ui::draw_text(format!("{:?}", ray), pos, color, Font::ChaletLondon, scale);
             if let Some(entity) = ray.entity {
                 let model = entity.get_model();
-                game::ui::draw_text(format!("Model {}; pos: {:?}", model, ray.end), pos, color, Font::ChaletLondon, scale);
+                game::ui::draw_text(format!("Model {}; pos: {:?}", model, ray.end), pos + Vector2::unit_y() * 35.0, color, Font::ChaletLondon, scale);
             }
         }
 

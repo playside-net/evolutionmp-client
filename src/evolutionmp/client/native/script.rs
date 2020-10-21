@@ -131,14 +131,14 @@ pub fn is_thread_pool_empty() -> bool {
 
 const ACTIVE_THREAD_TLS_OFFSET: usize = 0x830;
 
-fn get_active_thread() -> *mut RageThread {
+pub fn get_active_thread() -> *mut RageThread {
     unsafe {
         let module_tls = *(__readgsqword(88) as *mut *mut u8);
         *module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut RageThread>()
     }
 }
 
-fn set_active_thread(thread: *mut RageThread) {
+pub fn set_active_thread(thread: *mut RageThread) {
     unsafe {
         let module_tls = *(__readgsqword(88) as *mut *mut u8);
         *module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut RageThread>() = thread;

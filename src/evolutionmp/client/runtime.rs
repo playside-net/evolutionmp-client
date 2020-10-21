@@ -16,6 +16,7 @@ use crate::launcher_dir;
 use crate::native::NativeCallContext;
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
+use jni_dynamic::sys::jint;
 
 java_static_method!(set_system_property, "java/lang/System", "setProperty", fn(property: &str, value: &str) -> Option<String>);
 
@@ -117,6 +118,10 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         crate::game::restart();
     }
 
+    extern fn pid(_env: &JNIEnv, _obj: JObject) -> jint {
+        std::process::id() as _
+    }
+
     natives!(env, "mp/evolution/invoke/NativeArgs",
         NativeMethod::new("push", "(Ljava/lang/String;)V", put_string as _)
     );
@@ -206,7 +211,8 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
     pool!(env, crate::game::ped::get_pool(), "mp/evolution/game/entity/ped/PedPool");
 
     natives!(env, "mp/evolution/runtime/Runtime",
-        NativeMethod::new("restart", "()V", restart as _)
+        NativeMethod::new("restart", "()V", restart as _),
+        NativeMethod::new("pid", "()I", pid as _)
     );
 
     let _ = get_runtime(&env);

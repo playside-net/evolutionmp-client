@@ -1,5 +1,6 @@
 use crate::game::Handle;
 use crate::invoke;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct ScriptThread {
@@ -64,5 +65,6 @@ pub fn get_all_threads() -> Vec<ScriptThread> {
 }
 
 pub fn wait(millis: u32) {
-    invoke!((), 0x4EDE34FBADD967A6, millis)
+    //std::thread::sleep(Duration::from_millis(millis as u64));
+    //invoke!((), 0x4EDE34FBADD967A6, millis);
 }

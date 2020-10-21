@@ -129,6 +129,7 @@ extern fn skip_init(state: u32) -> bool {
 }
 
 bind_field_ip!(INIT_STATE, "BA 08 00 00 00 8D 41 FC 83 F8 01", 16, u32);
+bind_field_ip!(MINIMAP_CLIP_SHAPE, "8A 15 ? ? ? ? F3 0F 10 15 ? ? ? ? 84 D2 74 08", 2, bool);
 bind_fn_detour_ip!(MAIN_FRAME, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", 6, main_frame, () -> ());
 bind_fn_detour_ip!(SKIP_INIT, "32 DB EB 02 B3 01 E8 ? ? ? ? 48 8B", -9, skip_init, (u32) -> bool);
 bind_fn_detour_ip!(LOAD_GAME_NOW, "33 C9 E8 ? ? ? ? 8B 0D ? ? ? ? 48 8B 5C 24 ? 8D 41 FC 83 F8 01 0F 47 CF 89 0D ? ? ? ?", 2, load_game_now, (u8) -> u32);
@@ -137,6 +138,7 @@ pub fn hook() {
     locale::hook();
     ui::hook();
     lazy_static::initialize(&INIT_STATE);
+    lazy_static::initialize(&MINIMAP_CLIP_SHAPE);
     lazy_static::initialize(&MAIN_FRAME);
     lazy_static::initialize(&SKIP_INIT);
     lazy_static::initialize(&LOAD_GAME_NOW);

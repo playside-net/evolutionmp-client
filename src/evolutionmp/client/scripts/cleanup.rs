@@ -123,6 +123,11 @@ impl Script for ScriptCleanWorld {
         if game::controls::is_disabled_just_pressed(ControlGroup::Wheel, Control::FrontendPauseAlternate) && game::controls::is_enabled(ControlGroup::Wheel, Control::FrontendSelect) {
             game::ui::activate_frontend_menu("FE_MENU_VERSION_SP_PAUSE", false, -1);
         }
+
+        if game::ui::is_pause_menu_active() {
+            game::controls::disable_action(ControlGroup::VehicleMoveAll, Control::VehicleAccelerate, true);
+            game::controls::disable_action(ControlGroup::VehicleMoveAll, Control::VehicleBrake, true);
+        }
     }
 
     fn event(&mut self, _event: ScriptEvent) {}

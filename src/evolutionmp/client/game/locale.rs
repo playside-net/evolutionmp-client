@@ -3,7 +3,7 @@ use std::ffi::CString;
 use std::sync::Mutex;
 
 use crate::{bind_fn_detour_ip, invoke};
-use crate::hash::{Hash, Hashable};
+use crate::hash::{Hash, Hashable, joaat};
 
 bind_fn_detour_ip!(GET_TEXT, "48 8B CB 8B D0 E8 ? ? ? ? 48 85 C0 0F 95 C0", 5, TranslationTable::get_text, (&TranslationTable, Hash) -> *const u8);
 bind_fn_detour_ip!(GET_TEXT2, "48 85 C0 75 34 8B 0D", -5, TranslationTable::get_text, (&TranslationTable, Hash) -> *const u8);
@@ -46,7 +46,11 @@ pub fn get_translation<'a>(label: &str) -> &'a str {
 
 pub fn set_translation<H>(label: H, translation: &str) where H: Hashable {
     let mut table = TRANSLATION_TABLE.lock().expect("mutex poisoned");
+    let hash = label.joaat();
+    if hash == joaat("LOADING_SPLAYER_L") {
+
+    }
     if let Ok(translation) = CString::new(translation) {
-        table.insert(label.joaat(), translation);
+        table.insert(hash, translation);
     }
 }
