@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -334,28 +333,6 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject,
         std::mem::forget(context); //Do not free java nio buffers
     } else {
         env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
-    }
-}
-
-pub struct TaskQueue {
-    tasks: VecDeque<Box<dyn FnMut()>>
-}
-
-impl TaskQueue {
-    pub fn new() -> TaskQueue {
-        TaskQueue {
-            tasks: VecDeque::new()
-        }
-    }
-
-    pub fn push<F>(&mut self, task: F) where F: FnMut() + 'static {
-        self.tasks.push_back(Box::new(task))
-    }
-
-    pub fn process(&mut self) {
-        while let Some(mut task) = self.tasks.pop_front() {
-            task();
-        }
     }
 }
 

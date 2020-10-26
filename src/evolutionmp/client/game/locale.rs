@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 use std::sync::Mutex;
 
-use crate::{bind_fn_detour_ip, invoke};
+use crate::{bind_fn_detour_ip, bind_field_ip, bind_fn, invoke};
 use crate::hash::{Hash, Hashable, joaat};
 
 bind_fn_detour_ip!(GET_TEXT, "48 8B CB 8B D0 E8 ? ? ? ? 48 85 C0 0F 95 C0", 5, TranslationTable::get_text, (&TranslationTable, Hash) -> *const u8);

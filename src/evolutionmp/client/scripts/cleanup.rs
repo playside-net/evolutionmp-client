@@ -195,31 +195,3 @@ pub(crate) const CONTROLS_TO_DISABLE: [Control; 20] = [
     Control::VehicleSlowMoUpOnly,
     Control::VehicleSlowMoUpDown
 ];
-
-pub struct ScriptWeaponStats;
-
-impl Script for ScriptWeaponStats {
-    fn frame(&mut self) {
-
-    }
-
-    fn event(&mut self, event: ScriptEvent) {
-        match event {
-            ScriptEvent::UserInput(InputEvent::Keyboard(KeyboardEvent::Key { is_up, key, was_down_before, .. })) => {
-                if !is_up && !was_down_before && key == VK_NUMPAD9 {
-                    let ped = Ped::local();
-                    let weapons = vec!["pistol", "pistol_mk2", "combatpistol", "appistol", "stungun", "pistol50", "snspistol", "snspistol_mk2", "heavypistol", "vintagepistol", "flaregun", "marksmanpistol", "revolver", "revolver_mk2", "doubleaction", "raypistol", "ceramicpistol", "navyrevolver", "microsmg", "smg", "smg_mk2", "assaultsmg", "combatpdw", "machinepistol", "minismg", "raycarbine", "pumpshotgun", "pumpshotgun_mk2", "sawnoffshotgun", "assaultshotgun", "bullpupshotgun", "musket", "heavyshotgun", "dbshotgun", "autoshotgun", "assaultrifle", "assaultrifle_mk2", "carbinerifle", "carbinerifle_mk2", "advancedrifle", "specialcarbine", "specialcarbine_mk2", "bullpuprifle", "bullpuprifle_mk2", "compactrifle", "mg", "combatmg", "combatmg_mk2", "gusenberg", "sniperrifle", "heavysniper", "heavysniper_mk2", "marksmanrifle", "marksmanrifle_mk2", "rpg", "grenadelauncher", "grenadelauncher_smoke", "minigun", "firework", "railgun", "hominglauncher", "compactlauncher", "rayminigun"];
-                    let mut map = HashMap::new();
-                    for w in weapons {
-                        let hash = format!("weapon_{}", w).as_str().joaat();
-                        let capacity = crate::invoke!(u32, 0xA38DCFFCEA8962FA, ped, hash, false);
-                        info!("{} (0x{:08X}): {}", w, hash.0, capacity);
-                        map.insert(w, capacity);
-                    }
-                    info!("Result: {:#?}", map);
-                }
-            },
-            _ => {}
-        }
-    }
-}
