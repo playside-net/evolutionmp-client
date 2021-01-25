@@ -177,12 +177,18 @@ lazy_static! {
     pub static ref FN_MAP: HashMap<Hash, &'static str> = KNOWN_INIT_FNS.iter().map(|f| (f.joaat(), *f)).collect();
 }
 
+bind_fn_detour_ip!(UNK_U8, "E8 ? ? ? ? 84 C0 74 ? 66 0F 6E 35 ? ? ?", 0, unk_u8, () -> u8);
 bind_fn_detour_ip!(RUN_INIT, "BA 04 00 00 00 E8 ? ? ? ? E8 ? ? ? ? E8", 5, GameSkeleton::init, (&mut GameSkeleton, InitFnMask) -> ());
 bind_fn_detour_ip!(RUN_UPDATE, "48 8D 0D ? ? ? ? BA 01 00 00 00 E8 ? ? ? ? E8 ? ? ? ?", 12, GameSkeleton::update, (&mut GameSkeleton, u32) -> ());
 bind_fn_detour!(RUN_UPDATE_GROUP, "40 53 48 83 EC 20 48 8B 59 20 EB 0D 48 8B 03 48", 0, UpdateFn::run_group, (&mut UpdateFn) -> ());
 
+extern fn unk_u8() -> u8 { // Seems to be called every frame
+    0
+}
+
 pub fn hook() {
     info!("Hooking init functions...");
+    lazy_static::initialize(&UNK_U8);
     lazy_static::initialize(&FN_MAP);
     lazy_static::initialize(&RUN_INIT);
     /*lazy_static::initialize(&RUN_UPDATE);

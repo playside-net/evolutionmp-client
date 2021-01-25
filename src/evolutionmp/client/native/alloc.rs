@@ -10,6 +10,15 @@ pub struct RageVec<T> {
 
 impl<T> RageVec<T> {
     #[inline]
+    pub fn empty() -> RageVec<T> {
+        RageVec {
+            ptr: std::ptr::NonNull::dangling().as_ptr(),
+            len: 0,
+            capacity: 0
+        }
+    }
+
+    #[inline]
     pub fn len(&self) -> u16 {
         self.len
     }
@@ -47,6 +56,34 @@ impl<T> DerefMut for RageVec<T> {
             std::slice::from_raw_parts_mut(self.ptr, self.len as usize)
         }
     }
+}
+#[repr(C)]
+pub struct RageCollection<T> {
+    ptr: *mut T,
+    len: u16,
+    capacity: u16
+}
+
+impl<T> RageCollection<T> {
+    #[inline]
+    pub fn len(&self) -> u16 {
+        self.len
+    }
+
+    #[inline]
+    pub fn capacity(&self) -> u16 {
+        self.capacity
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+pub struct RCIter<T> {
+    start: *mut T,
+    end: *mut T
 }
 
 #[repr(C)]

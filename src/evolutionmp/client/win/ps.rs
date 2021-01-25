@@ -1,6 +1,6 @@
 use std::cell::UnsafeCell;
 use std::error::Error;
-use std::ffi::{CStr, CString, OsString};
+use std::ffi::{CStr, CString, OsString, OsStr};
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
 use winapi::um::memoryapi::{ReadProcessMemory, VirtualAllocEx, VirtualFreeEx, WriteProcessMemory};
 use winapi::um::processthreadsapi::{CreateRemoteThreadEx, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess};
 use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
-use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS, MODULEENTRY32W, Module32FirstW, Module32NextW, Module32First, Module32Next, MODULEENTRY32};
 use winapi::um::winbase::{INFINITE, THREAD_PRIORITY_HIGHEST};
 use winapi::um::winnt::{MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE};
 use wio::wide::{FromWide, ToWide};
@@ -62,12 +62,12 @@ pub unsafe fn create_elevated_thread(thread: ElevatedThread) -> bool {
     CloseHandle(CreateThread(null_mut(), 0, Some(thread), null_mut(), THREAD_PRIORITY_HIGHEST, null_mut())) == TRUE
 }
 
-pub struct ModuleEntry {
+pub struct ModuleHandle {
     instance: HMODULE,
     name: OsString,
 }
 
-impl ModuleEntry {
+impl ModuleHandle {
     pub fn get_instance(&self) -> HMODULE {
         self.instance
     }
@@ -100,7 +100,7 @@ impl ProcessHandle {
         unsafe { GetProcessId(self.inner) }
     }
 
-    pub fn get_modules(&self, flags: DWORD) -> Vec<ModuleEntry> {
+    pub fn get_modules(&self, flags: DWORD) -> Vec<ModuleHandle> {
         let mut result = Vec::new();
         let mut modules = vec![std::ptr::null_mut(); 1024];
         let mut count: DWORD = 0;
@@ -112,7 +112,7 @@ impl ProcessHandle {
                     let module = modules[i];
                     if GetModuleFileNameExW(self.inner, module, mod_name.as_mut_ptr(), MAX_PATH as DWORD) != 0 {
                         let name = OsString::from_wide_ptr_null(mod_name.as_ptr());
-                        result.push(ModuleEntry {
+                        result.push(ModuleHandle {
                             instance: module,
                             name,
                         });
@@ -141,17 +141,17 @@ impl ProcessHandle {
         }
     }
 
-    pub fn virtual_alloc<T>(&self, value: &T, address: LPVOID, allocation_type: DWORD, protect: DWORD) -> Result<VirtualAlloc<T>, VirtualAllocError> where T: VirtualData {
+    pub fn virtual_alloc<T>(&self, value: &T, address: LPVOID, allocation_type: DWORD, protect: DWORD) -> Result<VirtualAlloc<T>, ProcessMemoryError> where T: RemoteData {
         let size = value.get_size();
         let alloc = unsafe { self.virtual_alloc_uninit::<T>(address, size, allocation_type, protect) }?;
         alloc.write(value)?;
         Ok(alloc)
     }
 
-    pub unsafe fn virtual_alloc_uninit<T>(&self, address: LPVOID, size: SIZE_T, allocation_type: DWORD, protect: DWORD) -> Result<VirtualAlloc<T>, VirtualAllocError> where T: VirtualData {
+    pub unsafe fn virtual_alloc_uninit<T>(&self, address: LPVOID, size: SIZE_T, allocation_type: DWORD, protect: DWORD) -> Result<VirtualAlloc<T>, ProcessMemoryError> where T: RemoteData {
         let inner = VirtualAllocEx(self.inner, address, size, allocation_type, protect);
         if inner.is_null() {
-            Err(VirtualAllocError::AllocationFailed(GetLastError()))
+            Err(ProcessMemoryError::AllocationFailed(GetLastError()))
         } else {
             Ok(VirtualAlloc {
                 process: self,
@@ -163,7 +163,40 @@ impl ProcessHandle {
         }
     }
 
-    pub fn create_thread<T>(&self, start_routine: FARPROC, arg: &VirtualAlloc<T>) -> Result<ThreadHandle, CreateThreadError> where T: VirtualData {
+    pub unsafe fn write<D>(&self, base_address: LPVOID, data: &D) -> Result<usize, ProcessMemoryError> where D: RemoteData {
+        let size = data.get_size();
+        let mut bytes_written = 0usize;
+        if WriteProcessMemory(**self, base_address, data.get_ptr(), size, &mut bytes_written) == TRUE {
+            if size != bytes_written {
+                Err(ProcessMemoryError::WriteBytesMismatch(size, bytes_written))
+            } else {
+                Ok(bytes_written)
+            }
+        } else {
+            Err(ProcessMemoryError::WriteFailed(unsafe { GetLastError() }))
+        }
+    }
+
+    pub unsafe fn read<D>(&self, base_address: LPVOID, size: SIZE_T) -> Result<D, ProcessMemoryError> where D: RemoteData {
+        let mut data = vec![0u8; size];
+        let _ = self.read_into(base_address, size, &mut data)?;
+        Ok(D::read(data))
+    }
+
+    pub unsafe fn read_into<D>(&self, base_address: LPVOID, size: SIZE_T, data: &mut D) -> Result<usize, ProcessMemoryError> where D: RemoteData {
+        let mut bytes_read = 0usize;
+        if unsafe { ReadProcessMemory(**self, base_address, data.get_mut_ptr() as *mut _, size, &mut bytes_read) } == TRUE {
+            if size != bytes_read {
+                Err(ProcessMemoryError::ReadBytesMismatch(size, bytes_read))
+            } else {
+                Ok(bytes_read)
+            }
+        } else {
+            Err(ProcessMemoryError::ReadFailed(unsafe { GetLastError() }))
+        }
+    }
+
+    pub fn create_thread<T>(&self, start_routine: FARPROC, arg: &VirtualAlloc<T>) -> Result<ThreadHandle, CreateThreadError> where T: RemoteData {
         let routine: Option<TY> = Some(unsafe { std::mem::transmute(start_routine) });
         let inner = unsafe { CreateRemoteThreadEx(self.inner, null_mut(), 0, routine, **arg, 0, null_mut(), null_mut()) };
         if inner.is_null() {
@@ -198,50 +231,21 @@ pub struct VirtualAlloc<'a, T> {
     _data: PhantomData<T>,
 }
 
-impl<'a, T> VirtualAlloc<'a, T> where T: VirtualData {
-    pub fn write(&self, data: &T) -> Result<usize, VirtualAllocError> {
-        let size = data.get_size();
-        let mut bytes_written = 0usize;
-        if unsafe { WriteProcessMemory(**self.process, self.inner, data.get_ptr(), size, &mut bytes_written) } == TRUE {
-            if size != bytes_written {
-                Err(VirtualAllocError::WriteBytesMismatch(size, bytes_written))
-            } else {
-                Ok(bytes_written)
-            }
-        } else {
-            Err(VirtualAllocError::WriteFailed(unsafe { GetLastError() }))
-        }
+impl<'a, T> VirtualAlloc<'a, T> where T: RemoteData {
+    pub fn write(&self, data: &T) -> Result<usize, ProcessMemoryError> {
+        unsafe { self.process.write(self.inner, data) }
     }
 
-    pub fn read(&self, size: SIZE_T) -> Result<T, VirtualAllocError> {
-        let mut bytes_read = 0usize;
-        let mut data = vec![0; size];
-        if unsafe { ReadProcessMemory(**self.process, self.inner, data.as_mut_ptr() as *mut _, size, &mut bytes_read) } == TRUE {
-            if size != bytes_read {
-                Err(VirtualAllocError::ReadBytesMismatch(size, bytes_read))
-            } else {
-                Ok(T::read(data))
-            }
-        } else {
-            Err(VirtualAllocError::ReadFailed(unsafe { GetLastError() }))
-        }
+    pub fn read(&self, size: SIZE_T) -> Result<T, ProcessMemoryError> {
+        unsafe { self.process.read(self.inner, size) }
     }
 
-    pub fn read_into(&self, data: &mut T, size: SIZE_T) -> Result<usize, VirtualAllocError> {
-        let mut bytes_read = 0usize;
-        if unsafe { ReadProcessMemory(**self.process, self.inner, data.get_mut_ptr(), size, &mut bytes_read) } == TRUE {
-            if size != bytes_read {
-                Err(VirtualAllocError::ReadBytesMismatch(size, bytes_read))
-            } else {
-                Ok(bytes_read)
-            }
-        } else {
-            Err(VirtualAllocError::ReadFailed(unsafe { GetLastError() }))
-        }
+    pub fn read_into(&self, data: &mut T, size: SIZE_T) -> Result<usize, ProcessMemoryError> {
+        unsafe { self.process.read_into(self.inner, size, data) }
     }
 }
 
-impl<'a, T> std::ops::Deref for VirtualAlloc<'a, T> where T: VirtualData {
+impl<'a, T> std::ops::Deref for VirtualAlloc<'a, T> where T: RemoteData {
     type Target = HANDLE;
 
     fn deref(&self) -> &Self::Target {
@@ -275,16 +279,40 @@ impl From<PROCESSENTRY32W> for ProcessEntry {
 
 impl ProcessEntry {
     pub fn get_name(&self) -> OsString {
-        OsString::from_wide_null(&self.inner.szExeFile[..])
+        OsString::from_wide_null(&self.inner.szExeFile)
+    }
+
+    pub fn get_pid(&self) -> u32 {
+        self.inner.th32ProcessID
     }
 
     pub fn open(&self, desired_access: DWORD, inherit_handle: bool) -> Result<ProcessHandle, DWORD> {
-        let handle = unsafe { OpenProcess(desired_access, inherit_handle as _, self.inner.th32ProcessID) };
+        let handle = unsafe { OpenProcess(desired_access, inherit_handle as _, self.get_pid()) };
         if handle != NULL {
             Ok(ProcessHandle::from(handle))
         } else {
             Err(unsafe { GetLastError() })
         }
+    }
+
+    pub fn get_modules(&self, flags: DWORD) -> Option<ModuleIterator> {
+        ModuleIterator::new(self.get_pid(), flags)
+    }
+}
+
+pub struct ModuleEntry {
+    inner: MODULEENTRY32
+}
+
+impl From<MODULEENTRY32> for ModuleEntry {
+    fn from(inner: MODULEENTRY32) -> Self {
+        ModuleEntry { inner }
+    }
+}
+
+impl ModuleEntry {
+    pub fn get_name(&self) -> &OsStr {
+        unsafe { std::mem::transmute(CStr::from_ptr(self.inner.szModule[..].as_ptr() as _)) }
     }
 }
 
@@ -304,7 +332,7 @@ impl ProcessIterator {
                 first: true,
                 entry: PROCESSENTRY32W {
                     dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
-                    ..Default::default()
+                    .. Default::default()
                 },
             })
         } else {
@@ -337,14 +365,63 @@ impl Drop for ProcessIterator {
     }
 }
 
-pub trait VirtualData {
+pub struct ModuleIterator {
+    module_snapshot: HANDLE,
+    first: bool,
+    entry: MODULEENTRY32,
+}
+
+impl ModuleIterator {
+    pub fn new(pid: u32, flags: DWORD) -> Option<ModuleIterator> {
+        let module_snapshot = unsafe { CreateToolhelp32Snapshot(flags, pid) };
+        unsafe { SetLastError(0) };
+        if module_snapshot != INVALID_HANDLE_VALUE {
+            Some(ModuleIterator {
+                module_snapshot,
+                first: true,
+                entry: MODULEENTRY32 {
+                    dwSize: std::mem::size_of::<MODULEENTRY32>() as u32,
+                    ..Default::default()
+                },
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Iterator for ModuleIterator {
+    type Item = ModuleEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.first {
+            self.first = false;
+            if unsafe { Module32First(self.module_snapshot, &mut self.entry) } == TRUE {
+                return Some(ModuleEntry::from(self.entry.clone()));
+            }
+        } else {
+            while unsafe { Module32Next(self.module_snapshot, &mut self.entry) } == TRUE {
+                return Some(ModuleEntry::from(self.entry.clone()));
+            }
+        }
+        None
+    }
+}
+
+impl Drop for ModuleIterator {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.module_snapshot) };
+    }
+}
+
+pub trait RemoteData {
     fn get_ptr(&self) -> *const c_void;
     fn get_mut_ptr(&mut self) -> *mut c_void;
     fn get_size(&self) -> SIZE_T;
     fn read(data: Vec<u8>) -> Self;
 }
 
-impl VirtualData for Vec<u8> {
+impl RemoteData for Vec<u8> {
     fn get_ptr(&self) -> *const c_void {
         self.as_ptr() as *const _
     }
@@ -362,7 +439,7 @@ impl VirtualData for Vec<u8> {
     }
 }
 
-impl VirtualData for CString {
+impl RemoteData for CString {
     fn get_ptr(&self) -> *const c_void {
         self.as_ptr() as *const c_void
     }
@@ -380,7 +457,7 @@ impl VirtualData for CString {
     }
 }
 
-impl VirtualData for Vec<u16> {
+impl RemoteData for Vec<u16> {
     fn get_ptr(&self) -> *const c_void {
         self.as_ptr() as _
     }
@@ -398,7 +475,7 @@ impl VirtualData for Vec<u16> {
     }
 }
 
-impl VirtualData for u8 {
+impl RemoteData for u8 {
     fn get_ptr(&self) -> *const c_void {
         unsafe { std::mem::transmute(self) }
     }
@@ -416,7 +493,7 @@ impl VirtualData for u8 {
     }
 }
 
-impl VirtualData for u16 {
+impl RemoteData for u16 {
     fn get_ptr(&self) -> *const c_void {
         unsafe { std::mem::transmute(self) }
     }
@@ -434,7 +511,7 @@ impl VirtualData for u16 {
     }
 }
 
-impl VirtualData for u32 {
+impl RemoteData for u32 {
     fn get_ptr(&self) -> *const c_void {
         unsafe { std::mem::transmute(self) }
     }
@@ -469,7 +546,7 @@ impl std::fmt::Display for CreateThreadError {
 pub enum InjectionError<'a> {
     InvalidProcessHandle,
     FileDoesntExist,
-    AllocationFailed(VirtualAllocError),
+    AllocationFailed(ProcessMemoryError),
     InvalidFile,
     NoX64File,
     NoX86File,
@@ -513,7 +590,7 @@ impl<'a> std::fmt::Display for InjectionError<'a> {
 }
 
 #[derive(Debug)]
-pub enum VirtualAllocError {
+pub enum ProcessMemoryError {
     AllocationFailed(u32),
     WriteFailed(u32),
     WriteBytesMismatch(usize, usize),
@@ -521,57 +598,16 @@ pub enum VirtualAllocError {
     ReadBytesMismatch(usize, usize),
 }
 
-impl Error for VirtualAllocError {}
+impl Error for ProcessMemoryError {}
 
-impl std::fmt::Display for VirtualAllocError {
+impl std::fmt::Display for ProcessMemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            VirtualAllocError::AllocationFailed(code) => f.write_fmt(format_args!("Virtual allocation failed: {}", code)),
-            VirtualAllocError::WriteFailed(code) => f.write_fmt(format_args!("Virtual write failed: {}", code)),
-            VirtualAllocError::WriteBytesMismatch(expected, written) => f.write_fmt(format_args!("Virtual write bytes mismatch: {} expected but {} written", expected, written)),
-            VirtualAllocError::ReadFailed(code) => f.write_fmt(format_args!("Virtual read failed: {}", code)),
-            VirtualAllocError::ReadBytesMismatch(expected, read) => f.write_fmt(format_args!("Virtual read bytes mismatch: {} expected but {} read", expected, read))
+            ProcessMemoryError::AllocationFailed(code) => f.write_fmt(format_args!("Virtual allocation failed: {}", code)),
+            ProcessMemoryError::WriteFailed(code) => f.write_fmt(format_args!("Virtual write failed: {}", code)),
+            ProcessMemoryError::WriteBytesMismatch(expected, written) => f.write_fmt(format_args!("Virtual write bytes mismatch: {} expected but {} written", expected, written)),
+            ProcessMemoryError::ReadFailed(code) => f.write_fmt(format_args!("Virtual read failed: {}", code)),
+            ProcessMemoryError::ReadBytesMismatch(expected, read) => f.write_fmt(format_args!("Virtual read bytes mismatch: {} expected but {} read", expected, read))
         }
     }
 }
-
-/*
-void killProcessByName(const char *filename)
-{
-HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
-PROCESSENTRY32 pEntry;
-pEntry.dwSize = sizeof(pEntry);
-BOOL hRes = Process32First(hSnapShot, &pEntry);
-while (hRes)
-{
-if (strcmp(pEntry.szExeFile, filename) == 0)
-{
-HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, 0,
-(DWORD)pEntry.th32ProcessID);
-if (hProcess != NULL)
-{
-TerminateProcess(hProcess, 9);
-CloseHandle(hProcess);
-}
-}
-hRes = Process32Next(hSnapShot, &pEntry);
-}
-CloseHandle(hSnapShot);
-}
-
-bool Is64BitProcess(HANDLE hProc)
-{
-bool Is64BitWin = false;
-BOOL Out = 0;
-IsWow64Process(GetCurrentProcess(), &Out);
-if (Out)
-Is64BitWin = true;
-
-if (!IsWow64Process(hProc, &Out))
-return false;
-
-if (Is64BitWin && !Out)
-return true;
-
-return false;
-}*/

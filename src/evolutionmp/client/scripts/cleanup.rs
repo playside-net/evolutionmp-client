@@ -135,8 +135,8 @@ impl Script for ScriptCleanWorld {
 
 impl ScriptCleanWorld {
     fn cleanup(&self) {
-        let player = Player::local();
-        player.disable_vehicle_rewards();
+        //let player = Player::local();
+        //player.disable_vehicle_rewards();
 
         game::player::set_max_wanted_level(0);
 
@@ -154,7 +154,7 @@ impl ScriptCleanWorld {
         let range = Vector3::from_value(9999.0);
         game::vehicle::remove_vehicles_from_generators_in_area(-range, range, false);
 
-        game::ped::set_non_scenario_cops(false);
+        //game::ped::set_non_scenario_cops(false);
         game::ped::set_cops(false);
         game::ped::set_scenario_cops(false);
 

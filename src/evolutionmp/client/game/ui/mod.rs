@@ -6,21 +6,98 @@ use cgmath::{Vector2, Vector3};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 use crate::{invoke, native};
-use crate::{bind_fn, mem};
+use crate::{bind_fn, bind_field_ip, mem};
 use crate::game::Rgba;
-use crate::hash::Hashable;
+use crate::hash::{Hashable, Hash};
 use crate::win::input::{InputEvent, KeyboardEvent};
+use crate::client::native::alloc::RageVec;
+use std::ffi::{CStr, OsStr};
+use bitflags::_core::mem::align_of;
+use std::borrow::Cow;
 
 pub mod notification;
 
 pub const BASE_WIDTH: f32 = 1280.0;
 pub const BASE_HEIGHT: f32 = 720.0;
 
+#[repr(C, packed(1))]
+pub struct UIMenuItem {
+    index: u32,
+    title: Hash,
+    unk_vec: RageVec<()>,
+    setting_id: u8,
+    action_ty: u8,
+    ty: u8,
+    state_flags: u8,
+    pad1: [u8; 4]
+}
+
+#[repr(C, packed(1))]
+pub struct UIMenu {
+    c_instance: *mut (),
+    items: RageVec<Box<UIMenuItem>>,
+    unk: *mut (),
+    pad1: [u8; 16],
+    name: *mut u8,
+    pad2: [u8; 8],
+    id: u32,
+    unk1: u32,
+    unk_flag: u16,
+    scroll_flags: u16,
+    pad3: [u8; 4]
+}
+
+impl UIMenu {
+    pub fn empty() -> UIMenu {
+        UIMenu {
+            c_instance: std::ptr::null_mut(),
+            items: RageVec::empty(),
+            unk: std::ptr::null_mut(),
+            pad1: [0; 16],
+            name: std::ptr::null_mut(),
+            pad2: [0; 8],
+            id: 0,
+            unk1: 0,
+            unk_flag: 0,
+            scroll_flags: 0,
+            pad3: [0; 4]
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.c_instance.is_null() || self.name.is_null()
+    }
+
+    pub fn get_name(&self) -> &OsStr {
+        unsafe { std::mem::transmute(CStr::from_ptr(self.name.cast()).to_bytes()) }
+    }
+}
+
+#[repr(u32)]
+pub enum DynamicMenuAction {
+    Slider,
+    Toggle,
+    AimMode,
+    GamepadLayout,
+    LowMedHi,
+    AudioOutput,
+    FadeRadio,
+    SelfRadioMode,
+    OffOnBlips,
+    SimpleComplex,
+    Language,
+    LowHi
+}
+
 bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, (bool, u32) -> FrontendButtons);
+bind_field_ip!(ACTIVE_MENU_POOL, "0F B7 54 51 ?", -4, RageVec<UIMenu>);
 
 pub fn hook() {
     info!("Hooking UI...");
+    assert_eq!(std::mem::size_of::<UIMenuItem>(), 0x20);
+    assert_eq!(std::mem::size_of::<UIMenu>(), 0x50);
     lazy_static::initialize(&GET_WARN_RESULT);
+    lazy_static::initialize(&ACTIVE_MENU_POOL);
 }
 
 pub fn init() {
@@ -33,6 +110,19 @@ pub fn init() {
         //no_slowmo.add(8).nop(5); //Vignetting call patch
 
         no_slowmo.add(34).write_bytes(&[0x31, 0xD2]); //Timescale override patch
+    }
+}
+
+pub fn print_menus() {
+    for menu in unsafe { ACTIVE_MENU_POOL.as_mut() }.iter_mut() {
+        if !menu.is_empty() {
+            let name = menu.get_name();
+            warn!("{:p} menu \"{}\": {} with {} elements", menu.c_instance, name.to_string_lossy(), menu.id, menu.items.len());
+            //if name == "PAUSE_MENU_PAGES_GAME" {
+                warn!("unk {:p} unk1 {} unk_flag {} scroll_flags {}", menu.unk, menu.unk1, menu.unk_flag, menu.scroll_flags);
+                //menu.items = RageVec::empty();
+            //}
+        }
     }
 }
 

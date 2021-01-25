@@ -7,7 +7,7 @@ use std::os::raw::c_char;
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
-use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3};
+use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3, Angle};
 use detour::{GenericDetour, RawDetour};
 
 use crate::client::native::pool::{CEntity, Native};
@@ -18,6 +18,8 @@ use crate::hash::Hash;
 use crate::native::pool::Handleable;
 use std::sync::atomic::Ordering;
 use crate::client::jni::attach_thread;
+use crate::client::print_address_info;
+use backtrace::SymbolName;
 
 pub mod vehicle;
 pub mod pool;
@@ -207,7 +209,7 @@ bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSpr
 
 pub(crate) fn hook() {
     script::hook();
-    streaming::hook();
+    //streaming::hook();
     grc::hook();
     pool::hook();
     vehicle::hook();
@@ -265,6 +267,9 @@ pub fn call_trampoline(hash: u64, context: &mut NativeCallContext) {
 pub fn detour(hash: u64, hook: fn(&mut NativeCallContext)) {
     let original = crate::native::get_handler(hash);
     unsafe {
+        warn!("Hooking native 0x{:016X} at:", hash);
+        print_address_info(original as _, None, SymbolName::new(format!("NATIVE 0x{:016X}", hash).as_bytes()));
+
         let detour = GenericDetour::new(original, std::mem::transmute(hook))
             .expect(&format!("native hook creation failed for 0x{:016X}", hash));
         detour.enable().expect(&format!("native hook enabling failed for 0x{:016X}", hash));
@@ -582,6 +587,7 @@ impl Natives {
 
         for group in NATIVE_TABLE.groups.iter() {
             for (hash, handler) in group.iter() {
+                //warn!("0x{:016X}", hash);
                 handlers.insert(hash, handler);
             }
         }

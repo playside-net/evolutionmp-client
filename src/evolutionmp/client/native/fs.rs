@@ -77,6 +77,7 @@ pub(crate) fn hook() {
 
     //lazy_static::initialize(&SOME_FN);
 
+    lazy_static::initialize(&INITIAL_MOUNT);
     lazy_static::initialize(&GET_DEVICE);
     lazy_static::initialize(&MOUNT_GLOBAL);
     lazy_static::initialize(&UNMOUNT);
@@ -86,8 +87,6 @@ pub(crate) fn hook() {
     lazy_static::initialize(&RELATIVE_DEVICE_SET_PATH);
     lazy_static::initialize(&RELATIVE_DEVICE_MOUNT);
     lazy_static::initialize(&KEY_STATE_INIT);
-
-    lazy_static::initialize(&INITIAL_MOUNT);
 
     lazy_static::initialize(&DEVICE_VTABLE);
     lazy_static::initialize(&PACK_FILE_VTABLE);
@@ -151,7 +150,7 @@ pub(crate) fn init() {
 }
 
 extern fn initial_mount() {
-    info!("Initial mount");
+    warn!("Initial mount");
 
     INITIAL_MOUNT();
 }

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use winapi::shared::minwindef::{HKL, LPARAM, LRESULT, UINT, WPARAM};
 use winapi::shared::windef::HWND;
-use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC, WM_NCHITTEST, WM_SETCURSOR, WM_GETICON};
+use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC, WM_NCHITTEST, WM_SETCURSOR, WM_GETICON, VK_F3};
 use wio::wide::FromWide;
 
 use crate::events::ScriptEvent;
@@ -76,6 +76,12 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
                 was_down_before: ((lparam >> 30) & 1) == 1,
                 is_up,
             };
+
+            if let KeyboardEvent::Key { key, shift, is_up, .. } = event {
+                if is_up && key == VK_F3 && shift {
+                    crate::game::ui::print_menus();
+                }
+            }
 
             push_event(InputEvent::Keyboard(event));
 

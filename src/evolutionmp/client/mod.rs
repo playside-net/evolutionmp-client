@@ -1,21 +1,22 @@
-use std::ffi::{CString, OsString, CStr};
+use std::ffi::{CStr, CString, OsString};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use backtrace::{Backtrace, SymbolName};
 use detour::RawDetour;
 use winapi::ctypes::c_void;
-use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, HLOCAL, LPVOID, MAX_PATH, TRUE, HMODULE};
-use winapi::shared::windef::{HMENU, HWND};
+use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, HLOCAL, HMODULE, LPVOID, MAX_PATH, TRUE};
+use winapi::shared::windef::{HHOOK, HMENU, HWND};
 use winapi::um::errhandlingapi::{AddVectoredExceptionHandler, GetLastError};
 use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress, LoadLibraryA};
 use winapi::um::memoryapi::VirtualQuery;
+use winapi::um::synchapi::Sleep;
 use winapi::um::winbase::{
     FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_HMODULE,
     FORMAT_MESSAGE_FROM_SYSTEM, FormatMessageW, LocalFree,
 };
-use winapi::um::winnt::{EXCEPTION_POINTERS, LANG_NEUTRAL, LONG, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, SUBLANG_DEFAULT, EXCEPTION_RECORD, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR, LPCSTR};
-use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC};
+use winapi::um::winnt::{EXCEPTION_POINTERS, EXCEPTION_RECORD, LANG_NEUTRAL, LONG, LPCSTR, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR, SUBLANG_DEFAULT};
+use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, UnhookWindowsHookEx, WNDPROC, HOOKPROC, SetWindowsHookExA};
 use wio::wide::FromWide;
 
 use game::GameState;
@@ -30,7 +31,6 @@ pub mod events;
 pub mod mappings;
 pub mod game;
 pub mod pattern;
-pub mod process;
 pub mod registry;
 pub mod scripts;
 pub mod jni;
@@ -75,7 +75,7 @@ unsafe fn get_error_code_message(ntdll: HMODULE, rec: &EXCEPTION_RECORD) -> Stri
             } else {
                 String::from("STATUS_ACCESS_VIOLATION")
             }
-        },
+        }
         STATUS_IN_PAGE_ERROR => {
             let address = rec.ExceptionInformation[1];
             if rec.NumberParameters == 3 {
@@ -85,7 +85,7 @@ unsafe fn get_error_code_message(ntdll: HMODULE, rec: &EXCEPTION_RECORD) -> Stri
             } else {
                 String::from("STATUS_IN_PAGE_ERROR")
             }
-        },
+        }
         code => {
             let mut buffer: LPWSTR = std::ptr::null_mut();
             let strlen = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_HMODULE,
@@ -211,6 +211,10 @@ proc_detour!(CREATE_WINDOW, "user32.dll", "CreateWindowExW", create_window,
     (DWORD, LPWSTR, LPWSTR, DWORD, i32, i32, i32, i32, Window, HMENU, HINSTANCE, LPVOID) -> Window
 );
 
+proc_detour!(SET_WINDOWS_HOOK, "user32.dll", "SetWindowsHookExW", set_windows_hook,
+    (u32, HOOKPROC, HINSTANCE, DWORD) -> HHOOK
+);
+
 proc_detour!(OUTPUT_DEBUG_STRING_A, "kernel32.dll", "OutputDebugStringA", debug_a,
     (LPCSTR) -> ()
 );
@@ -218,6 +222,12 @@ proc_detour!(OUTPUT_DEBUG_STRING_A, "kernel32.dll", "OutputDebugStringA", debug_
 proc_detour!(OUTPUT_DEBUG_STRING_W, "kernel32.dll", "OutputDebugStringW", debug_w,
     (LPWSTR) -> ()
 );
+
+unsafe extern fn set_windows_hook(id: u32, handler: HOOKPROC, module: HINSTANCE, thread_id: DWORD) -> HHOOK {
+    warn!("Hook installation requested: {}, {:?}, {:p}, {}", id, handler.map(|f|f as *mut ()), module, thread_id);
+    SET_WINDOWS_HOOK(id, handler, module, thread_id)
+    //1
+}
 
 unsafe extern fn debug_a(text: LPCSTR) {
     let text = CStr::from_ptr(text);
@@ -233,6 +243,8 @@ unsafe fn initialize(window: &Window) {
     console::attach();
 
     lazy_static::initialize(&GAME_STATE);
+    info!("Hooking DirectX...");
+    crate::win::direct::hook();
     info!("Hooking user input...");
     crate::win::input::hook(window);
 
@@ -257,6 +269,23 @@ unsafe fn initialize(window: &Window) {
     /*mem!("48 85 C0 0F 84 ? ? ? ? 8B 48 50").expect("unlock objects")
         .nop(24);*/
 
+    /*bind_field_ip!(DEBUGGER_HOOK, "48 8D 15 ? ? ? ? 41 8D 49 0D", 3, HHOOK);
+    lazy_static::initialize(&DEBUGGER_HOOK);
+
+    std::thread::spawn(|| {
+        loop {
+            unsafe {
+                let hook = **DEBUGGER_HOOK;
+                if !hook.is_null() {
+                    if UnhookWindowsHookEx(hook) == 1 {
+                        info!("unhooked {:p}", hook);
+                    }
+                    Sleep(0);
+                }
+            }
+        }
+    });*/
+
     //*HEAP_SIZE.as_mut() = 650 * 1024 * 1024; //Increase heap size to 650MB
 
     native::fs::hook();
@@ -278,6 +307,7 @@ fn attach() {
         lazy_static::initialize(&OUTPUT_DEBUG_STRING_A);
         lazy_static::initialize(&OUTPUT_DEBUG_STRING_W);
         lazy_static::initialize(&CREATE_WINDOW);
+        lazy_static::initialize(&SET_WINDOWS_HOOK);
     }
 }
 
