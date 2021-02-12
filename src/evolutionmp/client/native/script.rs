@@ -27,7 +27,6 @@ pub fn run<S>(name: &str, script: S) where S: Script + 'static {
 }
 
 bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
-bind_field_ip!(THREAD_ID, "89 15 ? ? ? ? 48 8B 0C D8", 2, u32);
 bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B F9", 2, u32);
 bind_field_ip!(SCRIPT_MANAGER, "74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D", 13, ScriptManager);
 
@@ -110,7 +109,6 @@ unsafe extern fn script_access(script: &'static mut RageThread, unk: *mut ()) ->
 pub(crate) fn hook() {
     info!("Hooking scripts...");
     lazy_static::initialize(&THREAD_COLLECTION);
-    lazy_static::initialize(&THREAD_ID);
     lazy_static::initialize(&THREAD_COUNT);
     lazy_static::initialize(&SCRIPT_MANAGER);
 
@@ -290,11 +288,10 @@ impl ScriptThread {
                 .or_else(|| collection.iter().position(|t| t.context.id == 0));
 
             if let Some(slot) = slot {
-                let thread_id = THREAD_ID.max(1);
+                let thread_id = THREAD_COUNT.max(1);
                 self.context.id = thread_id;
                 self.context.script_hash = Hash(THREAD_COUNT.add(1));
                 *THREAD_COUNT.as_mut() += 1;
-                *THREAD_ID.as_mut() = thread_id + 1;
                 collection[slot as usize] = ManuallyDrop::new(std::mem::transmute(self));
             }
         }
@@ -366,8 +363,8 @@ impl ScriptThreadRuntime {
         self.can_remove_blips_from_other_scripts = true;
         self.sz_exit_message = c_str!("Normal exit").as_ptr();
         if self.context.id == 0 {
-            self.context.id = **THREAD_ID;
-            unsafe { *THREAD_ID.as_mut() += 1; }
+            self.context.id = **THREAD_COUNT;
+            unsafe { *THREAD_COUNT.as_mut() += 1; }
         }
         unsafe { SCRIPT_MANAGER.as_mut().attach(self); }
         self.context.state
