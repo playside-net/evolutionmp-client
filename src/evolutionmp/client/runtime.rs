@@ -127,10 +127,10 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
     }
 
     natives!(env, "mp/evolution/invoke/NativeArgs",
-        NativeMethod::new("push", "(Ljava/lang/String;)V", put_string as _)
+        NativeMethod::new("getStringUTFChars", "(Ljava/lang/String;)J", get_string_utf_chars as _)
     );
     natives!(env, "mp/evolution/invoke/NativeResult",
-        NativeMethod::new("getString", "()Ljava/lang/String;", get_string as _)
+        NativeMethod::new("getStringFromUTFChars", "(J)Ljava/lang/String;", get_string_from_utf_chars as _)
     );
     natives!(env, "mp/evolution/invoke/Native",
         NativeMethod::new("invoke", "(JJIJ)V", invoke as _),
@@ -295,17 +295,13 @@ impl Script for ScriptJava {
     }
 }
 
-unsafe extern fn put_string(_env: &JNIEnv, args: JObject, value: JString) {
+unsafe extern fn get_string_utf_chars(_env: &JNIEnv, _class: JClass, value: JString) -> *const i8 {
     let env = attach_thread();
-    let buffer = env.get_field(args, "buffer", "Ljava/nio/ByteBuffer;").unwrap().l().unwrap();
-    let ptr = env.get_string_utf_chars(value).unwrap();
-    env.call_method(buffer, "putLong", "(J)Ljava/nio/ByteBuffer;", args![ptr as i64]).unwrap();
+    env.get_string_utf_chars(value).unwrap()
 }
 
-unsafe extern fn get_string<'a>(_env: &'a JNIEnv, args: JObject) -> JString<'a> {
+unsafe extern fn get_string_from_utf_chars<'a>(_env: &'a JNIEnv, _class: JClass, ptr: *const i8) -> JString<'a> {
     let env = attach_thread();
-    let buffer = env.get_field(args, "buffer", "Ljava/nio/ByteBuffer;").unwrap().l().unwrap();
-    let ptr = env.call_method(buffer, "getLong", "()J", args![]).unwrap().j().unwrap() as u64 as *const i8;
     env.new_string(JNIStr::from_ptr(ptr).to_owned()).unwrap()
 }
 
