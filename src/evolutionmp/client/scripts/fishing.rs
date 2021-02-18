@@ -15,6 +15,7 @@ use crate::game::Rgba;
 use crate::game::streaming::{AnimDict, Resource};
 use crate::game::ui::Font;
 use crate::runtime::Script;
+use crate::client::game::interior::Interior;
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
@@ -32,7 +33,7 @@ impl Script for ScriptFishing {
         let dir = cam.get_direction();
         let end = start + dir * distance;
 
-        let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
+        /*let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
         if ray.hit {
             game::graphics::draw_line(start, ray.end, Rgba::WHITE);
             let pos = Vector2::new(2.0, 2.0);
@@ -44,7 +45,7 @@ impl Script for ScriptFishing {
                 let model = entity.get_model();
                 game::ui::draw_text(format!("Model {}; pos: {:?}", model, ray.end), pos + Vector2::unit_y() * 35.0, color, Font::ChaletLondon, scale);
             }
-        }
+        }*/
 
         /*if let Some(veh) = ped.get_in_vehicle(false) {
             let pos = Vector2::new(2.0, 2.0);
@@ -75,6 +76,12 @@ impl Script for ScriptFishing {
                 veh.get_rotation(2),
             ), pos, color, Font::ChaletLondon, scale);
         }*/
+
+        if game::controls::is_disabled_just_pressed(ControlGroup::Move, Control::Cover) {
+            if let Some(int) = Interior::from_pos(ped.get_position()) {
+                warn!("{:?}", int.get_info());
+            }
+        }
 
         let probe = game::water::probe(start, end);
         if let Some(pos) = probe {

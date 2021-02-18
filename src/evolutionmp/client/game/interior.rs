@@ -108,6 +108,7 @@ impl Resource for Interior {
     }
 }
 
+#[derive(Debug)]
 pub struct InteriorInfo {
     pub pos: Vector3<f32>,
     pub hash: Hash

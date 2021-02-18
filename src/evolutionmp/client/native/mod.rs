@@ -824,6 +824,7 @@ impl<A, T> NativeField<A, T> where A: Addressable, T: Sized {
     }
 }
 
+#[derive(Debug)]
 #[repr(C, packed(1))]
 pub struct NativeVector3 {
     pub x: f32,

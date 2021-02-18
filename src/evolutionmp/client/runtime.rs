@@ -16,6 +16,11 @@ use crate::native::NativeCallContext;
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
 use jni_dynamic::sys::jint;
+use crate::client::game::ped::Ped;
+use crate::client::game::interior::Interior;
+use crate::client::game::entity::Entity;
+use crate::client::native::NativeVector3;
+use crate::client::native::pool::Handleable;
 
 java_static_method!(set_system_property, "java/lang/System", "setProperty", fn(property: &str, value: &str) -> Option<String>);
 
@@ -128,7 +133,11 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         NativeMethod::new("getString", "()Ljava/lang/String;", get_string as _)
     );
     natives!(env, "mp/evolution/invoke/Native",
-        NativeMethod::new("invoke", "(JLjava/nio/LongBuffer;Ljava/nio/LongBuffer;)V", invoke as _)
+        NativeMethod::new("invoke", "(JJIJ)V", invoke as _),
+        NativeMethod::new("test", "(J)V", test as _)
+    );
+    natives!(env, "mp/evolution/invoke/MutableVector3",
+        NativeMethod::new("address", "(J)J", vector_address as _)
     );
     natives!(env, "mp/evolution/script/Script",
         //NativeMethod::new("yield", "(J)V", wait as _),
@@ -316,23 +325,39 @@ unsafe extern fn error(_env: &JNIEnv, _class: JClass, line: JObject) {
     error!(target: "script", "{}", line);
 }
 
-unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: JObject, result: JObject) {
-    let env = attach_thread();
+unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: Box<[u64; 32]>, arg_count: u32, result: Box<[u64; 3]>) {
     if let Some(handler) = crate::native::get_handler_opt(hash) {
-        let arg_count = env.call_method(args, "limit", "()I", &[]).unwrap().i().unwrap() as u32;
-        let args = env.call_method(args, "address", "()J", &[]).unwrap().j().unwrap() as *mut u64;
-        let result = env.call_method(result, "address", "()J", &[]).unwrap().j().unwrap() as *mut u64;
-        let mut context = NativeCallContext::new_allocated(
-            Box::from_raw(args as _),
-            Box::from_raw(result as _),
-            arg_count,
-        );
+        let mut context = NativeCallContext::new_allocated(args, result, arg_count);
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
         handler(&mut context);
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
         std::mem::forget(context); //Do not free java nio buffers
     } else {
+        let env = attach_thread();
         env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
+    }
+}
+
+unsafe extern fn vector_address(_env: &JNIEnv, _class: JClass, vec: *mut NativeVector3) -> usize {
+    let mut data: Box<NativeVector3> = Box::from_raw(vec as _);
+    let address = data.as_mut() as *mut _ as usize;
+    std::mem::forget(data);
+    address
+}
+
+unsafe extern fn test(_env: &JNIEnv, _class: JClass, data: &mut NativeVector3) {
+    let env = attach_thread();
+    let ped = Ped::local();
+    let pos = ped.get_position();
+    warn!("ped pos: {:?}", pos);
+    if let Some(int) = Interior::from_pos(pos) {
+        warn!("int: {:?}", int);
+        let info = int.get_info();
+        warn!("info: {:?}", info);
+        let ptr = data as *mut _ as usize;
+        warn!("ptr: {:p} ({} vs {})", data, ptr, std::mem::transmute::<_, isize>(ptr));
+        crate::invoke!((), 0x252BDC06B73FA6EA, int.get_handle(), data as *mut _ as u64, &mut 0);
+        //warn!("new data: {:?}", data);
     }
 }
 

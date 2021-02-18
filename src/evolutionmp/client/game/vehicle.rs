@@ -179,6 +179,14 @@ impl Vehicle {
         }
     }
 
+    pub fn get_primary_color_rgb(&self) -> (u32, u32, u32) {
+        let mut r = 0;
+        let mut g = 0;
+        let mut b = 0;
+        invoke!((), 0xB64CF2CCA9D95F52, self.handle, &mut r, &mut g, &mut b);
+        (r, g, b)
+    }
+
     pub fn get_colors(&self) -> VehicleColors {
         let mut primary = 0;
         let mut secondary = 0;
