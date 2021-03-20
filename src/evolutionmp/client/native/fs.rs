@@ -322,7 +322,7 @@ impl Device {
 
     pub fn open<P>(&mut self, file_name: P, read_only: bool) -> Option<DeviceOpenGuard> where P: AsRef<Path> {
         let handle = (self.v_table.open)(self, file_name.as_ref().into(), read_only);
-        if handle != std::u64::MAX {
+        if handle != u64::MAX {
             Some(DeviceOpenGuard {
                 device: self,
                 handle,
@@ -337,7 +337,7 @@ impl Device {
         let mut base_offset = 0;
         let len = self.len(&file_name);
         let handle = (self.v_table.open_bulk)(self, file_name, &mut base_offset);
-        if handle != std::u64::MAX {
+        if handle != u64::MAX {
             Some(DeviceOpenBulkGuard {
                 device: self,
                 len,
@@ -360,7 +360,7 @@ impl Device {
 
     fn read(&mut self, handle: u64, buffer: &mut [u8]) -> IoResult<usize> {
         let read = (self.v_table.read)(self, handle, buffer.as_mut_ptr(), buffer.len() as _);
-        if read == std::u32::MAX {
+        if read == u32::MAX {
             Err(IoError::new(ErrorKind::UnexpectedEof, "unable to read"))
         } else {
             Ok(read as _)
@@ -369,7 +369,7 @@ impl Device {
 
     fn read_bulk(&mut self, handle: u64, offset: usize, buffer: &mut [u8]) -> IoResult<usize> {
         let read = (self.v_table.read_bulk)(self, handle, offset, buffer.as_mut_ptr(), buffer.len() as _);
-        if read == std::u32::MAX {
+        if read == u32::MAX {
             Err(IoError::new(ErrorKind::UnexpectedEof, "unable to read bulk"))
         } else {
             Ok(read as _)
@@ -378,7 +378,7 @@ impl Device {
 
     fn write(&mut self, handle: u64, buffer: &[u8]) -> IoResult<usize> {
         let written = (self.v_table.write)(self, handle, buffer.as_ptr(), buffer.len() as _);
-        if written == std::u32::MAX {
+        if written == u32::MAX {
             Err(IoError::new(ErrorKind::WriteZero, "unable to write"))
         } else {
             Ok(written as usize)
@@ -387,7 +387,7 @@ impl Device {
 
     /*fn write_bulk(&mut self, handle: u64, ptr: u64, buffer: &[u8]) -> IoResult<usize> {
         let written = (self.v_table.write_bulk)(self, handle, ptr, buffer.as_ptr(), buffer.len() as _);
-        if written == std::u32::MAX {
+        if written == u32::MAX {
             Err(IoError::new(ErrorKind::WriteZero, "unable to write"))
         } else {
             Ok(written as usize)
@@ -401,7 +401,7 @@ impl Device {
             SeekFrom::Current(offset) => (FILE_CURRENT, offset)
         };
         let seek = (self.v_table.seek_long)(self, handle, distance, method);
-        if seek == std::u64::MAX {
+        if seek == u64::MAX {
             Err(IoError::new(ErrorKind::UnexpectedEof, "unable to seek"))
         } else {
             Ok(seek)
@@ -513,7 +513,7 @@ impl<'a> Iterator for DeviceEntries<'a> {
             }
         } else {
             let handle = self.device.entry_first(self.path, &mut file);
-            if handle != std::u64::MAX {
+            if handle != u64::MAX {
                 self.handle = Some(handle);
                 Some(file)
             } else {

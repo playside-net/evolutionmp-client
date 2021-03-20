@@ -255,7 +255,7 @@ macro_rules! impl_handle {
     ($ty:ident) => {
         impl crate::native::pool::Handleable for $ty {
             fn from_handle(handle: crate::game::Handle) -> Option<Self> where Self: Sized {
-                if handle == 0 || handle == std::u32::MAX {
+                if handle == 0 || handle == u32::MAX {
                     None
                 } else {
                     Some($ty { handle })

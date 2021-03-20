@@ -353,8 +353,8 @@ impl ScriptThreadRuntime {
         self.context = RageThreadContext {
             state: RageThreadState::Idle,
             script_hash: hash,
-            unk1: std::u32::MAX,
-            unk2: std::u32::MAX,
+            unk1: u32::MAX,
+            unk2: u32::MAX,
             set1: 1,
             ..Default::default()
         };
