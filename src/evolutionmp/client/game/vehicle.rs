@@ -179,6 +179,14 @@ impl Vehicle {
         }
     }
 
+    fn as_vehicle(&self) -> Option<Vehicle> {
+        if self.is_vehicle() {
+            Vehicle::from_handle(self.get_handle())
+        } else {
+            None
+        }
+    }
+
     pub fn get_primary_color_rgb(&self) -> (u32, u32, u32) {
         let mut r = 0;
         let mut g = 0;

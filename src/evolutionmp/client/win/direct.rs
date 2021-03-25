@@ -93,7 +93,7 @@ impl SwapChain {
     fn get_resource<'a, R: Interface, G>(&mut self, getter: G) -> Result<&'a mut R, u32>
         where G: Fn(&mut Self, REFIID, *mut *mut c_void) -> HRESULT {
 
-        let mut resource: *mut R = std::ptr::null_mut();
+        let resource: *mut R = std::ptr::null_mut();
         let result = (getter)(self, &R::uuidof(), &mut resource.cast());
         if SUCCEEDED(result) {
             Ok(unsafe { &mut *resource })

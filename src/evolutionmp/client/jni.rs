@@ -75,7 +75,7 @@ pub trait JavaValue<R> where R: Sized {
     fn from_java_value<'a>(env: &'a JNIEnv<'a>, value: JValue<'a>) -> R;
     #[inline]
     fn from_java_field<'a>(env: &'a JNIEnv<'a>, obj: JObject<'a>, field: &str) -> R {
-        let field = env.get_field(obj, field, Self::get_signature()).expect("error getting field");
+        let field = env.get_field(obj, field, Self::get_signature()).expect(&format!("error getting field {}.{}", Self::get_signature(), field));
         Self::from_java_value(env, field)
     }
     fn to_java_value<'a>(&self, env: &'a JNIEnv<'a>) -> JValue<'a>;

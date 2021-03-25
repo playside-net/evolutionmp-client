@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 use jni_dynamic::{JavaVM, JNIEnv, NativeMethod};
 use jni_dynamic::errors::ErrorKind;
-use jni_dynamic::objects::{JClass, JObject, JString};
+use jni_dynamic::objects::{JClass, JObject, JString, JMethodID, JValue};
 use jni_dynamic::strings::JNIStr;
 
 use crate::{args, java_static_method};
@@ -12,7 +12,7 @@ use crate::game::vehicle::Vehicle;
 use crate::jni::{JavaObject, JavaValue};
 use crate::jni::attach_thread;
 use crate::launcher_dir;
-use crate::native::NativeCallContext;
+use crate::native::{NativeCallContext, ThreadSafe};
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
 use jni_dynamic::sys::jint;
@@ -21,6 +21,8 @@ use crate::client::game::interior::Interior;
 use crate::client::game::entity::Entity;
 use crate::client::native::NativeVector3;
 use crate::client::native::pool::Handleable;
+use jni_dynamic::signature::JavaType;
+use jni_dynamic::signature::Primitive::{Void, Int};
 
 java_static_method!(set_system_property, "java/lang/System", "setProperty", fn(property: &str, value: &str) -> Option<String>);
 
@@ -38,10 +40,28 @@ pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
         .unwrap())
 }
 
+macro_rules! method_id {
+    ($name: ident, $cls:literal, $fn_name: literal, $sig: literal) => {
+        lazy_static! {
+            static ref $name: ThreadSafe<JMethodID<'static>> = {
+                let env = attach_thread();
+                let cls = env.find_class($cls).unwrap();
+                ThreadSafe::new(env.get_method_id(cls, $fn_name, $sig).unwrap())
+            };
+        }
+    };
+}
+
+method_id!(SCRIPT_FRAME, "mp/evolution/runtime/Runtime", "frame", "()V");
+method_id!(SCRIPT_EVENT, "mp/evolution/runtime/Runtime", "event", "(Lmp/evolution/script/event/ScriptEvent;)V");
+method_id!(HANDLED_HANDLE, "mp/evolution/invoke/Handled", "handle", "()I");
+
 pub(crate) fn start(vm: Arc<JavaVM>) {
     unsafe { crate::jni::set_vm(vm); };
 
     let env = attach_thread();
+
+    info!("setting user.dir");
 
     set_system_property("user.dir", &launcher_dir().display().to_string());
 
@@ -153,11 +173,16 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         NativeMethod::new("getPosition", "(JJ)J", crate::native::pool::get_entity_pos as _)
     );
 
+    fn get_handle(env: &JNIEnv, obj: JObject) -> u32 {
+        env.call_method_unchecked_fast(obj, **HANDLED_HANDLE, JavaType::Primitive(Int), &[])
+            .unwrap().i().unwrap() as u32
+    }
+
     macro_rules! g {
         ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
             extern fn get(_env: &JNIEnv, obj: JObject) -> $ty {
                 use $crate::native::pool::Handleable;
-                let handle = i32::from_java_field(&attach_thread(), obj, "handle");
+                let handle = get_handle(&attach_thread(), obj);
                 <$handle>::from_handle(handle as u32).unwrap().$name()
             }
             NativeMethod::new($vm_name, $vm_sig, get as _)
@@ -168,7 +193,7 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
             extern fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
                 use $crate::native::pool::Handleable;
-                let handle = i32::from_java_field(&attach_thread(), obj, "handle");
+                let handle = get_handle(&attach_thread(), obj);
                 <$handle>::from_handle(handle as u32).unwrap().$name(value)
             }
             NativeMethod::new($vm_name, $vm_sig, set as _)
@@ -251,7 +276,8 @@ impl Script for ScriptJava {
         if crate::game::is_loaded() {
             let env = attach_thread();
             let runtime = get_runtime(&env);
-            env.call_method(runtime, "frame", "()V", args![]).expect("error calling `frame`");
+            env.call_method_unchecked_fast(runtime, **SCRIPT_FRAME, JavaType::Primitive(Void), &[])
+                .expect("error calling `frame`");
         }
     }
 
@@ -290,7 +316,8 @@ impl Script for ScriptJava {
                 _ => return
             };
             let runtime = get_runtime(&env);
-            env.call_method(runtime, "event", "(Lmp/evolution/script/event/ScriptEvent;)V", args![event]).expect("error calling `event`");
+            env.call_method_unchecked_fast(runtime, **SCRIPT_EVENT, JavaType::Primitive(Void), &[JValue::Object(event).to_jni()])
+                .expect("error calling `event`");
         }
     }
 }
@@ -334,11 +361,8 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: Box<[u64
     }
 }
 
-unsafe extern fn vector_address(_env: &JNIEnv, _class: JClass, vec: *mut NativeVector3) -> usize {
-    let mut data: Box<NativeVector3> = Box::from_raw(vec as _);
-    let address = data.as_mut() as *mut _ as usize;
-    std::mem::forget(data);
-    address
+unsafe extern fn vector_address(_env: &JNIEnv, _class: JClass, vec: Box<NativeVector3>) -> usize {
+    Box::leak(vec) as *mut _ as usize
 }
 
 unsafe extern fn test(_env: &JNIEnv, _class: JClass, data: &mut NativeVector3) {

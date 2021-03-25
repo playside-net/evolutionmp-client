@@ -13,9 +13,10 @@ use crate::game::player::Player;
 use crate::game::prop::Prop;
 use crate::game::Rgba;
 use crate::game::streaming::{AnimDict, Resource};
-use crate::game::ui::Font;
+use crate::game::ui::{Font, FrontendButtons};
 use crate::runtime::Script;
 use crate::client::game::interior::Interior;
+use crate::client::native::pool::Handleable;
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
@@ -24,6 +25,12 @@ pub struct ScriptFishing {
 
 impl Script for ScriptFishing {
     fn frame(&mut self) {
+        if crate::game::is_loaded() {
+            //let result = crate::game::ui::warn("Hello", "Line1", "Line2", FrontendButtons::Ok | FrontendButtons::Cancel, true);
+
+            //info!("Clicked {:?}", result);
+        }
+
         let distance = 10.0;
         let player = Player::local();
         let ped = player.get_ped();
@@ -33,7 +40,7 @@ impl Script for ScriptFishing {
         let dir = cam.get_direction();
         let end = start + dir * distance;
 
-        /*let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
+        let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
         if ray.hit {
             game::graphics::draw_line(start, ray.end, Rgba::WHITE);
             let pos = Vector2::new(2.0, 2.0);
@@ -41,11 +48,24 @@ impl Script for ScriptFishing {
             let color = Rgba::WHITE;
 
             game::ui::draw_text(format!("{:?}", ray), pos, color, Font::ChaletLondon, scale);
-            if let Some(entity) = ray.entity {
+            if let Some(mut entity) = ray.entity {
                 let model = entity.get_model();
                 game::ui::draw_text(format!("Model {}; pos: {:?}", model, ray.end), pos + Vector2::unit_y() * 35.0, color, Font::ChaletLondon, scale);
+
+                if game::controls::is_disabled_just_pressed(ControlGroup::Move, Control::Cover) {
+                    /*if let Some(int) = Interior::from_pos(ped.get_position()) {
+                        warn!("{:?}", int.get_info());
+                    }*/
+                    warn!("MODEL: {:?} POS: {:?}", model, entity.get_position());
+                    if let Some(prop) = entity.as_prop() {
+                        if prop.is_broken() {
+                            prop.place_on_ground_properly()
+                        }
+                    }
+                    //entity.delete()
+                }
             }
-        }*/
+        }
 
         /*if let Some(veh) = ped.get_in_vehicle(false) {
             let pos = Vector2::new(2.0, 2.0);
@@ -76,12 +96,6 @@ impl Script for ScriptFishing {
                 veh.get_rotation(2),
             ), pos, color, Font::ChaletLondon, scale);
         }*/
-
-        if game::controls::is_disabled_just_pressed(ControlGroup::Move, Control::Cover) {
-            if let Some(int) = Interior::from_pos(ped.get_position()) {
-                warn!("{:?}", int.get_info());
-            }
-        }
 
         let probe = game::water::probe(start, end);
         if let Some(pos) = probe {

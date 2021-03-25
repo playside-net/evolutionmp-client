@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{bind_fn_detour, bind_fn_detour_ip};
+use crate::{bind_fn_detour, bind_fn_detour_ip, class};
 use crate::hash::{Hash, Hashable};
 use crate::win::thread::seh;
 use crate::pattern::RageBox;
@@ -65,21 +65,16 @@ struct InitFnGroup {
     entries: ChainedBox<InitFn>
 }
 
-#[repr(C)]
-struct UpdateFnVTable {
-    destructor: extern fn(Box<UpdateFn>),
-    run: extern fn(&UpdateFn)
-}
+class!(UpdateFn @UpdateFnVT {
+    fn destructor() -> (),
+    fn run() -> ();
 
-#[repr(C)]
-pub struct UpdateFn {
-    v_table: RageBox<UpdateFnVTable>,
     flag: bool,
     float: f32,
     hash: Hash,
     next: Option<ChainedBox<UpdateFn>>,
     child: Option<ChainedBox<UpdateFn>>
-}
+});
 
 impl UpdateFn {
     fn run(&self) {
@@ -114,14 +109,9 @@ struct UpdateFnGroup {
     entries: ChainedBox<UpdateFn>
 }
 
-#[repr(C)]
-struct GameSkeletonVTable {
-    destructor: extern fn(Box<GameSkeleton>)
-}
+class!(GameSkeleton @GameSkeletonVT {
+    fn destructor() -> ();
 
-#[repr(C)]
-pub struct GameSkeleton {
-    v_table: RageBox<GameSkeletonVTable>,
     fn_order: u32,
     fn_mask: InitFnMask,
     pad: u32,
@@ -132,7 +122,7 @@ pub struct GameSkeleton {
     init_groups: ChainedBox<InitFnGroup>,
     pad4: *mut u8,
     update_groups: ChainedBox<UpdateFnGroup>
-}
+});
 
 impl GameSkeleton {
     extern fn init(&mut self, mask: InitFnMask) {

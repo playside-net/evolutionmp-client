@@ -13,7 +13,7 @@ use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use winapi::um::winbase::{FILE_BEGIN, FILE_CURRENT, FILE_END};
 use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
 
-use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip};
+use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip, class};
 use crate::pattern::RageBox;
 
 bind_fn_detour!(OPEN_PACK_FILES, "41 B0 01 BA 1B E6 DA 93 E8", -12, open_pack_files, () -> ());
@@ -32,10 +32,10 @@ bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, (&
 
 bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, () -> ());
 
-bind_field_ip!(DEVICE_VTABLE, "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15, DeviceVTable);
-bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15, DeviceVTable);
-bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, DeviceVTable);
-bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVTable);
+bind_field_ip!(DEVICE_VTABLE, "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15, DeviceVT);
+bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15, DeviceVT);
+bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, DeviceVT);
+bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVT);
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
@@ -222,31 +222,24 @@ impl FileEntry {
     }
 }
 
-#[repr(C)]
-pub struct CollectionVTable {
-    close: extern fn(*mut Collection),
-    open_entry: extern fn(*mut Collection, index: u16, ptr: *mut u8),
-    get_entry: extern fn(*mut Collection, index: u16) -> RageBox<FileEntry>,
-    unk1: extern fn(*mut Collection, index: u16, flag: bool) -> u64,
-    get_entry_name: extern fn(*mut Collection, index: u16) -> RagePath,
-    get_entry_name_to_buffer: extern fn(*mut Collection, index: u16, buf: *mut u8, len: u32),
-    get_entry_by_name: extern fn(*mut Collection, name: *const i8) -> u16,
-    get_unk1: extern fn(*mut Collection) -> u32,
-    get_unk_a: extern fn(*mut Collection, index: u16) -> bool,
-    close_base_pack_file: extern fn(*mut Collection) -> bool,
-    unk_c: extern fn(*mut Collection) -> u8,
-    unk_d: extern fn(*mut Collection, u8) -> bool,
-    unk_e: extern fn(*mut Collection, name: *const i8) -> *mut u8,
-    unk_f: extern fn(*mut Collection, *mut (), bool) -> u64,
-
-}
+class!(Collection @CollcetionVT : Device {
+    fn close() -> (),
+    fn open_entry(index: u16, ptr: *mut u8) -> (),
+    fn get_entry(index: u16) -> RageBox<FileEntry>,
+    fn unk1(index: u16, flag: bool) -> u64,
+    fn get_entry_name(index: u16) -> RagePath,
+    fn get_entry_name_to_buffer(index: u16, buf: *mut u8, len: u32) -> (),
+    fn get_entry_by_name(name: *const i8) -> u16,
+    fn get_unk1() -> u32,
+    fn get_unk_a(index: u16) -> bool,
+    fn close_base_pack_file() -> bool,
+    fn unk_c() -> u8,
+    fn unk_d(arg1: u8) -> bool,
+    fn unk_e(name: *const i8) -> *mut u8,
+    fn unk_f(arg1: *mut (), arg2: bool) -> u64;
+});
 
 #[repr(C)]
-pub struct Collection {
-    device: Device,
-    v_table: RageBox<CollectionVTable>,
-}
-
 pub struct CollectionExt {
     collection: Collection,
     m_pad: [u8; 184],
@@ -255,61 +248,55 @@ pub struct CollectionExt {
     parent: Option<Box<Collection>>,
 }
 
-#[repr(C)]
-pub struct DeviceVTable {
-    destructor: extern fn(this: *mut Device),
-    open: extern fn(this: *mut Device, file_name: RagePath, read_only: bool) -> u64,
-    open_bulk: extern fn(this: *mut Device, file_name: RagePath, base_offset: &mut usize) -> u64,
-    open_bulk_wrap: extern fn(this: *mut Device, file_name: RagePath, ptr: *const u64, *const ()) -> u64,
-    create_local: extern fn(this: *mut Device, file_name: RagePath) -> u64,
-    create: extern fn(this: *mut Device, file_name: RagePath) -> u64,
-    read: extern fn(this: *mut Device, handle: u64, buffer: *mut u8, to_read: u32) -> u32,
-    read_bulk: extern fn(this: *mut Device, handle: u64, offset: usize, buffer: *mut u8, to_read: u32) -> u32,
-    write_bulk: extern fn(this: *mut Device, handle: u64, i32, i32, i32, i32) -> u32,
-    write: extern fn(this: *mut Device, handle: u64, buffer: *const u8, to_write: u32) -> u32,
-    seek: extern fn(this: *mut Device, handle: u64, distance: i32, method: u32) -> u32,
-    seek_long: extern fn(this: *mut Device, handle: u64, distance: i64, method: u32) -> u64,
-    close: extern fn(this: *mut Device, handle: u64) -> i32,
-    close_bulk: extern fn(this: *mut Device, handle: u64) -> i32,
-    get_file_len: extern fn(this: *const Device, handle: u64) -> i32,
-    get_file_len_u: extern fn(this: *const Device, handle: u64) -> u64,
-    m_40: extern fn(this: *mut Device, i32) -> i32,
-    remove_file: extern fn(this: *mut Device, file_name: RagePath) -> bool,
-    rename_file: extern fn(this: *mut Device, from: RagePath, to: RagePath) -> i32,
-    create_dir: extern fn(this: *mut Device, dir_name: RagePath) -> i32,
-    remove_dir: extern fn(this: *mut Device, dir_name: RagePath) -> i32,
-    m_xx: extern fn(this: *mut Device),
-    get_file_len_l: extern fn(this: *const Device, file_name: RagePath) -> u64,
-    get_file_time: extern fn(this: *const Device, file_name: RagePath) -> u64,
-    set_file_time: extern fn(this: *mut Device, file_name: RagePath, time: FILETIME),
-    find_first: extern fn(this: *const Device, path: RagePath, data: *mut DeviceEntry) -> u64,
-    find_next: extern fn(this: *const Device, handle: u64, data: *mut DeviceEntry) -> bool,
-    find_close: extern fn(this: *const Device, handle: u64),
-    get_unk_device: extern fn(this: *mut Device) -> *const Device,
-    m_xy: extern fn(this: *mut Device, *const (), i32, *const ()) -> *const (),
-    truncate: extern fn(this: *mut Device, handle: u64) -> bool,
-    get_file_attr: extern fn(this: *const Device, path: RagePath) -> u32,
-    m_xz: extern fn(this: *mut Device) -> bool,
-    set_file_attr: extern fn(this: *mut Device, attributes: u32) -> bool,
-    m_yx: extern fn(this: *mut Device) -> i32,
-    read_full: extern fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
-    write_full: extern fn(this: *mut Device, handle: u64, buffer: *const (), len: u32) -> bool,
-    get_res_ver: extern fn(this: *mut Device, file_name: RagePath, flags: *const ResourceFlags) -> i32,
-    m_yy: extern fn(this: *mut Device) -> i32,
-    m_yz: extern fn(this: *mut Device, *const ()) -> i32,
-    m_zx: extern fn(this: *mut Device, *const ()) -> i32,
-    is_collection: extern fn(this: *mut Device) -> bool,
-    m_added_in_1290: extern fn(this: *mut Device) -> bool,
-    get_collection: extern fn(this: *mut Device) -> *const Device,
-    m_ax: extern fn(this: *mut Device) -> bool,
-    get_collection_id: extern fn(this: *mut Device) -> i32,
-    get_name: extern fn(this: *const Device) -> RagePath,
-}
-
-#[repr(C)]
-pub struct Device {
-    v_table: RageBox<DeviceVTable>
-}
+class!(Device @DeviceVT {
+    fn destructor() -> (),
+    fn open(file_name: RagePath, read_only: bool) -> u64,
+    fn open_bulk(file_name: RagePath, base_offset: &mut usize) -> u64,
+    fn open_bulk_wrap(file_name: RagePath, ptr: *const u64, arg1: *const ()) -> u64,
+    fn create_local(file_name: RagePath) -> u64,
+    fn create(file_name: RagePath) -> u64,
+    fn read(handle: u64, buffer: *mut u8, to_read: u32) -> u32,
+    fn read_bulk(handle: u64, offset: usize, buffer: *mut u8, to_read: u32) -> u32,
+    fn write_bulk(handle: u64, arg1: i32, arg2: i32, arg3: i32, arg4: i32) -> u32,
+    fn write(handle: u64, buffer: *const u8, to_write: u32) -> u32,
+    fn seek(handle: u64, distance: i32, method: u32) -> u32,
+    fn seek_long(handle: u64, distance: i64, method: u32) -> u64,
+    fn close(handle: u64) -> i32,
+    fn close_bulk(handle: u64) -> i32,
+    fn get_file_len(handle: u64) -> i32,
+    fn get_file_len_u(handle: u64) -> u64,
+    fn m_40(arg: i32) -> i32,
+    fn remove_file(file_name: RagePath) -> bool,
+    fn rename_file(from: RagePath, to: RagePath) -> i32,
+    fn create_dir(dir_name: RagePath) -> i32,
+    fn remove_dir(dir_name: RagePath) -> i32,
+    fn m_xx() -> (),
+    fn get_file_len_l(file_name: RagePath) -> u64,
+    fn get_file_time(file_name: RagePath) -> u64,
+    fn set_file_time(file_name: RagePath, time: FILETIME) -> (),
+    fn find_first(path: RagePath, data: *mut DeviceEntry) -> u64,
+    fn find_next(handle: u64, data: *mut DeviceEntry) -> bool,
+    fn find_close(handle: u64) -> (),
+    fn get_unk_device() -> *const Device,
+    fn m_xy(arg1: *const (), arg2: i32, arg3: *const ()) -> *const (),
+    fn truncate(handle: u64) -> bool,
+    fn get_file_attr(path: RagePath) -> u32,
+    fn m_xz() -> bool,
+    fn set_file_attr(attributes: u32) -> bool,
+    fn m_yx() -> i32,
+    fn read_full(handle: u64, buffer: *const (), len: u32) -> bool,
+    fn write_full(handle: u64, buffer: *const (), len: u32) -> bool,
+    fn get_res_ver(file_name: RagePath, flags: *const ResourceFlags) -> i32,
+    fn m_yy() -> i32,
+    fn m_yz(arg: *const ()) -> i32,
+    fn m_zx(arg: *const ()) -> i32,
+    fn is_collection() -> bool,
+    fn m_added_in_1290() -> bool,
+    fn get_collection() -> *const Device,
+    fn m_ax() -> bool,
+    fn get_collection_id() -> i32,
+    fn get_name() -> RagePath;
+});
 
 impl Device {
     pub fn get<P>(path: P, allow_root: bool) -> Option<ManuallyDrop<Box<Device>>> where P: AsRef<Path> {
@@ -606,7 +593,7 @@ impl PackFile {
     pub fn open<P>(archive: P, ty: i32) -> Option<PackFile> where P: AsRef<Path> {
         let mut pack_file = PackFile {
             device: Device {
-                v_table: PACK_FILE_VTABLE.cloned()
+                v_table: unsafe { std::mem::transmute(PACK_FILE_VTABLE.cloned()) }
             },
             inner: [0; PACK_FILE_SIZE],
         };
@@ -664,7 +651,7 @@ impl RelativeDevice {
         assert!(!RELATIVE_DEVICE_VTABLE.is_null(), "RELATIVE_DEVICE_VTABLE is null");
         RelativeDevice {
             device: Device {
-                v_table: RELATIVE_DEVICE_VTABLE.cloned()
+                v_table: unsafe { std::mem::transmute(RELATIVE_DEVICE_VTABLE.cloned()) }
             },
             inner: [0; RELATIVE_DEVICE_SIZE],
         }
@@ -754,7 +741,7 @@ pub struct EncryptingDevice {
 impl EncryptingDevice {
     pub fn new(key: [u8; 32]) -> EncryptingDevice {
         let device = Device {
-            v_table: ENCRYPTING_DEVICE_VTABLE.cloned()
+            v_table: unsafe { std::mem::transmute(ENCRYPTING_DEVICE_VTABLE.cloned()) }
         };
         EncryptingDevice {
             device,

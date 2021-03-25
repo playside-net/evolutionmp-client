@@ -123,7 +123,7 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
             error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X}: 0x{:08X} ({})", addr as u64, code, message);
         }
 
-        let backtrace = Backtrace::new_starting_from(addr as _, false);
+        let backtrace = Backtrace::new();
 
         for frame in backtrace.frames().iter() {
             for symbol in frame.symbols() {

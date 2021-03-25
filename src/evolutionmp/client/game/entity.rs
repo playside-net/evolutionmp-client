@@ -1,11 +1,14 @@
 use cgmath::{Quaternion, Vector3};
 
-use crate::client::native::pool::Native;
+use crate::client::native::pool::{Native, Handleable};
 use crate::game::streaming::AnimDict;
 use crate::hash::Hash;
 use crate::invoke;
 use crate::native::Addressable;
 use crate::native::pool;
+use crate::game::ped::Ped;
+use crate::game::vehicle::Vehicle;
+use crate::game::prop::Prop;
 
 pub trait Entity: Native {
     fn exists(&self) -> bool {
@@ -71,6 +74,42 @@ pub trait Entity: Native {
 
     fn get_type(&self) -> u32 {
         invoke!(u32, 0x8ACD366038D14505, self.get_handle())
+    }
+
+    fn is_ped(&self) -> bool {
+        self.get_type() == 1
+    }
+
+    fn as_ped(&self) -> Option<Ped> {
+        if self.is_ped() {
+            Ped::from_handle(self.get_handle())
+        } else {
+            None
+        }
+    }
+
+    fn is_vehicle(&self) -> bool {
+        self.get_type() == 2
+    }
+
+    fn as_vehicle(&self) -> Option<Vehicle> {
+        if self.is_vehicle() {
+            Vehicle::from_handle(self.get_handle())
+        } else {
+            None
+        }
+    }
+
+    fn is_prop(&self) -> bool {
+        self.get_type() == 3
+    }
+
+    fn as_prop(&self) -> Option<Prop> {
+        if self.is_prop() {
+            Prop::from_handle(self.get_handle())
+        } else {
+            None
+        }
     }
 
     fn get_model(&self) -> Hash {

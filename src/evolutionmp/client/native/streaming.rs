@@ -1,6 +1,6 @@
 use std::mem::ManuallyDrop;
 
-use crate::{bind_field, bind_field_ip, bind_fn};
+use crate::{bind_field, bind_field_ip, bind_fn, class};
 use crate::hash::Hash;
 use crate::native::TypeInfo;
 
@@ -61,18 +61,11 @@ pub struct DataFileEntry {
 
 impl DataFileEntry {}
 
-#[repr(C)]
-pub struct PackFileMounterVTable {
-    type_info: ManuallyDrop<Box<TypeInfo>>,
-    drop: extern fn(this: *mut PackFileMounter),
-    mount: extern fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
-    unmount: extern fn(this: *mut PackFileMounter, entry: *mut DataFileEntry),
-}
-
-#[repr(C)]
-pub struct PackFileMounter {
-    v_table: ManuallyDrop<Box<PackFileMounterVTable>>
-}
+class!(PackFileMounter @PackFileMounterVT {
+    fn drop() -> (),
+    fn mount(entry: *mut DataFileEntry) -> (),
+    fn unmount(entry: *mut DataFileEntry) -> ();
+});
 
 impl PackFileMounter {
     /*pub fn find<T>(ty: T) -> Option<&'static PackFileMounter> where T: AsRef<str> {

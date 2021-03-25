@@ -1,45 +1,41 @@
-use crate::bind_fn_detour_ip;
-use crate::native::{NativeCallContext, ThreadSafe};
-use crate::game::vehicle::Vehicle;
-use crate::game::ped::Ped;
-use crate::hash::Hash;
-use crate::win::input::InputEvent;
-use cgmath::{Vector3, Vector2};
-use std::collections::VecDeque;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::mem::ManuallyDrop;
 
-#[repr(C)]
-struct EventVTable {
-    destructor: extern fn(this: *const Event),
-    m_8: extern fn(this: *const Event),
-    equals: extern fn(this: *const Event, other: *const Event) -> bool,
-    get_id: extern fn(this: *const Event) -> u32,
-    m_20: extern fn(this: *const Event) -> u32,
-    m_28: extern fn(this: *const Event) -> u32,
-    get_arguments: extern fn(this: *const Event, buffer: *mut *const (), len: usize) -> bool,
-    m_38: extern fn(this: *const Event) -> bool,
-    m_40: extern fn(this: *const Event, other: *const Event) -> bool
-}
+use cgmath::{Vector2, Vector3};
 
-#[repr(C)]
-pub struct Event {
-    _vtable: ManuallyDrop<Box<EventVTable>>
-}
+use crate::{bind_fn_detour, bind_fn_detour_ip, class};
+use crate::game::ped::Ped;
+use crate::game::vehicle::Vehicle;
+use crate::hash::Hash;
+use crate::native::{NativeCallContext, ThreadSafe};
+use crate::win::input::InputEvent;
+
+class!(Event @EventVT {
+    fn destructor() -> (),
+    fn m_8() -> (),
+    fn equals(other: *const Event) -> bool,
+    fn get_id() -> u32,
+    fn m_20() -> u32,
+    fn m_28() -> u32,
+    fn get_arguments(buffer: *mut *const (), len: usize) -> bool,
+    fn m_38() -> bool,
+    fn m_40(other: *const Event) -> bool;
+});
 
 impl Event {
     pub fn get_id(&self) -> u32 {
-        (self._vtable.get_id)(self as _)
+        (self.v_table.get_id)(self as _)
     }
 
     pub fn get_arguments(&self, buffer: *mut *const (), len: usize) -> bool {
-        (self._vtable.get_arguments)(self as _, buffer, len)
+        (self.v_table.get_arguments)(self as _, buffer, len)
     }
 }
 
 impl std::cmp::PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
-        (self._vtable.equals)(self as _, other as _)
+        (self.v_table.equals)(self as _, other as _)
     }
 }
 
@@ -207,7 +203,7 @@ macro_rules! native_event {
     };
 }
 
-bind_fn_detour_ip!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, (&(), Option<&Event>) -> *mut ());
+bind_fn_detour!(CALL_EVENT, "81 BF ? ? 00 00 ? ? 00 00 75 ? 48 8B CF E8", -0x36, call_event, (&(), Option<&Event>) -> *mut ());
 
 pub unsafe extern fn call_event(group: &(), event: Option<&Event>) -> *mut () {
     if let Some(event) = event {

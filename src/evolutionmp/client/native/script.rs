@@ -5,7 +5,7 @@ use std::os::raw::c_char;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 
-use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip};
+use crate::{bind_field, bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip, class};
 use crate::events::ScriptEvent;
 use crate::hash::{Hash, Hashable};
 use crate::native::alloc::RageVec;
@@ -25,6 +25,8 @@ pub fn run<S>(name: &str, script: S) where S: Script + 'static {
     loaded_scripts.push(script);
     event_senders.push(sender);
 }
+
+bind_field!(SCRIPT_TLS_OFFSET, "48 8B 04 D0 4A 8B 14 00 48 8B 01 F3 44 0F 2C 42 20", -4, u32);
 
 bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
 bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B F9", 2, u32);
@@ -108,6 +110,8 @@ unsafe extern fn script_access(script: &'static mut RageThread, unk: *mut ()) ->
 
 pub(crate) fn hook() {
     info!("Hooking scripts...");
+    lazy_static::initialize(&SCRIPT_TLS_OFFSET);
+
     lazy_static::initialize(&THREAD_COLLECTION);
     lazy_static::initialize(&THREAD_COUNT);
     lazy_static::initialize(&SCRIPT_MANAGER);
@@ -127,19 +131,17 @@ pub fn is_thread_pool_empty() -> bool {
     THREAD_COLLECTION.is_empty()
 }
 
-const ACTIVE_THREAD_TLS_OFFSET: usize = 0x830;
-
 pub fn get_active_thread() -> *mut RageThread {
     unsafe {
         let module_tls = *(__readgsqword(88) as *mut *mut u8);
-        *module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut RageThread>()
+        *module_tls.add(**SCRIPT_TLS_OFFSET as usize).cast::<*mut RageThread>()
     }
 }
 
 pub fn set_active_thread(thread: *mut RageThread) {
     unsafe {
         let module_tls = *(__readgsqword(88) as *mut *mut u8);
-        *module_tls.add(ACTIVE_THREAD_TLS_OFFSET).cast::<*mut RageThread>() = thread;
+        *module_tls.add(**SCRIPT_TLS_OFFSET as usize).cast::<*mut RageThread>() = thread;
     }
 }
 
@@ -148,21 +150,6 @@ fn with_thread<A>(thread: &mut ScriptThreadRuntime, mut action: A) where A: FnMu
     set_active_thread((thread as *mut ScriptThreadRuntime).cast());
     action(thread);
     set_active_thread(old_thread);
-}
-
-#[repr(C)]
-pub struct ScriptManagerVTable {
-    destructor: extern fn(this: *mut ScriptManager),
-    fn1: extern fn(this: &mut ScriptManager),
-    fn2: extern fn(this: *mut ScriptManager),
-    fn3: extern fn(this: *mut ScriptManager),
-    fn4: extern fn(this: *mut ScriptManager),
-    fn5: extern fn(this: *mut ScriptManager),
-    fn6: extern fn(this: *mut ScriptManager),
-    fn7: extern fn(this: *mut ScriptManager),
-    fn8: extern fn(this: *mut ScriptManager),
-    fn9: extern fn(this: *mut ScriptManager),
-    attach: extern fn(this: *mut ScriptManager, thread: *mut ScriptThread),
 }
 
 #[repr(u32)]
@@ -181,10 +168,19 @@ impl Default for RageThreadState {
     }
 }
 
-#[repr(C)]
-pub struct ScriptManager {
-    v_table: ManuallyDrop<Box<ScriptManagerVTable>>
-}
+class!(ScriptManager @ScriptManagerVT {
+    fn destructor() -> (),
+    fn fn1() -> (),
+    fn fn2() -> (),
+    fn fn3() -> (),
+    fn fn4() -> (),
+    fn fn5() -> (),
+    fn fn6() -> (),
+    fn fn7() -> (),
+    fn fn8() -> (),
+    fn fn9() -> (),
+    fn attach(thread: *mut ScriptThread) -> ();
+});
 
 impl ScriptManager {
     pub fn attach(&mut self, script: &mut ScriptThread) {
@@ -211,25 +207,20 @@ pub struct RageThreadContext {
     pad2: [u32; 17],
 }
 
-#[repr(C)]
-pub struct RageThreadVTable {
-    drop: extern fn(this: *mut ()),
-    reset: extern fn(this: *mut (), id: u32, args: *const (), len: u32) -> RageThreadState,
-    run: extern fn(this: *mut (), ops: u32) -> RageThreadState,
-    tick: extern fn(this: *mut (), ops: u32) -> RageThreadState,
-    kill: extern fn(this: *mut ()),
-    frame: extern fn(this: *mut ()),
-}
+class!(RageThread @RageThreadVTable {
+    fn drop() -> (),
+    fn reset(id: u32, args: *const (), len: u32) -> (),
+    fn run(ops: u32) -> RageThreadState,
+    fn tick(ops: u32) -> (),
+    fn kill() -> (),
+    fn frame() -> ();
 
-#[repr(C)]
-pub struct RageThread {
-    v_table: ManuallyDrop<Box<RageThreadVTable>>,
     context: RageThreadContext,
     stack: u64,
     pad1: u64,
     pad2: u64,
-    sz_exit_message: *const c_char,
-}
+    sz_exit_message: *const c_char
+});
 
 #[repr(C)]
 pub struct ScriptThread {

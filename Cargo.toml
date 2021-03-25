@@ -23,7 +23,7 @@ chrono = "*"
 log = "*"
 colored = "*"
 fern = { version = "*", features = ["colored"] }
-backtrace = { git = "https://github.com/Radviger/backtrace-rs", features = ["cpp_demangle"] }
+backtrace = { version = "*", features = ["cpp_demangle"] }
 ansi_term = "*"
 clipboard = "0.5.0"
 alignas = "*"

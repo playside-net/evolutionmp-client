@@ -1,5 +1,10 @@
 use std::ops::{Deref, DerefMut};
 use std::alloc::{Layout};
+use crate::{class, bind_field};
+use crate::win::thread::__readgsqword;
+use crate::pattern::RageBox;
+
+bind_field!(ALLOCATOR_TLS_OFFSET, "B9 ? ? ? ? 48 8B 0C 01 45 33 C9 49 8B D2 48", 1, u32);
 
 #[repr(C)]
 pub struct RageVec<T> {
@@ -116,5 +121,31 @@ impl<'a, T> Iterator for ChainedIter<'a, T> {
         } else {
             None
         }
+    }
+}
+
+
+pub(crate) fn hook() {
+    info!("Hooking native allocator...");
+    lazy_static::initialize(&ALLOCATOR_TLS_OFFSET);
+
+}
+
+class!(RageAlloc @RageAllocVT {
+    fn destructor() -> (),
+    fn set_quit_on_fail(value: bool) -> ();
+});
+
+pub fn get_allocator() -> *mut RageAlloc {
+    unsafe {
+        let module_tls = *(__readgsqword(88) as *mut *mut u8);
+        *module_tls.add(**ALLOCATOR_TLS_OFFSET as usize).cast::<*mut RageAlloc>()
+    }
+}
+
+pub fn set_allocator(allocator: *mut RageAlloc) {
+    unsafe {
+        let module_tls = *(__readgsqword(88) as *mut *mut u8);
+        *module_tls.add(**ALLOCATOR_TLS_OFFSET as usize).cast::<*mut RageAlloc>() = allocator;
     }
 }

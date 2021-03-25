@@ -6,7 +6,7 @@ use cgmath::{Vector2, Vector3};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 use crate::{invoke, native};
-use crate::{bind_fn, bind_field_ip, mem};
+use crate::{bind_fn_ip, bind_field_ip, mem};
 use crate::game::Rgba;
 use crate::hash::{Hashable, Hash};
 use crate::win::input::{InputEvent, KeyboardEvent};
@@ -89,7 +89,7 @@ pub enum DynamicMenuAction {
     LowHi
 }
 
-bind_fn!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 4, (bool, u32) -> FrontendButtons);
+bind_fn_ip!(GET_WARN_RESULT, "33 D2 33 C9 E8 ? ? ? ? 48 83 F8 04 0F 84", 5, (bool, u32) -> FrontendButtons);
 bind_field_ip!(ACTIVE_MENU_POOL, "0F B7 54 51 ?", -4, RageVec<UIMenu>);
 
 pub fn hook() {
@@ -424,13 +424,10 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
     super::locale::set_translation("WNMC_TITLE", title);
     super::locale::set_translation("WNMC_LINE1", line1);
     super::locale::set_translation("WNMC_LINE2", line2);
-    let buttons = buttons as u32;
+    let buttons = buttons.bits;
     loop {
-        info!("waiting warn");
         super::script::wait(0);
-        info!("invoking draw_warn");
         invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, background);
-        info!("getting result");
         let result = GET_WARN_RESULT(true, 0);
         if result != FrontendButtons::None {
             break result;
@@ -438,64 +435,22 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
     }
 }
 
-#[repr(C)]
-#[derive(Debug, PartialOrd, PartialEq, Hash)]
-pub enum FrontendButtons {
-    None = 0,
-    Select = 1,
-    Ok = 2,
-    Yes = 4,
-    Back = 8,
-    BackSelect = 9,
-    BackOk = 10,
-    BackYes = 12,
-    Cancel = 16,
-    CancelSelect = 17,
-    CancelOk = 18,
-    CancelYes = 20,
-    No = 32,
-    NoSelect = 33,
-    NoOk = 34,
-    YesNo = 36,
-    Retry = 64,
-    RetrySelect = 65,
-    RetryOk = 66,
-    RetryYes = 68,
-    RetryBack = 72,
-    RetryBackSelect = 73,
-    RetryBackOk = 74,
-    RetryBackYes = 76,
-    RetryCancel = 80,
-    RetryCancelSelect = 81,
-    RetryCancelOk = 82,
-    RetryCancelYes = 84,
-    Skip = 256,
-    SkipSelect = 257,
-    SkipOk = 258,
-    SkipYes = 260,
-    SkipBack = 264,
-    SkipBackSelect = 265,
-    SkipBackOk = 266,
-    SkipBackYes = 268,
-    SkipCancel = 272,
-    SkipCancelSelect = 273,
-    SkipCancelOk = 274,
-    SkipCancelYes = 276,
-    Continue = 16384,
-    BackContinue = 16392,
-    CancelContinue = 16400,
-    LoadingSpinner = 134217728,
-    SelectLoadingSpinner = 134217729,
-    OkLoadingSpinner = 134217730,
-    YesLoadingSpinner = 134217732,
-    BackLoadingSpinner = 134217736,
-    BackSelectLoadingSpinner = 134217737,
-    BackOkLoadingSpinner = 134217738,
-    BackYesLoadingSpinner = 134217740,
-    CancelLoadingSpinner = 134217744,
-    CancelSelectLoadingSpinner = 134217745,
-    CancelOkLoadingSpinner = 134217746,
-    CancelYesLoadingSpinner = 134217748,
+bitflags! {
+    #[repr(C)]
+    pub struct FrontendButtons: u32 {
+        const None = 0;
+        const Select = 1;
+        const Ok = 2;
+        const Yes = 4;
+        const Back = 8;
+        const Cancel = 16;
+        const No = 32;
+        const Retry = 64;
+        const Unknown128 = 128;
+        const Skip = 256;
+        const Continue = 16384;
+        const LoadingSpinner = 134217728;
+    }
 }
 
 pub struct TextInput {

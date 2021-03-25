@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use crate::client::jni::attach_thread;
 use crate::client::print_address_info;
 use backtrace::SymbolName;
+use std::ops::Deref;
 
 pub mod vehicle;
 pub mod pool;
@@ -95,6 +96,43 @@ macro_rules! bind_fn_detour_ip {
                     .offset($offset).detour_ip($detour as _);
                 std::mem::transmute(d)
             };
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! class {
+    ($this:ident @$v_table:ident { $(fn $fn_name:ident($($n: ident: $arg:ty),*)->$ret:ty),* ; $($v:vis $f_name:ident: $ty:ty),* }) => {
+        #[repr(C)]
+        pub struct $v_table {
+            $($fn_name: extern fn(this: *const $this, $($n: $arg),*)->$ret),*
+        }
+
+        #[repr(C)]
+        pub struct $this {
+            v_table: std::mem::ManuallyDrop<Box<$v_table>>,
+            $($v $f_name: $ty),*
+        }
+    };
+    ($this:ident @$v_table:ident : $parent:ty { $(fn $fn_name:ident($($n: ident: $arg:ty),*)->$ret:ty),* ; $($f_name:ident: $ty:ty),* }) => {
+        #[repr(C)]
+        pub struct $v_table {
+            $($fn_name: extern fn(this: *const $this, $($n: $arg),*)->$ret),*
+        }
+
+        #[repr(C)]
+        pub struct $this {
+            pub parent: $parent,
+            v_table: std::mem::ManuallyDrop<Box<$v_table>>,
+            $(pub $f_name: $ty),*
+        }
+
+        impl std::ops::Deref for $this {
+            type Target = $parent;
+
+            fn deref(&self) -> &Self::Target {
+                &self.parent
+            }
         }
     };
 }
@@ -208,6 +246,7 @@ bind_field!(REVEAL_FULL_MAP, "33 C0 0F 57 C0 ? 0D", 30, bool);
 bind_field!(CURSOR_SPRITE, "74 11 8B D1 48 8D 0D ? ? ? ? 45 33 C0", 0, CursorSprite);
 
 pub(crate) fn hook() {
+    alloc::hook();
     script::hook();
     //streaming::hook();
     grc::hook();
@@ -228,7 +267,7 @@ pub(crate) fn init() {
     vehicle::init();
     HOOKS.replace(Some(HashMap::new()));
 
-    crate::events::init();
+    //crate::events::init();
     detour(0x745711A75AB09277, |ctx| {
         if CURRENT_NATIVE.load(Ordering::SeqCst) == 0x745711A75AB09277 && ctx.args[0] == 1 {
             let env = attach_thread();
