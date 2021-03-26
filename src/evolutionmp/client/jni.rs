@@ -9,6 +9,12 @@ macro_rules! args {
         &[$(jni_dynamic::objects::JValue::from($arg)),*]
     };
 }
+#[macro_export]
+macro_rules! args_v {
+    [$($arg:expr),*] => {
+        &[$(jni_dynamic::sys::jvalue::from(jni_dynamic::objects::JValue::from($arg))),*]
+    };
+}
 
 static mut VM: Option<Arc<JavaVM>> = None;
 

@@ -3,10 +3,10 @@ use std::sync::atomic::Ordering;
 
 use jni_dynamic::{JavaVM, JNIEnv, NativeMethod};
 use jni_dynamic::errors::ErrorKind;
-use jni_dynamic::objects::{JClass, JObject, JString, JMethodID, JValue};
+use jni_dynamic::objects::{JClass, JObject, JString, JMethodID, JValue, JFieldID, JStaticFieldID, GlobalRef};
 use jni_dynamic::strings::JNIStr;
 
-use crate::{args, java_static_method};
+use crate::{args, args_v, java_static_method};
 use crate::events::ScriptEvent;
 use crate::game::vehicle::Vehicle;
 use crate::jni::{JavaObject, JavaValue};
@@ -40,6 +40,30 @@ pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
         .unwrap())
 }
 
+macro_rules! class_id {
+    ($name: ident, $cls:literal) => {
+        lazy_static! {
+            static ref $name: GlobalRef = {
+                let env = attach_thread();
+                let cls = env.find_class($cls).unwrap();
+                env.new_global_ref(*cls).unwrap()
+            };
+        }
+    };
+}
+
+macro_rules! static_field_id {
+    ($name: ident, $cls:literal, $f_name: literal, $sig: literal) => {
+        lazy_static! {
+            static ref $name: ThreadSafe<JStaticFieldID<'static>> = {
+                let env = attach_thread();
+                let cls = env.find_class($cls).unwrap();
+                ThreadSafe::new(env.get_static_field_id(cls, $f_name, $sig).unwrap())
+            };
+        }
+    };
+}
+
 macro_rules! method_id {
     ($name: ident, $cls:literal, $fn_name: literal, $sig: literal) => {
         lazy_static! {
@@ -52,9 +76,17 @@ macro_rules! method_id {
     };
 }
 
+class_id!(RUNTIME, "mp/evolution/runtime/Runtime");
+class_id!(KEY_EVENT, "mp/evolution/script/event/ScriptEventKeyboardKey");
+class_id!(CHAR_EVENT, "mp/evolution/script/event/ScriptEventKeyboardChar");
+
+static_field_id!(INSTANCE, "mp/evolution/runtime/Runtime", "INSTANCE", "Lmp/evolution/runtime/Runtime;");
+
 method_id!(SCRIPT_FRAME, "mp/evolution/runtime/Runtime", "frame", "()V");
 method_id!(SCRIPT_EVENT, "mp/evolution/runtime/Runtime", "event", "(Lmp/evolution/script/event/ScriptEvent;)V");
 method_id!(HANDLED_HANDLE, "mp/evolution/invoke/Handled", "handle", "()I");
+method_id!(NEW_KEY_EVENT, "mp/evolution/script/event/ScriptEventKeyboardKey", "<init>", "(ISBZZZZZZ)V");
+method_id!(NEW_CHAR_EVENT, "mp/evolution/script/event/ScriptEventKeyboardChar", "<init>", "(Ljava/lang/String;)V");
 
 pub(crate) fn start(vm: Arc<JavaVM>) {
     unsafe { crate::jni::set_vm(vm); };
@@ -252,15 +284,8 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
 }
 
 fn get_runtime<'a>(env: &'a JNIEnv) -> JObject<'a> {
-    let main_class = env.find_class("mp/evolution/runtime/Runtime")
-        .expect("Unable to find main class");
-
-    match env.get_static_field(main_class, "INSTANCE", "Lmp/evolution/runtime/Runtime;") {
-        Err(e) if matches!(e.kind(), ErrorKind::JavaException) => {
-            panic!("{}", get_last_exception(&env));
-        }
-        other => other.expect("Error instantiating runtime").l().unwrap(),
-    }
+    env.get_static_field_unchecked_fast(RUNTIME.as_obj().into(), **INSTANCE, JavaType::Object(String::new()))
+        .unwrap().l().unwrap()
 }
 
 pub struct ScriptJava {}
@@ -294,14 +319,14 @@ impl Script for ScriptJava {
                                     alt, shift, control, was_down_before,
                                     is_up
                                 } => {
-                                    env.new_object("mp/evolution/script/event/ScriptEventKeyboardKey", "(ISBZZZZZZ)V", args![
+                                    env.new_object_unchecked_fast(KEY_EVENT.as_obj().into(), **NEW_KEY_EVENT, args_v![
                                         key, repeats as i16, scan_code as i8, is_extended, alt,
                                         shift, control, was_down_before, is_up
                                     ]).unwrap()
                                 }
                                 KeyboardEvent::Char(c) => {
                                     let c = c.to_java_object(&env);
-                                    env.new_object("mp/evolution/script/event/ScriptEventKeyboardChar", "(Ljava/lang/String;)V", args![
+                                    env.new_object_unchecked_fast(CHAR_EVENT.as_obj().into(), **NEW_CHAR_EVENT, args_v![
                                         c
                                     ]).unwrap()
                                 }
