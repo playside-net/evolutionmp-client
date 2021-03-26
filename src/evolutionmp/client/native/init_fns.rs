@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::{bind_fn_detour, bind_fn_detour_ip, class};
 use crate::hash::{Hash, Hashable};
 use crate::win::thread::seh;
-use crate::pattern::RageBox;
 use crate::native::alloc::{RageVec, ChainedBox};
 
 bitflags! {

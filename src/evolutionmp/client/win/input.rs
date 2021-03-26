@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use winapi::shared::minwindef::{HKL, LPARAM, LRESULT, UINT, WPARAM};
 use winapi::shared::windef::HWND;
-use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC, WM_NCHITTEST, WM_SETCURSOR, WM_GETICON, VK_F3};
+use winapi::um::winuser::{CallWindowProcW, FindWindowA, GET_WHEEL_DELTA_WPARAM, GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, GetWindowThreadProcessId, GWLP_WNDPROC, MapVirtualKeyExW, MAPVK_VSC_TO_VK, SetWindowLongPtrW, ToUnicodeEx, VK_CONTROL, VK_DELETE, VK_SHIFT, WM_CHAR, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDPROC, VK_F3};
 use wio::wide::FromWide;
 
 use crate::events::ScriptEvent;

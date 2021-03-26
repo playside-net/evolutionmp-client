@@ -5,8 +5,7 @@ use jni_dynamic::{InitArgsBuilder, JavaVM, JNIVersion};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::client::add_dll_directory;
-use crate::{bind_fn_detour_ip, bind_field_ip, class, launcher_dir};
-use crate::game::ui::FrontendButtons;
+use crate::{bind_fn_detour_ip, bind_field_ip, launcher_dir};
 
 pub mod audio;
 pub mod entity;
@@ -112,7 +111,7 @@ pub fn restart() {
 }
 
 extern fn main_frame() {
-    if SHOULD_RELOAD.compare_and_swap(true, false, Ordering::SeqCst) {
+    if SHOULD_RELOAD.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst) == Ok(true) {
         //unsafe { *INIT_STATE.as_mut() = map_init_state(2) };
     }
     MAIN_FRAME()

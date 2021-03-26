@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use cgmath::{Array, Vector2, Vector3, Zero};
+use cgmath::{Array, Vector3, Zero};
 
 use crate::events::ScriptEvent;
 use crate::game;
@@ -13,10 +13,8 @@ use crate::game::player::Player;
 use crate::game::prop::Prop;
 use crate::game::Rgba;
 use crate::game::streaming::{AnimDict, Resource};
-use crate::game::ui::{Font, FrontendButtons};
 use crate::runtime::Script;
-use crate::client::game::interior::Interior;
-use crate::client::native::pool::Handleable;
+use crate::game::ui::FrontendButtons;
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
@@ -26,7 +24,7 @@ pub struct ScriptFishing {
 impl Script for ScriptFishing {
     fn frame(&mut self) {
         if crate::game::is_loaded() {
-            //let result = crate::game::ui::warn("Hello", "Line1", "Line2", FrontendButtons::Ok | FrontendButtons::Cancel, true);
+            //let result = crate::game::ui::warn("Hello", "Line1", "Line2", FrontendButtons::OK | FrontendButtons::CANCEL, true);
 
             //info!("Clicked {:?}", result);
         }
@@ -40,7 +38,7 @@ impl Script for ScriptFishing {
         let dir = cam.get_direction();
         let end = start + dir * distance;
 
-        let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
+        /*let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
         if ray.hit {
             game::graphics::draw_line(start, ray.end, Rgba::WHITE);
             let pos = Vector2::new(2.0, 2.0);
@@ -65,7 +63,7 @@ impl Script for ScriptFishing {
                     //entity.delete()
                 }
             }
-        }
+        }*/
 
         /*if let Some(veh) = ped.get_in_vehicle(false) {
             let pos = Vector2::new(2.0, 2.0);

@@ -476,6 +476,10 @@ impl Vehicle {
         LIGHTS.get(self)
     }
 
+    pub fn set_light_flags(&self, lights: u32) {
+        LIGHTS.set(self, lights)
+    }
+
     pub fn is_interior_light(&self) -> bool {
         let lights = LIGHTS.get(self);
         (lights & 0b01000000) > 0
@@ -483,11 +487,6 @@ impl Vehicle {
 
     pub fn set_interior_light(&self, enabled: bool) {
         invoke!((), 0xBC2042F090AF6AD3, self.handle, enabled)
-    }
-
-    pub fn get_indicator_light(&self) -> u8 {
-        let lights = LIGHTS.get(self);
-        lights.to_ne_bytes()[0]
     }
 
     pub fn is_engine_starting(&self) -> bool {

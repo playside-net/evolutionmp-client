@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::mem::ManuallyDrop;
 
 use cgmath::{Vector2, Vector3};
 
@@ -220,16 +219,24 @@ pub unsafe extern fn call_event(group: &(), event: Option<&Event>) -> *mut () {
     CALL_EVENT(group, event)
 }
 
+bind_fn_detour!(GET_EVENT_DATA, "48 85 C0 74 14 4C 8B 10", -28, get_event_data, (i32, i32, *mut i32, u32) -> bool);
+
+pub unsafe extern fn get_event_data(group: i32, event: i32, args: *mut i32, arg_count: u32) -> bool {
+    warn!("Getting event data for group {} id {} argc {}", group, event, arg_count);
+    GET_EVENT_DATA(group, event, args, arg_count)
+}
+
 pub fn init() {
-    info!("Intializing native events...");
+    info!("Initializing native events...");
     EVENTS.replace(Some(VecDeque::new()));
 
-    //lazy_static::initialize(&CALL_EVENT);
+    lazy_static::initialize(&CALL_EVENT);
+    lazy_static::initialize(&GET_EVENT_DATA);
 
-    native_event!(0xAF35D0D2583051B0, new_vehicle);
+    /*native_event!(0xAF35D0D2583051B0, new_vehicle);
     native_event!(0xD49F9B0955C367DE, new_ped);
     native_event!(0xC20E50AA46D09CA8, task_enter_vehicle);
     native_event!(0xD3DBCE61A490BE02, task_leave_vehicle);
-    native_event!(0xFE43368D2AA4F2FC, set_waypoint);
+    native_event!(0xFE43368D2AA4F2FC, set_waypoint);*/
     //native_event!(0x1D408577D440E81E, set_time_scale);
 }

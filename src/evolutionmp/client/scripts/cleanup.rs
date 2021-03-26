@@ -6,15 +6,9 @@ use crate::events::ScriptEvent;
 use crate::game;
 use crate::game::controls::{Control, Group as ControlGroup};
 use crate::game::ped::Ped;
-use crate::game::player::Player;
 use crate::game::vehicle::Dispatch;
 use crate::native::pool::Handleable;
 use crate::runtime::Script;
-use crate::client::win::input::{InputEvent, KeyboardEvent};
-use winapi::um::winuser::VK_NUMPAD9;
-
-use crate::hash::Hashable;
-use std::collections::HashMap;
 
 static AUDIO_FLAGS: [(&'static str, bool); 7] = [
     ("LoadMPData", true),

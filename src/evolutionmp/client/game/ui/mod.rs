@@ -12,8 +12,6 @@ use crate::hash::{Hashable, Hash};
 use crate::win::input::{InputEvent, KeyboardEvent};
 use crate::client::native::alloc::RageVec;
 use std::ffi::{CStr, OsStr};
-use bitflags::_core::mem::align_of;
-use std::borrow::Cow;
 
 pub mod notification;
 
@@ -429,7 +427,7 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
         super::script::wait(0);
         invoke!((), 0xDC38CC1E35B6A5D7, "WNMC_TITLE", "WNMC_LINE1", buttons, "WNMC_LINE2", 0, -1, false, 0, background);
         let result = GET_WARN_RESULT(true, 0);
-        if result != FrontendButtons::None {
+        if result != FrontendButtons::NONE {
             break result;
         }
     }
@@ -438,18 +436,18 @@ pub fn warn(title: &str, line1: &str, line2: &str, buttons: FrontendButtons, bac
 bitflags! {
     #[repr(C)]
     pub struct FrontendButtons: u32 {
-        const None = 0;
-        const Select = 1;
-        const Ok = 2;
-        const Yes = 4;
-        const Back = 8;
-        const Cancel = 16;
-        const No = 32;
-        const Retry = 64;
-        const Unknown128 = 128;
-        const Skip = 256;
-        const Continue = 16384;
-        const LoadingSpinner = 134217728;
+        const NONE = 0;
+        const SELECT = 1;
+        const OK = 2;
+        const YES = 4;
+        const BACK = 8;
+        const CANCEL = 16;
+        const NO = 32;
+        const RETRY = 64;
+        const UNK128 = 128;
+        const SKIP = 256;
+        const CONTINUE = 16384;
+        const LOADING_SPINNER = 134217728;
     }
 }
 
@@ -629,8 +627,7 @@ impl TextInput {
                         match c.as_str() {
                             "\u{0008}" => self.erase_left(),
                             "\u{007F}" => self.erase_right(),
-                            c => self.enter_char(c),
-                            _ => {}
+                            c => self.enter_char(c)
                         }
                     }
                     _ => {}

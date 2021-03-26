@@ -1,8 +1,5 @@
-use std::mem::ManuallyDrop;
-
 use crate::{bind_field, bind_field_ip, bind_fn, class};
 use crate::hash::Hash;
-use crate::native::TypeInfo;
 
 bind_fn!(INIT_MANIFEST_CHUNK, "48 8D 4F 10 B2 01 48 89 2F", -0x2E, (&()) -> ());
 bind_fn!(LOAD_MANIFEST_CHUNK, "45 38 AE C0 00 00 00 0F 95 C3 E8", -5, (&()) -> ());

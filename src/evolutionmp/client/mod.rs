@@ -10,13 +10,12 @@ use winapi::shared::windef::{HHOOK, HMENU, HWND};
 use winapi::um::errhandlingapi::{AddVectoredExceptionHandler, GetLastError};
 use winapi::um::libloaderapi::{DisableThreadLibraryCalls, FreeLibrary, GetModuleFileNameW, GetModuleHandleA, GetProcAddress, LoadLibraryA};
 use winapi::um::memoryapi::VirtualQuery;
-use winapi::um::synchapi::Sleep;
 use winapi::um::winbase::{
     FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_HMODULE,
     FORMAT_MESSAGE_FROM_SYSTEM, FormatMessageW, LocalFree,
 };
 use winapi::um::winnt::{EXCEPTION_POINTERS, EXCEPTION_RECORD, LANG_NEUTRAL, LONG, LPCSTR, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR, SUBLANG_DEFAULT};
-use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, UnhookWindowsHookEx, WNDPROC, HOOKPROC, SetWindowsHookExA};
+use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC, HOOKPROC};
 use wio::wide::FromWide;
 
 use game::GameState;

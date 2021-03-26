@@ -2,7 +2,6 @@ use std::ops::{Deref, DerefMut};
 use std::alloc::{Layout};
 use crate::{class, bind_field};
 use crate::win::thread::__readgsqword;
-use crate::pattern::RageBox;
 
 bind_field!(ALLOCATOR_TLS_OFFSET, "B9 ? ? ? ? 48 8B 0C 01 45 33 C9 49 8B D2 48", 1, u32);
 

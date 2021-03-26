@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 use jni_dynamic::{JavaVM, JNIEnv, NativeMethod};
 use jni_dynamic::errors::ErrorKind;
-use jni_dynamic::objects::{JClass, JObject, JString, JMethodID, JValue, JFieldID, JStaticFieldID, GlobalRef};
+use jni_dynamic::objects::{JClass, JObject, JString, JMethodID, JValue, JStaticFieldID, GlobalRef};
 use jni_dynamic::strings::JNIStr;
 
 use crate::{args, args_v, java_static_method};
@@ -16,11 +16,6 @@ use crate::native::{NativeCallContext, ThreadSafe};
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
 use jni_dynamic::sys::jint;
-use crate::client::game::ped::Ped;
-use crate::client::game::interior::Interior;
-use crate::client::game::entity::Entity;
-use crate::client::native::NativeVector3;
-use crate::client::native::pool::Handleable;
 use jni_dynamic::signature::JavaType;
 use jni_dynamic::signature::Primitive::{Void, Int};
 
@@ -208,9 +203,8 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
 
     macro_rules! g {
         ($handle: ty, $ty: ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
-            extern fn get(_env: &JNIEnv, obj: JObject) -> $ty {
+            extern fn get(_env: &JNIEnv, _class: JClass, handle: u32) -> $ty {
                 use $crate::native::pool::Handleable;
-                let handle = get_handle(&attach_thread(), obj);
                 <$handle>::from_handle(handle as u32).unwrap().$name()
             }
             NativeMethod::new($vm_name, $vm_sig, get as _)
@@ -219,9 +213,8 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
 
     macro_rules! s {
         ($handle: ty, $ty:ty, $vm_name: literal, $vm_sig: literal, $name: ident) => ({
-            extern fn set(_env: &JNIEnv, obj: JObject, value: $ty) {
+            extern fn set(_env: &JNIEnv, _class: JClass, handle: u32, value: $ty) {
                 use $crate::native::pool::Handleable;
-                let handle = get_handle(&attach_thread(), obj);
                 <$handle>::from_handle(handle as u32).unwrap().$name(value)
             }
             NativeMethod::new($vm_name, $vm_sig, set as _)
@@ -229,43 +222,43 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
     }
 
     natives!(env, "mp/evolution/game/entity/vehicle/Vehicle",
-        g!(Vehicle, u32, "getLightFlags", "()I", get_light_flags),
-        g!(Vehicle, bool, "isEngineStarting", "()Z", is_engine_starting),
-        g!(Vehicle, bool, "isInteriorLight", "()Z", is_interior_light),
-        g!(Vehicle, bool, "isHandbrake", "()Z", is_handbrake),
-        g!(Vehicle, u8, "getIndicatorLight", "()B", get_indicator_light),
-        g!(Vehicle, u8, "getNextGear", "()B", get_next_gear),
-        s!(Vehicle, u8, "setNextGear", "(B)V", set_next_gear),
-        g!(Vehicle, u8, "getCurrentGear", "()B", get_current_gear),
-        s!(Vehicle, u8, "setCurrentGear", "(B)V", set_current_gear),
-        g!(Vehicle, u8, "getHighGear", "()B", get_high_gear),
-        s!(Vehicle, u8, "setHighGear", "(B)V", set_high_gear),
-        g!(Vehicle, f32, "getCurrentRPM", "()F", get_rpm),
-        s!(Vehicle, f32, "setCurrentRPM", "(F)V", set_rpm),
-        g!(Vehicle, f32, "getTurbo", "()F", get_turbo),
-        s!(Vehicle, f32, "setTurbo", "(F)V", set_turbo),
-        g!(Vehicle, f32, "getDashboardSpeed", "()F", get_dashboard_speed),
-        g!(Vehicle, f32, "getWheelSpeed", "()F", get_wheel_speed),
-        s!(Vehicle, f32, "setWheelSpeed", "(F)V", set_wheel_speed),
-        g!(Vehicle, f32, "getThrottle", "()F", get_throttle),
-        s!(Vehicle, f32, "setThrottle", "(F)V", set_throttle),
-        g!(Vehicle, f32, "getThrottlePower", "()F", get_throttle_power),
-        s!(Vehicle, f32, "setThrottlePower", "(F)V", set_throttle_power),
-        g!(Vehicle, f32, "getFuel", "()F", get_fuel),
-        s!(Vehicle, f32, "setFuel", "(F)V", set_fuel),
-        g!(Vehicle, f32, "getMaxOil", "()F", get_max_oil),
-        g!(Vehicle, f32, "getOil", "()F", get_oil),
-        s!(Vehicle, f32, "setOil", "(F)V", set_oil),
-        g!(Vehicle, f32, "getClutch", "()F", get_clutch),
-        s!(Vehicle, f32, "setClutch", "(F)V", set_clutch),
-        g!(Vehicle, f32, "getEngineTemperature", "()F", get_engine_temperature),
-        s!(Vehicle, f32, "setEngineTemperature", "(F)V", set_engine_temperature),
-        g!(Vehicle, f32, "getEnginePower", "()F", get_engine_power),
-        g!(Vehicle, f32, "getBrakePower", "()F", get_brake_power),
-        g!(Vehicle, f32, "getSteeringAngle", "()F", get_steering_angle),
-        s!(Vehicle, f32, "setSteeringAngle", "(F)V", set_steering_angle),
-        g!(Vehicle, f32, "getSteeringScale", "()F", get_steering_scale),
-        s!(Vehicle, f32, "setSteeringScale", "(F)V", set_steering_scale)
+        g!(Vehicle, u32, "getLightFlags", "(I)I", get_light_flags),
+        s!(Vehicle, u32, "setLightFlags", "(II)V", set_light_flags),
+        g!(Vehicle, bool, "isEngineStarting", "(I)Z", is_engine_starting),
+        g!(Vehicle, bool, "isInteriorLight", "(I)Z", is_interior_light),
+        g!(Vehicle, bool, "isHandbrake", "(I)Z", is_handbrake),
+        g!(Vehicle, u8, "getNextGear", "(I)B", get_next_gear),
+        s!(Vehicle, u8, "setNextGear", "(IB)V", set_next_gear),
+        g!(Vehicle, u8, "getCurrentGear", "(I)B", get_current_gear),
+        s!(Vehicle, u8, "setCurrentGear", "(IB)V", set_current_gear),
+        g!(Vehicle, u8, "getHighGear", "(I)B", get_high_gear),
+        s!(Vehicle, u8, "setHighGear", "(IB)V", set_high_gear),
+        g!(Vehicle, f32, "getCurrentRPM", "(I)F", get_rpm),
+        s!(Vehicle, f32, "setCurrentRPM", "(IF)V", set_rpm),
+        g!(Vehicle, f32, "getTurbo", "(I)F", get_turbo),
+        s!(Vehicle, f32, "setTurbo", "(IF)V", set_turbo),
+        g!(Vehicle, f32, "getDashboardSpeed", "(I)F", get_dashboard_speed),
+        g!(Vehicle, f32, "getWheelSpeed", "(I)F", get_wheel_speed),
+        s!(Vehicle, f32, "setWheelSpeed", "(IF)V", set_wheel_speed),
+        g!(Vehicle, f32, "getThrottle", "(I)F", get_throttle),
+        s!(Vehicle, f32, "setThrottle", "(IF)V", set_throttle),
+        g!(Vehicle, f32, "getThrottlePower", "(I)F", get_throttle_power),
+        s!(Vehicle, f32, "setThrottlePower", "(IF)V", set_throttle_power),
+        g!(Vehicle, f32, "getFuel", "(I)F", get_fuel),
+        s!(Vehicle, f32, "setFuel", "(IF)V", set_fuel),
+        g!(Vehicle, f32, "getMaxOil", "(I)F", get_max_oil),
+        g!(Vehicle, f32, "getOil", "(I)F", get_oil),
+        s!(Vehicle, f32, "setOil", "(IF)V", set_oil),
+        g!(Vehicle, f32, "getClutch", "(I)F", get_clutch),
+        s!(Vehicle, f32, "setClutch", "(IF)V", set_clutch),
+        g!(Vehicle, f32, "getEngineTemperature", "(I)F", get_engine_temperature),
+        s!(Vehicle, f32, "setEngineTemperature", "(IF)V", set_engine_temperature),
+        g!(Vehicle, f32, "getEnginePower", "(I)F", get_engine_power),
+        g!(Vehicle, f32, "getBrakePower", "(I)F", get_brake_power),
+        g!(Vehicle, f32, "getSteeringAngle", "(I)F", get_steering_angle),
+        s!(Vehicle, f32, "setSteeringAngle", "(IF)V", set_steering_angle),
+        g!(Vehicle, f32, "getSteeringScale", "(I)F", get_steering_scale),
+        s!(Vehicle, f32, "setSteeringScale", "(IF)V", set_steering_scale)
     );
     pool!(env, crate::game::vehicle::get_pool(), "mp/evolution/game/entity/vehicle/VehiclePool");
     pool!(env, crate::game::prop::get_pool(), "mp/evolution/game/entity/prop/PropPool");

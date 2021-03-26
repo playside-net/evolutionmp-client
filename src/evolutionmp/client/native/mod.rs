@@ -7,7 +7,7 @@ use std::os::raw::c_char;
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
-use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3, Angle};
+use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3};
 use detour::{GenericDetour, RawDetour};
 
 use crate::client::native::pool::{CEntity, Native};
@@ -20,7 +20,6 @@ use std::sync::atomic::Ordering;
 use crate::client::jni::attach_thread;
 use crate::client::print_address_info;
 use backtrace::SymbolName;
-use std::ops::Deref;
 
 pub mod vehicle;
 pub mod pool;
@@ -267,8 +266,8 @@ pub(crate) fn init() {
     vehicle::init();
     HOOKS.replace(Some(HashMap::new()));
 
-    //crate::events::init();
-    detour(0x745711A75AB09277, |ctx| {
+    crate::events::init();
+    detour(0x745711A75AB09277, |ctx| unsafe {
         if CURRENT_NATIVE.load(Ordering::SeqCst) == 0x745711A75AB09277 && ctx.args[0] == 1 {
             let env = attach_thread();
             env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
@@ -336,7 +335,14 @@ impl PtrXorU64 {
     fn get(&self) -> u64 {
         let addr = self as *const Self as u64;
         let mask = (addr ^ self.next) as u32 as u64;
-        (((mask << 32) | mask) ^ self.prev) as _
+        let value = ((mask << 32) | mask) ^ self.prev;
+        (value) as _
+    }
+
+    fn set(&mut self, value: u64) {
+        let addr = self as *const Self as u64;
+        self.prev = (addr << 32) ^ (addr as u32 as u64) ^ value;
+        self.next = 0;
     }
 }
 
@@ -393,6 +399,11 @@ impl NativeGroup {
         self.hashes[index].get()
     }
 
+    pub fn set_hash(&self, index: usize, value: u64) {
+        let hash = unsafe { &mut *(&self.hashes[index] as *const _ as *mut PtrXorU64) };
+        hash.set(value);
+    }
+
     pub fn iter(&self) -> NativeGroupIterator {
         NativeGroupIterator {
             group: self,
@@ -414,6 +425,7 @@ impl<'a> Iterator for NativeGroupIterator<'a> {
         if index < self.group.len() {
             self.index += 1;
             let hash = self.group.get_hash(index);
+            self.group.set_hash(index, hash ^ u64::MAX);
             //info!("Native: 0x{:016X}", hash);
             let handler = self.group.handlers[index];
             Some((hash, handler))
@@ -615,6 +627,7 @@ pub type NativeFunction = extern fn(*mut NativeCallContext);
 pub struct Natives {
     mappings: HashMap<u64, u64>,
     handlers: HashMap<u64, NativeFunction>,
+    mapped_handlers: HashMap<u64, NativeFunction>,
 }
 
 impl Natives {
@@ -631,12 +644,19 @@ impl Natives {
             }
         }
 
-        Natives { mappings, handlers }
+        let mut mapped_handlers = handlers.clone();
+        for (from, to) in mappings.iter() {
+            if let Some(handler) = handlers.get(to).cloned() {
+                mapped_handlers.insert(*from, handler);
+            }
+        }
+
+        Natives { mappings, handlers, mapped_handlers }
     }
 
     pub fn get_handler(&self, hash: u64) -> Option<NativeFunction> {
-        let hash = self.mappings.get(&hash).cloned().unwrap_or(hash);
-        self.handlers.get(&hash).cloned()
+        //let hash = self.mappings.get(&hash).cloned().unwrap_or(hash);
+        self.mapped_handlers.get(&hash).cloned()
     }
 }
 

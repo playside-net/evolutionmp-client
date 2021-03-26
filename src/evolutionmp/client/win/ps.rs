@@ -16,7 +16,7 @@ use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
 use winapi::um::memoryapi::{ReadProcessMemory, VirtualAllocEx, VirtualFreeEx, WriteProcessMemory};
 use winapi::um::processthreadsapi::{CreateRemoteThreadEx, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess};
 use winapi::um::psapi::{EnumProcessModulesEx, GetModuleFileNameExW};
-use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS, MODULEENTRY32W, Module32FirstW, Module32NextW, Module32First, Module32Next, MODULEENTRY32};
+use winapi::um::tlhelp32::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS, Module32First, Module32Next, MODULEENTRY32};
 use winapi::um::winbase::{INFINITE, THREAD_PRIORITY_HIGHEST};
 use winapi::um::winnt::{MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE};
 use wio::wide::{FromWide, ToWide};
@@ -173,7 +173,7 @@ impl ProcessHandle {
                 Ok(bytes_written)
             }
         } else {
-            Err(ProcessMemoryError::WriteFailed(unsafe { GetLastError() }))
+            Err(ProcessMemoryError::WriteFailed(GetLastError()))
         }
     }
 
@@ -185,14 +185,14 @@ impl ProcessHandle {
 
     pub unsafe fn read_into<D>(&self, base_address: LPVOID, size: SIZE_T, data: &mut D) -> Result<usize, ProcessMemoryError> where D: RemoteData {
         let mut bytes_read = 0usize;
-        if unsafe { ReadProcessMemory(**self, base_address, data.get_mut_ptr() as *mut _, size, &mut bytes_read) } == TRUE {
+        if ReadProcessMemory(**self, base_address, data.get_mut_ptr() as *mut _, size, &mut bytes_read) == TRUE {
             if size != bytes_read {
                 Err(ProcessMemoryError::ReadBytesMismatch(size, bytes_read))
             } else {
                 Ok(bytes_read)
             }
         } else {
-            Err(ProcessMemoryError::ReadFailed(unsafe { GetLastError() }))
+            Err(ProcessMemoryError::ReadFailed(GetLastError()))
         }
     }
 

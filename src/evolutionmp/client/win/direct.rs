@@ -54,11 +54,11 @@ struct SwapChain(IDXGISwapChain);
 impl SwapChain {
     extern fn present(&mut self, sync_interval: u32, flags: u32) -> HRESULT {
         if !RESIZING.load(Ordering::Relaxed) {
-            if !INITIALIZED.compare_and_swap(false, true, Ordering::Relaxed) {
+            if INITIALIZED.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed) == Ok(false) {
                 self.initialize_devices();
             } else {
                 if let Ok(fullscreen) = self.get_fullscreen_state() {
-                    if FULLSCREEN.compare_and_swap(!fullscreen, fullscreen, Ordering::Relaxed) != fullscreen {
+                    if FULLSCREEN.compare_exchange(!fullscreen, fullscreen, Ordering::Relaxed, Ordering::Relaxed) == Ok(!fullscreen) {
                         info!("got resized");
                         RESIZING.store(true, Ordering::SeqCst);
                         self.release_devices();
@@ -90,26 +90,26 @@ impl SwapChain {
         }
     }
 
-    fn get_resource<'a, R: Interface, G>(&mut self, getter: G) -> Result<&'a mut R, u32>
+    fn get_resource<R: Interface, G>(&mut self, getter: G) -> Result<ManuallyDrop<Box<R>>, u32>
         where G: Fn(&mut Self, REFIID, *mut *mut c_void) -> HRESULT {
 
         let resource: *mut R = std::ptr::null_mut();
         let result = (getter)(self, &R::uuidof(), &mut resource.cast());
         if SUCCEEDED(result) {
-            Ok(unsafe { &mut *resource })
+            Ok(ManuallyDrop::new(unsafe { Box::from_raw(resource) }))
         } else {
             Err(HRESULT_CODE(result) as _)
         }
     }
 
-    fn get_device<'a, I: Interface>(&mut self) -> Result<&'a mut I, u32> {
-        self.get_resource::<'a, I, _>(|sc, id, res| unsafe {
+    fn get_device<I: Interface>(&mut self) -> Result<ManuallyDrop<Box<I>>, u32> {
+        self.get_resource::<I, _>(|sc, id, res| unsafe {
             sc.0.GetDevice(id, res)
         })
     }
 
-    fn get_buffer<'a, B: Interface>(&mut self, buffer: u32) -> Result<&'a mut B, u32> {
-        self.get_resource::<'a, B, _>(move |sc, id, res| unsafe {
+    fn get_buffer<B: Interface>(&mut self, buffer: u32) -> Result<ManuallyDrop<Box<B>>, u32> {
+        self.get_resource::<B, _>(move |sc, id, res| unsafe {
             sc.0.GetBuffer(buffer, id, res)
         })
     }
@@ -133,9 +133,9 @@ impl SwapChain {
 
     fn draw(&mut self) {
         self.create_textures();
-        if let Ok(device) = self.get_device::<ID3D11Device>() {
+        if let Ok(mut device) = self.get_device::<ID3D11Device>() {
             if let Some(context) = self.get_context() {
-                let state = unsafe { DXGIState::capture(device, context) };
+                let state = unsafe { DXGIState::capture(&mut *device, context) };
 
                 warn!("frame");
 
@@ -148,13 +148,13 @@ impl SwapChain {
 
     fn initialize_devices(&mut self) {
         warn!("initializing dx devices...");
-        if let Ok(device) = self.get_device::<ID3D11Device>() {
-            warn!("got device {:p}", device);
-            if let Ok(target_texture) = self.get_buffer::<ID3D11Texture2D>(0) {
-                warn!("got target texture {:p}", target_texture);
+        if let Ok(mut device) = self.get_device::<ID3D11Device>() {
+            warn!("got device {:p}", device.as_mut());
+            if let Ok(mut target_texture) = self.get_buffer::<ID3D11Texture2D>(0) {
+                warn!("got target texture {:p}", target_texture.as_mut());
                 let target_view = self.get_resource::<ID3D11RenderTargetView, _>(|sc, id, res| unsafe {
                     device.CreateRenderTargetView(
-                        std::mem::transmute(target_texture as *const _ as *mut ID3D11RenderTargetView),
+                        std::mem::transmute(target_texture.as_ref() as *const _ as *mut ID3D11RenderTargetView),
                         std::ptr::null_mut(),
                         res.cast()
                     )
