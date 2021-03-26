@@ -185,11 +185,7 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         NativeMethod::new("getStringFromUTFChars", "(J)Ljava/lang/String;", get_string_from_utf_chars as _)
     );
     natives!(env, "mp/evolution/invoke/Native",
-        NativeMethod::new("invoke", "(JJIJ)V", invoke as _),
-        NativeMethod::new("test", "(J)V", test as _)
-    );
-    natives!(env, "mp/evolution/invoke/MutableVector3",
-        NativeMethod::new("address", "(J)J", vector_address as _)
+        NativeMethod::new("invoke", "(JJIJ)V", invoke as _)
     );
     natives!(env, "mp/evolution/script/Script",
         //NativeMethod::new("yield", "(J)V", wait as _),
@@ -378,31 +374,12 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: Box<[u64
         let mut context = NativeCallContext::new_allocated(args, result, arg_count);
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
         handler(&mut context);
+        crate::native::SET_VECTOR_RESULTS(&mut context); //Flush all &mut NativeVector3 args
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
         std::mem::forget(context); //Do not free java nio buffers
     } else {
         let env = attach_thread();
         env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
-    }
-}
-
-unsafe extern fn vector_address(_env: &JNIEnv, _class: JClass, vec: Box<NativeVector3>) -> usize {
-    Box::leak(vec) as *mut _ as usize
-}
-
-unsafe extern fn test(_env: &JNIEnv, _class: JClass, data: &mut NativeVector3) {
-    let env = attach_thread();
-    let ped = Ped::local();
-    let pos = ped.get_position();
-    warn!("ped pos: {:?}", pos);
-    if let Some(int) = Interior::from_pos(pos) {
-        warn!("int: {:?}", int);
-        let info = int.get_info();
-        warn!("info: {:?}", info);
-        let ptr = data as *mut _ as usize;
-        warn!("ptr: {:p} ({} vs {})", data, ptr, std::mem::transmute::<_, isize>(ptr));
-        crate::invoke!((), 0x252BDC06B73FA6EA, int.get_handle(), data as *mut _ as u64, &mut 0);
-        //warn!("new data: {:?}", data);
     }
 }
 
