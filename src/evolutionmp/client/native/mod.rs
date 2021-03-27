@@ -69,8 +69,6 @@ impl<T> std::ops::DerefMut for ThreadSafe<T> {
     }
 }
 
-static HOOKS: ThreadSafe<RefCell<Option<HashMap<u64, RawDetour>>>> = ThreadSafe::new(RefCell::new(None));
-
 #[macro_export]
 macro_rules! bind_fn_detour {
     ($name:ident,$pattern:literal,$offset:literal,$detour:path,($($arg:ty),*) -> $ret:ty) => {
@@ -264,57 +262,7 @@ pub(crate) fn init() {
     info!("Initializing natives...");
     lazy_static::initialize(&NATIVES);
     vehicle::init();
-    HOOKS.replace(Some(HashMap::new()));
-
     crate::events::init();
-    detour(0x745711A75AB09277, |ctx| unsafe {
-        if CURRENT_NATIVE.load(Ordering::SeqCst) == 0x745711A75AB09277 && ctx.args[0] == 1 {
-            let env = attach_thread();
-            env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
-        }
-        ctx.args[0] = 0;
-        call_trampoline(0x745711A75AB09277, ctx)
-    });
-    detour(0xEF01D36B9C9D0C7B, |ctx| {
-        if CURRENT_NATIVE.load(Ordering::SeqCst) == 0xEF01D36B9C9D0C7B && ctx.args[1] == 1 {
-            let env = attach_thread();
-            env.throw_new("java/lang/IllegalStateException", "Activating pause frontend is prohibited").unwrap();
-        }
-        ctx.args[1] = 0;
-        call_trampoline(0xEF01D36B9C9D0C7B, ctx)
-    });
-    /*detour(0x4EDE34FBADD967A6, |ctx| {
-        let name = crate::invoke!(String, 0x442E0A7EDE4A738A);
-        info!("Script {} asked to wait for {} ms", name, ctx.get_args().read::<u32>());
-        call_trampoline(0x4EDE34FBADD967A6, ctx)
-    });*/
-}
-
-fn get_trampoline(hash: u64) -> NativeFunction {
-    let hooks = HOOKS.try_borrow().expect("unable to borrow hook map");
-    let hooks = hooks.as_ref().expect("hook map is not initialized");
-    let detour = hooks.get(&hash).expect(&format!("missing native trampoline for 0x{:016X}", hash));
-    unsafe { std::mem::transmute(detour.trampoline()) }
-}
-
-pub fn call_trampoline(hash: u64, context: &mut NativeCallContext) {
-    let trampoline = get_trampoline(hash);
-    trampoline(context);
-}
-
-pub fn detour(hash: u64, hook: fn(&mut NativeCallContext)) {
-    let original = crate::native::get_handler(hash);
-    unsafe {
-        warn!("Hooking native 0x{:016X} at:", hash);
-        print_address_info(original as _, None, SymbolName::new(format!("NATIVE 0x{:016X}", hash).as_bytes()));
-
-        let detour = GenericDetour::new(original, std::mem::transmute(hook))
-            .expect(&format!("native hook creation failed for 0x{:016X}", hash));
-        detour.enable().expect(&format!("native hook enabling failed for 0x{:016X}", hash));
-        let mut hooks = HOOKS.try_borrow_mut().expect("unable to mutably borrow hook map");
-        let detour = std::mem::transmute::<GenericDetour<_>, RawDetour>(detour);
-        hooks.as_mut().expect("hook map is not initialized").insert(hash, detour);
-    }
 }
 
 pub fn get_handler_opt(hash: u64) -> Option<NativeFunction> {
@@ -574,21 +522,16 @@ pub trait NativeStackValue {
 }
 
 #[repr(C)]
-#[derive(Clone)]
-pub struct NativeCallContext {
-    returns: Box<[u64; 3]>,
+pub struct NativeCallContext<'arg, 'ret> {
+    returns: &'ret mut [u64; 3],
     arg_count: u32,
-    args: Box<[u64; 32]>,
+    args: &'arg mut [u64; 32],
     data_count: u32,
     data: [u32; 48],
 }
 
-impl NativeCallContext {
-    pub fn new() -> NativeCallContext {
-        Self::new_allocated(Box::new([0; 32]), Box::new([0; 3]), 0)
-    }
-
-    pub fn new_allocated(args: Box<[u64; 32]>, returns: Box<[u64; 3]>, arg_count: u32) -> NativeCallContext {
+impl<'arg, 'ret> NativeCallContext<'arg, 'ret> {
+    pub fn new(args: &'arg mut [u64; 32], returns: &'ret mut [u64; 3], arg_count: u32) -> NativeCallContext<'arg, 'ret> {
         NativeCallContext {
             returns,
             arg_count,
@@ -668,7 +611,9 @@ macro_rules! invoke {
         lazy_static! {
             static ref HANDLER: $crate::native::NativeFunction = $crate::native::get_handler($hash);
         }
-        let mut context = $crate::native::NativeCallContext::new();
+        let mut args = [0; 32];
+        let mut result = [0; 3];
+        let mut context = $crate::native::NativeCallContext::new(&mut args, &mut result, 0);
         $(context.push_arg($arg);)*
         use std::sync::atomic::Ordering;
         $crate::native::CURRENT_NATIVE.store($hash, Ordering::SeqCst);

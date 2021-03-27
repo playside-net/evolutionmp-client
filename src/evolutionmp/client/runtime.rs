@@ -221,7 +221,24 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         })
     }
 
+    macro_rules! i {
+        ($ret: ty, $vm_name: literal, $vm_sig: literal, $hash: literal) => ({
+            extern fn call(_env: &JNIEnv, _class: JClass, handle: u32) -> $ret {
+                crate::invoke!($ret, $hash, handle)
+            }
+            NativeMethod::new($vm_name, $vm_sig, call as _)
+        });
+        ($ret: ty, $vm_name: literal, $vm_sig: literal, $hash: literal, $($a:ident: $t:ty),+) => ({
+            extern fn call(_env: &JNIEnv, _class: JClass, handle: u32, $($a: $t),*) -> $ret {
+                crate::invoke!($ret, $hash, handle, $($a),+)
+            }
+            NativeMethod::new($vm_name, $vm_sig, call as _)
+        })
+    }
+
     natives!(env, "mp/evolution/game/entity/vehicle/Vehicle",
+        i!(bool, "hasWeapon", "(I)Z", 0x25ECB9F8017D98E0),
+
         g!(Vehicle, u32, "getLightFlags", "(I)I", get_light_flags),
         s!(Vehicle, u32, "setLightFlags", "(II)V", set_light_flags),
         g!(Vehicle, bool, "isEngineStarting", "(I)Z", is_engine_starting),
@@ -362,14 +379,13 @@ unsafe extern fn error(_env: &JNIEnv, _class: JClass, line: JObject) {
     error!(target: "script", "{}", line);
 }
 
-unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: Box<[u64; 32]>, arg_count: u32, result: Box<[u64; 3]>) {
+unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: &mut [u64; 32], arg_count: u32, result: &mut [u64; 3]) {
     if let Some(handler) = crate::native::get_handler_opt(hash) {
-        let mut context = NativeCallContext::new_allocated(args, result, arg_count);
+        let mut context = NativeCallContext::new(args, result, arg_count);
         crate::native::CURRENT_NATIVE.store(hash, Ordering::SeqCst);
         handler(&mut context);
         crate::native::SET_VECTOR_RESULTS(&mut context); //Flush all &mut NativeVector3 args
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
-        std::mem::forget(context); //Do not free java nio buffers
     } else {
         let env = attach_thread();
         env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
