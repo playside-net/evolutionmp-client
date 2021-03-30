@@ -102,6 +102,6 @@ pub unsafe extern fn get_event_data(group: i32, event: i32, args: *mut i32, arg_
 
 pub fn init() {
     info!("Initializing native events...");
-    lazy_static::initialize(&CALL_EVENT);
-    lazy_static::initialize(&GET_EVENT_DATA);
+    //lazy_static::initialize(&CALL_EVENT);
+    //lazy_static::initialize(&GET_EVENT_DATA);
 }

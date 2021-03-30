@@ -53,8 +53,8 @@ impl StatValue for f32 {
 
 impl StatValue for bool {
     fn read(hash: Hash, default: Self) -> Option<Self> {
-        let mut result = false;
-        invoke_option!(result, 0x11B5E6D2AE73F48E, hash, &mut result, default)
+        let mut result = 0u32;
+        invoke_option!(result, 0x11B5E6D2AE73F48E, hash, &mut result, default).map(|v| v == 1)
     }
 
     fn write(&self, hash: Hash, save: bool) -> bool {

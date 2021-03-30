@@ -13,29 +13,46 @@ use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use winapi::um::winbase::{FILE_BEGIN, FILE_CURRENT, FILE_END};
 use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
 
-use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip, class};
+use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip, class, launcher_dir};
 use crate::pattern::RageBox;
 
-bind_fn_detour!(OPEN_PACK_FILES, "41 B0 01 BA 1B E6 DA 93 E8", -12, open_pack_files, () -> ());
+bind_fn_detour_ip!(OPEN_PACK_FILES, "41 B0 01 BA 1B E6 DA 93 E8", -12, open_pack_files, () -> ());
 bind_fn_detour!(ADD_COLLISION, "48 8B FA 89 44 24 30 48 8B D9 E8 ? ? ? ? 0F", 10, add_collision, (*mut u8, &mut u32, &u32) -> ());
-bind_fn_detour!(SOME_FN, "66 39 79 38 74 06 4C 8B 41 30 EB 07 4C 8D", 19, some_fn, (*mut u8, *mut u8, RagePath) -> u32);
+bind_fn_detour_ip!(SOME_FN, "66 39 79 38 74 06 4C 8B 41 30 EB 07 4C 8D", 19, some_fn, (*mut u8, *mut u8, RagePath) -> u32);
 
 bind_fn!(GET_DEVICE, "41 B8 07 00 00 00 48 8B F1 E8", -0x1F, (RagePath, bool) -> Option<ManuallyDrop<Box<Device>>>);
 bind_fn!(MOUNT_GLOBAL, "41 8A F0 48 8B F9 E8 ? ? ? ? 33 DB 85 C0", -0x28, (RagePath, &Device, bool) -> bool);
 bind_fn!(UNMOUNT, "E8 ? ? ? ? 85 C0 75 23 48 83", -0x22, (RagePath) -> ());
 bind_fn!(PACK_FILE_INIT, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D", -0x1E, (&mut PackFile) -> ());
-bind_fn!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, (&mut PackFile, RagePath, bool, i32, u64) -> bool);
-bind_fn!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, (&mut PackFile, RagePath) -> ());
+bind_fn_detour!(PACK_FILE_OPEN, "48 8D 68 98 48 81 EC 40 01 00 00 41 8B F9", -0x18, pack_file_open, (&mut PackFile, RagePath, bool, i32, u64) -> bool);
+bind_fn_detour!(PACK_FILE_MOUNT, "84 C0 74 1D 48 85 DB 74 0F 48", -0x1E, pack_file_mount, (&mut PackFile, RagePath) -> ());
 bind_fn!(RELATIVE_DEVICE_SET_PATH, "49 8B F9 48 8B D9 4C 8B CA", -0x17, (&mut RelativeDevice, RagePath, bool, Option<&Device>) -> ());
-bind_fn!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, (&mut RelativeDevice, RagePath, bool) -> ());
+bind_fn_detour!(RELATIVE_DEVICE_MOUNT, "44 8A 81 14 01 00 00 48 8B DA 48 8B F9 48 8B D1", -0xD, relative_device_mount, (&mut RelativeDevice, RagePath, bool) -> ());
 bind_fn!(KEY_STATE_INIT, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -12, (&mut KeyState, *const u8) -> ());
 
-bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, () -> ());
+//bind_fn_ip!(ORIGINAL_MOUNT, "48 81 EC E0 03 00 00 48 B8 63 6F 6D 6D", -0x1A, () -> ());
+//bind_fn_detour_ip!(INITIAL_MOUNT, "0F B7 05 ? ? ? ? 48 03 C3 44 88 34 38 66", 0x15, initial_mount, () -> ());
+bind_fn_detour!(INITIAL_MOUNT, "48 81 EC E0 03 00 00 48 B8 63 6F 6D 6D", -0x1A, initial_mount, () -> ());
 
 bind_field_ip!(DEVICE_VTABLE, "48 21 35 ? ? ? ? 48 8B 74 24 38 48 8D 05", 15, DeviceVT);
 bind_field_ip!(PACK_FILE_VTABLE, "44 89 41 28 4C 89 41 38 4C 89 41 50 48 8D 05", 15, DeviceVT);
 bind_field_ip!(RELATIVE_DEVICE_VTABLE, "48 85 C0 74 11 48 83 63 08 00 48", 13, DeviceVT);
 bind_field_ip!(ENCRYPTING_DEVICE_VTABLE, "45 33 F6 48 89 85 30 02 00 00 48 8D 45 30 48", -4, DeviceVT);
+
+extern fn pack_file_mount(file: &mut PackFile, path: RagePath) {
+    //info!("Mounting pack file \"{}\" to path: \"{}\"", file.get_name(), path);
+    PACK_FILE_MOUNT(file, path)
+}
+
+extern fn pack_file_open(file: &mut PackFile, path: RagePath, flag1: bool, ty: i32, flag2: u64) -> bool {
+    //error!("Opening pack file \"{}\" path: \"{}\" flag1: {} ty: {} flag2: {}", file.get_name(), path, flag1, ty, flag2);
+    PACK_FILE_OPEN(file, path, flag1, ty, flag2)
+}
+
+extern fn relative_device_mount(device: &mut RelativeDevice, path: RagePath, allow_root: bool) {
+    //warn!("Mounting relative device: \"{}\" path: \"{}\" allow_root: {}", device.get_name(), path, allow_root);
+    RELATIVE_DEVICE_MOUNT(device, path, allow_root)
+}
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
@@ -72,7 +89,7 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
 
 pub(crate) fn hook() {
     info!("Hooking filesystem...");
-    //lazy_static::initialize(&OPEN_PACK_FILES);
+    lazy_static::initialize(&OPEN_PACK_FILES);
     //lazy_static::initialize(&ADD_COLLISION);
 
     //lazy_static::initialize(&SOME_FN);
@@ -95,6 +112,7 @@ pub(crate) fn hook() {
 }
 
 extern fn open_pack_files() {
+    warn!("Opening packfiles...");
     OPEN_PACK_FILES()
 }
 
@@ -114,12 +132,49 @@ extern "cdecl" fn some_fn(extra_content_manager: *mut u8, unk: *mut u8, device_n
 pub(crate) fn init() {
     info!("Initializing FS");
 
-    let mut dev = RelativeDevice::new();
-    info!("created relative device");
-    dev.set_path("C:/dlcpacks", true, None);
-    info!("set path");
-    let mnt = dev.mount("kek:/", true);
-    walk(&*mnt, Path::new("kek:/"));
+    /*let mut root = RelativeDevice::new();
+    root.set_path(launcher_dir(), true, None);
+    root.mount_global("evo:/", true);
+
+    let pack = PackFile::open("evo:/dlc/ambulance22.rpf", 0).unwrap();
+    warn!("Opened pack file");
+    warn!("{}", pack.get_name());
+    pack.mount("dlc_")*/
+
+    /*if let Some(dlc) = Device::get("evo:/dlc", true) {
+        info!("found \"dlc/\": {}", dlc.get_name());
+        for entry in dlc.entries("evo:/dlc") {
+            if !entry.is_directory() {
+                let name = entry.get_name().to_string_lossy();
+
+                info!("found pack entry: {}", name);
+                if name.ends_with(".rpf") {
+                    error!("Found dlc: {:?}", name);
+                    if let Some(pack) = PackFile::open(&format!("evo:/dlc/{}", name), 0) {
+                        info!("Opened pack: {}", pack.get_name());
+                        let addon_name = name.strip_suffix(".rpf").unwrap();
+                        let addon_root = format!("addons:/{}", addon_name);
+                        let m = pack.mount(&addon_root);
+
+                        let mod_root = format!("modVfs_{}:/", addon_name);
+                        let mut device = RelativeDevice::new();
+                        device.set_path(&addon_root, true, Some(&*m));
+                        let d = device.mount(&mod_root, true);
+
+                        std::mem::forget(m);
+                        std::mem::forget(d);
+
+                        info!("Mounted pack {}", addon_root);
+                    }
+                }
+            }
+        }
+    }
+
+    std::mem::forget(root);*/
+
+    //walk(&*root, Path::new("evo:/"));
+
     info!("mounted");
 
     fn walk(device: &Device, path: &Path) {
@@ -138,8 +193,8 @@ pub(crate) fn init() {
     }
 
     /*if let Some(device) = Device::get("platform:/", true) {
-        info!("platform walking...");
-        walk(&device, Path::new("platform:/.."));
+        info!("walking 'platform'... name: {} rel: {} enc: {} pack: {}", device.get_name(), device.is_relative(), device.is_encrypting(), device.is_pack_file());
+        walk(&device, Path::new("platform:/"));
     }*/
 
     /*let mut d = RelativeDevice::new();
@@ -153,6 +208,8 @@ extern fn initial_mount() {
     warn!("Initial mount");
 
     INITIAL_MOUNT();
+
+    warn!("Initial mount done");
 }
 
 #[repr(C)]
@@ -161,6 +218,10 @@ pub struct DeviceEntry {
     size: u64,
     last_write_time: FILETIME,
     attributes: DWORD,
+}
+
+pub trait AsDevice: Deref<Target=Device> {
+    fn get_v_table() -> &'static DeviceVT;
 }
 
 impl DeviceEntry {
@@ -446,6 +507,30 @@ impl Device {
     pub fn get_name(&self) -> RagePath {
         (self.v_table.get_name)(self)
     }
+
+    fn is(&self, table: &DeviceVT) -> bool {
+        self.v_table.as_ref() as *const _ as usize == table as *const _ as usize
+    }
+
+    pub fn is_relative(&self) -> bool {
+        self.is(RELATIVE_DEVICE_VTABLE.as_ref())
+    }
+
+    pub fn is_encrypting(&self) -> bool {
+        self.is(ENCRYPTING_DEVICE_VTABLE.as_ref())
+    }
+
+    pub fn is_pack_file(&self) -> bool {
+        self.is(PACK_FILE_VTABLE.as_ref())
+    }
+
+    pub fn cast<T: AsDevice>(self: ManuallyDrop<Box<Device>>) -> Result<ManuallyDrop<Box<T>>, ManuallyDrop<Box<Device>>> {
+        if self.is(&*T::get_v_table()) {
+            Ok(unsafe { std::mem::transmute(self) })
+        } else {
+            Err(self)
+        }
+    }
 }
 
 pub struct DeviceOpenGuard<'a> {
@@ -629,12 +714,24 @@ impl DerefMut for PackFile {
     }
 }
 
+impl AsDevice for PackFile {
+    fn get_v_table() -> &'static DeviceVT {
+        &*PACK_FILE_VTABLE
+    }
+}
+
 const RELATIVE_DEVICE_SIZE: usize = 272;
 
 #[repr(C)]
 pub struct RelativeDevice {
     device: Device,
     inner: [u8; RELATIVE_DEVICE_SIZE],
+}
+
+impl AsDevice for RelativeDevice {
+    fn get_v_table() -> &'static DeviceVT {
+        &*RELATIVE_DEVICE_VTABLE
+    }
 }
 
 #[repr(C)]
@@ -765,5 +862,11 @@ impl Deref for EncryptingDevice {
 impl DerefMut for EncryptingDevice {
     fn deref_mut(&mut self) -> &mut Device {
         &mut self.device
+    }
+}
+
+impl AsDevice for EncryptingDevice {
+    fn get_v_table() -> &'static DeviceVT {
+        &*ENCRYPTING_DEVICE_VTABLE
     }
 }

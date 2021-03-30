@@ -223,9 +223,12 @@ proc_detour!(OUTPUT_DEBUG_STRING_W, "kernel32.dll", "OutputDebugStringW", debug_
 );
 
 unsafe extern fn set_windows_hook(id: u32, handler: HOOKPROC, module: HINSTANCE, thread_id: DWORD) -> HHOOK {
-    warn!("Hook installation requested: {}, {:?}, {:p}, {}", id, handler.map(|f|f as *mut ()), module, thread_id);
-    SET_WINDOWS_HOOK(id, handler, module, thread_id)
-    //1
+    if crate::game::is_loaded() {
+        warn!("Hook installation requested: {}, {:?}, {:p}, {}", id, handler.map(|f| f as *mut ()), module, thread_id);
+        SET_WINDOWS_HOOK(id, handler, module, thread_id)
+    } else {
+        std::ptr::null_mut()
+    }
 }
 
 unsafe extern fn debug_a(text: LPCSTR) {
@@ -292,7 +295,6 @@ unsafe fn initialize(window: &Window) {
 
     game::hook();
     game::init();
-    native::fs::init();
 
     crate::scripts::init();
 }

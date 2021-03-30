@@ -18,7 +18,7 @@ impl Probe {
     }
 
     pub fn get_result(&self, include_material: bool) -> ProbeResult {
-        let mut hit = false;
+        let mut hit = 0u32;
         let mut end = NativeVector3::zero();
         let mut surface_normal = NativeVector3::zero();
         let mut entity = 0 as Handle;
@@ -29,7 +29,7 @@ impl Probe {
             invoke!(u32, 0x3D87450E15D98694, self.handle, &mut hit, &mut end, &mut surface_normal, &mut entity)
         };
         ProbeResult {
-            hit,
+            hit: hit == 1,
             end: end.into(),
             surface_normal: surface_normal.into(),
             entity: if entity == 0 { None } else { Some(ProbeEntity { handle: entity }) },

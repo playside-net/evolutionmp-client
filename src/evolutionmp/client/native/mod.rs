@@ -263,6 +263,7 @@ pub(crate) fn init() {
     lazy_static::initialize(&NATIVES);
     vehicle::init();
     crate::events::init();
+    fs::init();
 }
 
 pub fn get_handler_opt(hash: u64) -> Option<NativeFunction> {
@@ -722,8 +723,8 @@ impl<H> NativeStackValue for Option<H> where H: Handleable + Sized {
 }
 
 impl NativeStackValue for Rgba {
-    fn read_from_stack(_stack: &mut NativeStackReader) -> Self {
-        panic!("Reading Rgba color from stack is not possible")
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        panic!("Reading Rgba color from return stack is not possible")
     }
 
     fn write_to_stack(self, stack: &mut NativeStackWriter) {
@@ -769,9 +770,15 @@ impl NativeStackValue for Deg<f32> {}
 
 impl NativeStackValue for &mut Deg<f32> {}
 
-impl NativeStackValue for bool {}
+impl NativeStackValue for bool {
+    fn read_from_stack(stack: &mut NativeStackReader) -> Self {
+        stack.read::<u32>() as u8 == 1
+    }
 
-impl NativeStackValue for &mut bool {}
+    fn write_to_stack(self, stack: &mut NativeStackWriter) {
+        stack.write(self as u32);
+    }
+}
 
 impl NativeStackValue for u64 {}
 

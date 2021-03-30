@@ -49,16 +49,18 @@ bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_ac
 unsafe extern fn script_post_init(arg: &(), ty: Hash, p3: u32) -> *mut u8 {
     let fn_name = crate::native::vtables::V_TABLES.get(&ty).map(|f| format!("{} ({})", f, ty)).unwrap_or_else(|| format!("({})", ty));
     let result = SCRIPT_POST_INIT(arg, ty, p3);
-    info!("called post_init on {:p}, {}, {} -> {:p}", arg, fn_name, p3, result);
+    if fn_name.contains("phMaterialMgr") {
+        info!("called post_init on {:p}, {}, {} -> {:p}", arg, fn_name, p3, result);
+    }
 
-    let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
+    /*let mut loaded_scripts = LOADED_SCRIPTS.lock().unwrap();
 
     for script in loaded_scripts.iter_mut() {
         if script.context.id == 0 {
             info!("Spawning own script {} on post_init", script.get_name().to_string_lossy());
             script.spawn();
         }
-    }
+    }*/
 
     result
 }
@@ -116,7 +118,7 @@ pub(crate) fn hook() {
     lazy_static::initialize(&THREAD_COUNT);
     lazy_static::initialize(&SCRIPT_MANAGER);
 
-    //lazy_static::initialize(&SCRIPT_POST_INIT);
+    lazy_static::initialize(&SCRIPT_POST_INIT);
     lazy_static::initialize(&SCRIPT_STARTUP);
     lazy_static::initialize(&SCRIPT_RESET);
     lazy_static::initialize(&SCRIPT_RUN);

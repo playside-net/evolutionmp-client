@@ -15,9 +15,12 @@ use crate::launcher_dir;
 use crate::native::{NativeCallContext, ThreadSafe};
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
-use jni_dynamic::sys::jint;
+use jni_dynamic::sys::{jint, jlong};
 use jni_dynamic::signature::JavaType;
 use jni_dynamic::signature::Primitive::{Void, Int};
+use cgmath::Vector3;
+use crate::game::Rgba;
+use crate::game::streaming::Texture;
 
 java_static_method!(set_system_property, "java/lang/System", "setProperty", fn(property: &str, value: &str) -> Option<String>);
 
@@ -33,6 +36,16 @@ pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
     ]).unwrap();
     String::from_java_value(env, env.call_method(string_writer, "toString", "()Ljava/lang/String;", &[])
         .unwrap())
+}
+
+lazy_static! {
+    static ref RUNTIME: GlobalRef = {
+        let env = attach_thread();
+        let cls = env.find_class("mp/evolution/runtime/Runtime").unwrap();
+        let runtime = env.get_static_field_unchecked_fast(cls, **INSTANCE, JavaType::Object(String::new()))
+            .unwrap().l().unwrap();
+        env.new_global_ref(runtime).unwrap()
+    };
 }
 
 macro_rules! class_id {
@@ -71,7 +84,6 @@ macro_rules! method_id {
     };
 }
 
-class_id!(RUNTIME, "mp/evolution/runtime/Runtime");
 class_id!(KEY_EVENT, "mp/evolution/script/event/ScriptEventKeyboardKey");
 class_id!(CHAR_EVENT, "mp/evolution/script/event/ScriptEventKeyboardChar");
 
@@ -237,8 +249,6 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
     }
 
     natives!(env, "mp/evolution/game/entity/vehicle/Vehicle",
-        i!(bool, "hasWeapon", "(I)Z", 0x25ECB9F8017D98E0),
-
         g!(Vehicle, u32, "getLightFlags", "(I)I", get_light_flags),
         s!(Vehicle, u32, "setLightFlags", "(II)V", set_light_flags),
         g!(Vehicle, bool, "isEngineStarting", "(I)Z", is_engine_starting),
@@ -270,6 +280,8 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         s!(Vehicle, f32, "setClutch", "(IF)V", set_clutch),
         g!(Vehicle, f32, "getEngineTemperature", "(I)F", get_engine_temperature),
         s!(Vehicle, f32, "setEngineTemperature", "(IF)V", set_engine_temperature),
+        g!(Vehicle, u32, "getAlarmTime", "(I)I", get_alarm_time),
+        s!(Vehicle, u32, "setAlarmTime", "(II)V", set_alarm_time),
         g!(Vehicle, f32, "getEnginePower", "(I)F", get_engine_power),
         g!(Vehicle, f32, "getBrakePower", "(I)F", get_brake_power),
         g!(Vehicle, f32, "getSteeringAngle", "(I)F", get_steering_angle),
@@ -286,12 +298,7 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         NativeMethod::new("pid", "()I", pid as _)
     );
 
-    let _ = get_runtime(&env);
-}
-
-fn get_runtime<'a>(env: &'a JNIEnv) -> JObject<'a> {
-    env.get_static_field_unchecked_fast(RUNTIME.as_obj().into(), **INSTANCE, JavaType::Object(String::new()))
-        .unwrap().l().unwrap()
+    lazy_static::initialize(&RUNTIME);
 }
 
 pub struct ScriptJava {}
@@ -306,8 +313,7 @@ impl Script for ScriptJava {
     fn frame(&mut self) {
         if crate::game::is_loaded() {
             let env = attach_thread();
-            let runtime = get_runtime(&env);
-            env.call_method_unchecked_fast(runtime, **SCRIPT_FRAME, JavaType::Primitive(Void), &[])
+            env.call_method_unchecked_fast(RUNTIME.as_obj(), **SCRIPT_FRAME, JavaType::Primitive(Void), &[])
                 .expect("error calling `frame`");
         }
     }
@@ -346,8 +352,7 @@ impl Script for ScriptJava {
                 }
                 _ => return
             };
-            let runtime = get_runtime(&env);
-            env.call_method_unchecked_fast(runtime, **SCRIPT_EVENT, JavaType::Primitive(Void), &[JValue::Object(event).to_jni()])
+            env.call_method_unchecked_fast(RUNTIME.as_obj(), **SCRIPT_EVENT, JavaType::Primitive(Void), &[JValue::Object(event).to_jni()])
                 .expect("error calling `event`");
         }
     }

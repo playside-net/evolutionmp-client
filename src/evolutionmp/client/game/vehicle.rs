@@ -91,7 +91,7 @@ pub enum Dispatch {
 }
 
 pub fn set_dispatch_service(dispatch: Dispatch, enabled: bool) {
-    invoke!((), 0xDC0F817884CDD856, dispatch as u32, enabled)
+    invoke!((), 0xDC0F817884CDD856, dispatch as u32 + 1, enabled)
 }
 
 #[derive(Debug)]
@@ -294,12 +294,12 @@ impl Vehicle {
         ENGINE_TEMPERATURE.set(self, temperature)
     }
 
-    pub fn get_alarm_time(&self) -> u16 {
-        ALARM_TIME.get(self)
+    pub fn get_alarm_time(&self) -> u32 {
+        ALARM_TIME.get(self) as u32
     }
 
-    pub fn set_alarm_time(&self, alarm_time: u16) {
-        ALARM_TIME.set(self, alarm_time)
+    pub fn set_alarm_time(&self, alarm_time: u32) {
+        ALARM_TIME.set(self, alarm_time as u16)
     }
 
     pub fn get_engine_power(&self) -> f32 {

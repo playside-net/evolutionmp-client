@@ -39,10 +39,10 @@ impl Door {
     }
 
     pub fn get_closest_state_at(&self, position: Vector3<f32>) -> (bool, f32) {
-        let mut locked = false;
+        let mut locked = 0u32;
         let mut heading = 0.0;
         invoke!((), 0xEDC1A5B84AEF33FF, self.hash, position, &mut locked, &mut heading);
-        (locked, heading)
+        (locked == 1, heading)
     }
 
     pub fn set_closest_state_at(&self, position: Vector3<f32>, locked: bool, heading: f32) {

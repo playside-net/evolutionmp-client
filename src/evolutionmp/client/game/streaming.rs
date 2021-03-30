@@ -228,6 +228,7 @@ impl Drop for PedPhoto {
     }
 }
 
+#[derive(Debug)]
 pub struct Texture {
     dict: String,
     name: String,

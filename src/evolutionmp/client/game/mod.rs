@@ -168,6 +168,7 @@ unsafe fn load_game_now(u: u8) -> u32 {
 }
 
 fn done_loading_game() {
+    info!("Loading mp maps...");
     dlc::load_mp_maps();
 
     let dll_path = launcher_dir().join("java/bin/server/jvm.dll");
