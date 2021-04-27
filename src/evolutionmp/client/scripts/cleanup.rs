@@ -72,13 +72,13 @@ impl Script for ScriptCleanWorld {
                 texture: 0,
                 palette: 2
             });*/
+            self.cleanup();
         }
 
         self.disable_controls();
         game::streaming::stop_player_switch();
         game::gameplay::set_time_scale(1.0);
 
-        self.cleanup();
 
         game::ped::set_density_multiplier_this_frame(0.0);
         game::ped::set_scenario_density_multiplier_this_frame(0.0);

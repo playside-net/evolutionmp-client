@@ -116,6 +116,10 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let ntdll = LoadLibraryA(c_str!("ntdll.dll").as_ptr());
         let message = get_error_code_message(ntdll, rec);
         let native = crate::native::CURRENT_NATIVE.load(Ordering::SeqCst);
+        let active_script = crate::native::script::get_active_thread().as_ref();
+        if let Some(active_script) = active_script {
+            error!(target: LOG_PANIC, "Script {} crashed with an exception", active_script.context.script_hash);
+        }
         if native != 0 {
             error!(target: LOG_PANIC, "Unhandled exception at 0x{:08X} caused by native invocation `0x{:016X}`: 0x{:08X} ({})", addr as u64, native, code, message);
         } else {
@@ -223,12 +227,12 @@ proc_detour!(OUTPUT_DEBUG_STRING_W, "kernel32.dll", "OutputDebugStringW", debug_
 );
 
 unsafe extern fn set_windows_hook(id: u32, handler: HOOKPROC, module: HINSTANCE, thread_id: DWORD) -> HHOOK {
-    if crate::game::is_loaded() {
+    //if crate::game::is_loaded() {
         warn!("Hook installation requested: {}, {:?}, {:p}, {}", id, handler.map(|f| f as *mut ()), module, thread_id);
         SET_WINDOWS_HOOK(id, handler, module, thread_id)
-    } else {
-        std::ptr::null_mut()
-    }
+    //} else {
+    //    std::ptr::null_mut()
+    //}
 }
 
 unsafe extern fn debug_a(text: LPCSTR) {

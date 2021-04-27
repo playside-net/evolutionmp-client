@@ -194,7 +194,7 @@ impl ScriptManager {
 #[derive(Default)]
 pub struct RageThreadContext {
     id: u32,
-    script_hash: Hash,
+    pub(crate) script_hash: Hash,
     state: RageThreadState,
     ip: u32,
     frame_sp: u32,
@@ -217,7 +217,7 @@ class!(RageThread @RageThreadVTable {
     fn kill() -> (),
     fn frame() -> ();
 
-    context: RageThreadContext,
+    pub context: RageThreadContext,
     stack: u64,
     pad1: u64,
     pad2: u64,

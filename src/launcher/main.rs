@@ -9,6 +9,7 @@ use winapi::um::winnt::{PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCES
 use evolutionmp::launcher_dir;
 use evolutionmp::registry::Registry;
 use evolutionmp::win::ps::{get_process, ProcessIterator};
+use winreg::RegKey;
 
 fn main() {
     let gta_exe = "GTA5.exe";
@@ -22,17 +23,25 @@ fn main() {
 
     if registry.is_retail_key() {
         println!("Found retail version of GTA5");
-        start(registry, &install_dir.join(gta_launcher_exe), gta_exe);
+        start(registry, &install_dir.join(gta_launcher_exe), gta_exe, &[]);
     } else if registry.is_steam_key() {
         println!("Found steam version of GTA5");
-        start(registry, "steam://rungameid/271590", gta_exe);
+        let user_key = RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+        let rockstar_key = user_key.open_subkey("SOFTWARE\\Wow6432Node\\Valve")
+            .expect("No Valve entry found in HKEY_LOCAL_MACHINE");
+        if let Some(steam_key) = rockstar_key.open_subkey("Steam").ok() {
+            let path = steam_key.get_value::<String, _>("InstallPath")
+                .expect("Unable to determine Steam InstallPath");
+            start(registry, &format!("{}\\Steam.exe", path), gta_exe, &["-applaunch", "271590"]);
+        }
     }
 }
 
-fn start<P>(registry: Registry, launch_path: P, gta_exe: &str) where P: AsRef<Path> {
+fn start<P>(registry: Registry, launch_path: P, gta_exe: &str, args: &[&str]) where P: AsRef<Path> {
     let mut process = Command::new(launch_path.as_ref())
         .stderr(Stdio::inherit())
         .stdout(Stdio::inherit())
+        .args(args)
         .spawn().expect(&format!("Error starting {:?}", launch_path.as_ref()));
 
     while !is_process_alive(gta_exe) {

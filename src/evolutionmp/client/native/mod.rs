@@ -99,28 +99,28 @@ macro_rules! bind_fn_detour_ip {
 
 #[macro_export]
 macro_rules! class {
-    ($this:ident @$v_table:ident { $(fn $fn_name:ident($($n: ident: $arg:ty),*)->$ret:ty),* ; $($v:vis $f_name:ident: $ty:ty),* }) => {
+    ($this:ident @$v_table:ident { $($fn_v:vis fn $fn_name:ident($($n: ident: $arg:ty),*)->$ret:ty),* ; $($v:vis $f_name:ident: $ty:ty),* }) => {
         #[repr(C)]
         pub struct $v_table {
-            $($fn_name: extern fn(this: *const $this, $($n: $arg),*)->$ret),*
+            $($fn_v $fn_name: extern fn(this: *const $this, $($n: $arg),*)->$ret),*
         }
 
         #[repr(C)]
         pub struct $this {
-            v_table: std::mem::ManuallyDrop<Box<$v_table>>,
+            pub(crate) v_table: std::mem::ManuallyDrop<Box<$v_table>>,
             $($v $f_name: $ty),*
         }
     };
-    ($this:ident @$v_table:ident : $parent:ty { $(fn $fn_name:ident($($n: ident: $arg:ty),*)->$ret:ty),* ; $($f_name:ident: $ty:ty),* }) => {
+    ($this:ident @$v_table:ident : $parent:ty { $($fn_v:vis fn $fn_name:ident($($n: ident: $arg:ty),*)->$ret:ty),* ; $($f_name:ident: $ty:ty),* }) => {
         #[repr(C)]
         pub struct $v_table {
-            $($fn_name: extern fn(this: *const $this, $($n: $arg),*)->$ret),*
+            $($fn_v $fn_name: extern fn(this: *const $this, $($n: $arg),*)->$ret),*
         }
 
         #[repr(C)]
         pub struct $this {
             pub parent: $parent,
-            v_table: std::mem::ManuallyDrop<Box<$v_table>>,
+            pub(crate) v_table: std::mem::ManuallyDrop<Box<$v_table>>,
             $(pub $f_name: $ty),*
         }
 

@@ -12,6 +12,7 @@ use crate::hash::{Hashable, Hash};
 use crate::win::input::{InputEvent, KeyboardEvent};
 use crate::client::native::alloc::RageVec;
 use std::ffi::{CStr, OsStr};
+use crate::pattern::{RET, NOP};
 
 pub mod notification;
 
@@ -100,12 +101,14 @@ pub fn hook() {
 
 pub fn init() {
     unsafe {
+        //let no_slowmo = mem!("32 C0 F3 0F 11 09").expect("no_slowmo");
+        //no_slowmo.nop(6);
         let no_slowmo = mem!("38 51 64 74 19")
-            .expect("no_slowmo");
+           .expect("no_slowmo");
 
-        //no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
+        no_slowmo.add(26).read_ptr(4).write_bytes(&[RET, NOP, NOP, NOP, NOP]); //No vignette
 
-        //no_slowmo.add(8).nop(5); //Vignetting call patch
+        no_slowmo.add(8).nop(5); //Vignetting call patch
 
         no_slowmo.add(34).write_bytes(&[0x31, 0xD2]); //Timescale override patch
     }

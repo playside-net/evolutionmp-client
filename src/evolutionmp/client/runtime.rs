@@ -393,7 +393,7 @@ unsafe extern fn invoke(_env: &JNIEnv, _class: JClass, hash: u64, args: &mut [u6
         crate::native::CURRENT_NATIVE.store(0, Ordering::SeqCst);
     } else {
         let env = attach_thread();
-        env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016}", hash)).unwrap();
+        env.throw_new("java/lang/IllegalArgumentException", format!("No such native: 0x{:016X}", hash)).unwrap();
     }
 }
 

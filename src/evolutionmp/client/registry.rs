@@ -16,7 +16,7 @@ impl Registry {
         let user_key = RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
         let rockstar_key = user_key.open_subkey("SOFTWARE\\Wow6432Node\\Rockstar Games").ok()?;
         if let Some(gta_key) = rockstar_key.open_subkey("GTAV").ok() {
-            let path = gta_key.get_value::<String, &str>("InstallFolderSteam").ok()?;
+            let path = gta_key.get_value::<String, _>("InstallFolderSteam").ok()?;
             Some(Registry {
                 is_steam: true,
                 install_folder: PathBuf::from(&path[..path.len() - 5]),
@@ -28,7 +28,7 @@ impl Registry {
         } else if let Some(gta_key) = rockstar_key.open_subkey("Grand Theft Auto V").ok() {
             Some(Registry {
                 is_steam: false,
-                install_folder: PathBuf::from(gta_key.get_value::<String, &str>("InstallFolder").ok()?),
+                install_folder: PathBuf::from(gta_key.get_value::<String, _>("InstallFolder").ok()?),
                 game_type: gta_key.get_value("Game Type").ok()?,
                 game_version: gta_key.get_value("Game Version").ok()?,
                 language: gta_key.get_value("Language").ok()?,
