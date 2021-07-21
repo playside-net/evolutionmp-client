@@ -82,9 +82,9 @@ unsafe extern fn script_reset() {
 
     SCRIPT_RESET(); //Story mode only
 
-    for thread in crate::game::script::get_all_threads() {
+    /*for thread in crate::game::script::get_all_threads() {
         warn!("Scr thread {}", thread.get_name());
-    }
+    }*/
 
     info!("Now resetting owned scripts");
 

@@ -267,19 +267,19 @@ impl Vehicle {
     }
 
     pub fn get_fuel(&self) -> f32 {
-        FUEL_LEVEL.get(self)
+        0.0//FUEL_LEVEL.get(self)
     }
 
     pub fn set_fuel(&self, fuel: f32) {
-        FUEL_LEVEL.set(self, fuel)
+        //FUEL_LEVEL.set(self, fuel)
     }
 
     pub fn get_oil(&self) -> f32 {
-        OIL_LEVEL.get(self)
+        0.0//OIL_LEVEL.get(self)
     }
 
     pub fn set_oil(&self, oil: f32) {
-        OIL_LEVEL.set(self, oil)
+        //OIL_LEVEL.set(self, oil)
     }
 
     pub fn get_max_oil(&self) -> f32 {

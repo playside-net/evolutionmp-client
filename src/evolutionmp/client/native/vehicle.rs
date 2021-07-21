@@ -26,8 +26,8 @@ pub fn hook() {
     lazy_static::initialize(&NEXT_GEAR);
     lazy_static::initialize(&CURRENT_GEAR);
     lazy_static::initialize(&HIGH_GEAR);
-    lazy_static::initialize(&FUEL_LEVEL);
-    lazy_static::initialize(&OIL_LEVEL);
+    //lazy_static::initialize(&FUEL_LEVEL);
+    //lazy_static::initialize(&OIL_LEVEL);
     lazy_static::initialize(&LIGHTS);
     lazy_static::initialize(&WHEEL_SPEED);
     lazy_static::initialize(&RPM);

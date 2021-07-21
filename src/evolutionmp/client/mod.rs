@@ -35,7 +35,7 @@ pub mod scripts;
 pub mod jni;
 pub mod console;
 
-bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 8A D9 74 0A", 2, GameState, 5);
+bind_field_ip!(GAME_STATE, "83 3D ? ? ? ? ? 75 17 8B 43 20 25", 2, GameState, 5);
 bind_field_ip!(HEAP_SIZE, "83 C8 01 48 8D 0D ? ? ? ? 41 B1 01 45 33 C0", 17, u32);
 
 unsafe fn print_address_info(addr: *mut c_void, line: Option<u32>, symbol_name: SymbolName) {
@@ -260,7 +260,7 @@ unsafe fn initialize(window: &Window) {
     /*mem.find_str("platform:/movies").expect("movie")
         .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie*/
 
-    mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[RET]); //Disable movie
+    //mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[RET]); //Disable movie
     /*mem!("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
         .nop(2); //Disable legals*/
     mem!("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")

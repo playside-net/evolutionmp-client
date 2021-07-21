@@ -4,6 +4,14 @@ use crate::{bind_fn_detour, bind_fn_detour_ip, class};
 use crate::hash::{Hash, Hashable};
 use crate::win::thread::seh;
 use crate::native::alloc::{RageVec, ChainedBox};
+use winapi::vc::excpt::EXCEPTION_EXECUTE_HANDLER;
+use winapi::um::winnt::{PVOID, MEMORY_BASIC_INFORMATION};
+use winapi::shared::minwindef::{HMODULE, MAX_PATH};
+use winapi::um::libloaderapi::{GetModuleHandleExA, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_PIN, GetModuleFileNameW};
+use winapi::shared::ntdef::TRUE;
+use winapi::um::memoryapi::VirtualQuery;
+use std::ffi::OsString;
+use wio::wide::FromWide;
 
 bitflags! {
     #[repr(C)]
@@ -40,14 +48,26 @@ impl InitFnData {
         let name = self.get_name();
         seh(|| (self.init)(mask), move |rec| {
             if (rec.ExceptionCode & 0x80000000) != 0 {
-                error!(
-                    "An exception occurred (0x{:08X} at {:p}) during execution of {:?} function for {}. The game will be terminated.",
-                    rec.ExceptionCode,
-                    rec.ExceptionAddress,
-                    mask, name
-                );
+                let module = get_module_offset(rec.ExceptionAddress);
+                if let Some((module_name, offset)) = module {
+                    error!(
+                        "An exception occurred (0x{:08X} at {:p} <- {:?} + 0x{:08X}) during execution of {:?} function for {}. The game will be terminated.",
+                        rec.ExceptionCode,
+                        rec.ExceptionAddress,
+                        module_name, offset,
+                        mask, name
+                    );
+                } else {
+                    error!(
+                        "An exception occurred (0x{:08X} at {:p}) during execution of {:?} function for {}. The game will be terminated.",
+                        rec.ExceptionCode,
+                        rec.ExceptionAddress,
+                        mask, name
+                    );
+                }
             }
-            0 //EXCEPTION_CONTINUE_SEARCH
+            EXCEPTION_EXECUTE_HANDLER
+            //0 //EXCEPTION_CONTINUE_SEARCH
         });
     }
 }
@@ -62,6 +82,21 @@ struct InitFn {
 struct InitFnGroup {
     mask: InitFnMask,
     entries: ChainedBox<InitFn>
+}
+
+unsafe fn get_module_offset(address: PVOID) -> Option<(OsString, u64)> {
+    let mut mbi = MEMORY_BASIC_INFORMATION::default();
+    let size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
+    if VirtualQuery(address, &mut mbi, size) == size {
+        let mut name = [0; MAX_PATH];
+        let len = GetModuleFileNameW(mbi.AllocationBase.cast(), name.as_mut_ptr(), MAX_PATH as u32);
+        if len != 0 {
+            let name = OsString::from_wide_ptr(name.as_ptr(), len as usize);
+            let offset = address as u64 - mbi.AllocationBase as u64;
+            return Some((name, offset))
+        }
+    }
+    None
 }
 
 class!(UpdateFn @UpdateFnVT {
@@ -179,7 +214,7 @@ pub fn hook() {
     info!("Hooking init functions...");
     lazy_static::initialize(&UNK_U8);
     lazy_static::initialize(&FN_MAP);
-    lazy_static::initialize(&RUN_INIT);
+    //lazy_static::initialize(&RUN_INIT);
     /*lazy_static::initialize(&RUN_UPDATE);
     lazy_static::initialize(&RUN_UPDATE_GROUP);*/
 }

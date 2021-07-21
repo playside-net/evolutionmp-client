@@ -130,7 +130,7 @@ extern "cdecl" fn some_fn(extra_content_manager: *mut u8, unk: *mut u8, device_n
 }
 
 pub(crate) fn init() {
-    info!("Initializing FS");
+    //info!("Initializing FS");
 
     /*let mut root = RelativeDevice::new();
     root.set_path(launcher_dir(), true, None);
@@ -175,7 +175,7 @@ pub(crate) fn init() {
 
     //walk(&*root, Path::new("evo:/"));
 
-    info!("mounted");
+    //info!("mounted");
 
     fn walk(device: &Device, path: &Path) {
         for f in device.entries(path) {
