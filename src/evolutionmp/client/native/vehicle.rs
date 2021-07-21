@@ -5,7 +5,8 @@ use crate::native::NativeField;
 type VehicleField<T> = NativeField<Vehicle, T>;
 
 bind_inner_field!(Vehicle, "48 8D 8F ? ? ? ? 4C 8B C3 F3 0F 11 7C 24", (3, NEXT_GEAR, u8, 0), (3, CURRENT_GEAR, u8, 2), (3, HIGH_GEAR, u8, 6));
-bind_inner_field!(Vehicle, "48 3B CA 0F 84 ? ? ? ? 8B 81", (49, FUEL_LEVEL, f32, 0), (61, OIL_LEVEL, f32, 0));
+bind_inner_field!(Vehicle, "74 26 0F 57 C9", (8, FUEL_LEVEL, f32, 0));
+bind_inner_field!(Vehicle, "48 3B CA 0F 84 ? ? ? ? 8B 81", /*(49, FUEL_LEVEL, f32, 0), */(61, OIL_LEVEL, f32, 0));
 bind_inner_field!(Vehicle, "FD 02 DB 08 98 ? ? ? ? 48 8B 5C 24 30", (-4, LIGHTS, u32, 0));
 bind_inner_field!(Vehicle, "F3 0F 10 8F ? ? ? ? F3 0F 59 05 ? ? ? ?", (4, WHEEL_SPEED, f32, 0));
 bind_inner_field!(Vehicle, "76 03 0F 28 F0 F3 44 0F 10 93", (10, RPM, f32, 0), (10, CLUTCH, f32, 12), (10, THROTTLE, f32, 16));
@@ -26,7 +27,7 @@ pub fn hook() {
     lazy_static::initialize(&NEXT_GEAR);
     lazy_static::initialize(&CURRENT_GEAR);
     lazy_static::initialize(&HIGH_GEAR);
-    //lazy_static::initialize(&FUEL_LEVEL);
+    lazy_static::initialize(&FUEL_LEVEL);
     //lazy_static::initialize(&OIL_LEVEL);
     lazy_static::initialize(&LIGHTS);
     lazy_static::initialize(&WHEEL_SPEED);

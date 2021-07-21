@@ -267,11 +267,11 @@ impl Vehicle {
     }
 
     pub fn get_fuel(&self) -> f32 {
-        0.0//FUEL_LEVEL.get(self)
+        FUEL_LEVEL.get(self)
     }
 
     pub fn set_fuel(&self, fuel: f32) {
-        //FUEL_LEVEL.set(self, fuel)
+        FUEL_LEVEL.set(self, fuel)
     }
 
     pub fn get_oil(&self) -> f32 {
