@@ -16,6 +16,7 @@ use winapi::um::winbase::{
 };
 use winapi::um::winnt::{EXCEPTION_POINTERS, EXCEPTION_RECORD, LANG_NEUTRAL, LONG, LPCSTR, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR, SUBLANG_DEFAULT};
 use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC, HOOKPROC};
+use winapi::vc::excpt::EXCEPTION_CONTINUE_EXECUTION;
 use wio::wide::FromWide;
 
 use game::GameState;
@@ -113,10 +114,15 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
         let rec = &mut *info.ExceptionRecord;
         let addr = rec.ExceptionAddress;
         let code = rec.ExceptionCode;
+
+        if code == 0x80000003 {
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+
         let ntdll = LoadLibraryA(c_str!("ntdll.dll").as_ptr());
         let message = get_error_code_message(ntdll, rec);
-        let native = crate::native::CURRENT_NATIVE.load(Ordering::SeqCst);
-        let active_script = crate::native::script::get_active_thread().as_ref();
+        let native = native::CURRENT_NATIVE.load(Ordering::SeqCst);
+        let active_script = native::script::get_active_thread().as_ref();
         if let Some(active_script) = active_script {
             error!(target: LOG_PANIC, "Script {} crashed with an exception", active_script.context.script_hash);
         }
@@ -250,9 +256,9 @@ unsafe fn initialize(window: &Window) {
 
     lazy_static::initialize(&GAME_STATE);
     info!("Hooking DirectX...");
-    crate::win::direct::hook();
+    win::direct::hook();
     info!("Hooking user input...");
-    crate::win::input::hook(window);
+    win::input::hook(window);
 
     info!("Applying patches...");
 
@@ -260,7 +266,7 @@ unsafe fn initialize(window: &Window) {
     /*mem.find_str("platform:/movies").expect("movie")
         .write_bytes(b"platform:/movies/2secondsblack.bik\0"); //Disable movie*/
 
-    //mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[RET]); //Disable movie
+    // mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[RET]); //Disable movie
     /*mem!("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
         .nop(2); //Disable legals*/
     mem!("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
@@ -300,7 +306,7 @@ unsafe fn initialize(window: &Window) {
     game::hook();
     game::init();
 
-    crate::scripts::init();
+    scripts::init();
 }
 
 #[cfg(target_os = "windows")]
@@ -319,7 +325,7 @@ fn attach() {
 #[cfg(target_os = "windows")]
 fn detach() {
     unsafe {
-        crate::win::input::unhook();
+        win::input::unhook();
     }
 }
 

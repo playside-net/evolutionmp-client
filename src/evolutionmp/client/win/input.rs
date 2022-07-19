@@ -96,7 +96,7 @@ pub unsafe extern "system" fn process_event(hwnd: HWND, msg: UINT, wparam: WPARA
             };
             let button = match msg {
                 WM_LBUTTONDOWN | WM_LBUTTONUP => MouseButton::Left,
-                WM_RBUTTONDOWN | WM_RBUTTONUP => MouseButton::Left,
+                WM_RBUTTONDOWN | WM_RBUTTONUP => MouseButton::Right,
                 _ => MouseButton::Middle
             };
             push_event(InputEvent::Mouse(MouseEvent::Click(button, down)))

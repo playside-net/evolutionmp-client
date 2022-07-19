@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use cgmath::{Array, Vector3, Zero};
+use cgmath::{Array, Vector2, Vector3, Zero};
 
 use crate::events::ScriptEvent;
 use crate::game;
@@ -14,7 +14,7 @@ use crate::game::prop::Prop;
 use crate::game::Rgba;
 use crate::game::streaming::{AnimDict, Resource};
 use crate::runtime::Script;
-use crate::game::ui::FrontendButtons;
+use crate::game::ui::{Font, FrontendButtons};
 
 pub struct ScriptFishing {
     catch_time: Option<Instant>,
@@ -38,7 +38,7 @@ impl Script for ScriptFishing {
         let dir = cam.get_direction();
         let end = start + dir * distance;
 
-        /*let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
+        let ray = game::worldprobe::Probe::new_ray(start, end, 2 + 4 + 8 + 16, &ped, 7).get_result(true);
         if ray.hit {
             game::graphics::draw_line(start, ray.end, Rgba::WHITE);
             let pos = Vector2::new(2.0, 2.0);
@@ -63,7 +63,7 @@ impl Script for ScriptFishing {
                     //entity.delete()
                 }
             }
-        }*/
+        }
 
         /*if let Some(veh) = ped.get_in_vehicle(false) {
             let pos = Vector2::new(2.0, 2.0);

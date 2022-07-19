@@ -1,12 +1,12 @@
-use std::cell::RefCell;
+
 use std::collections::VecDeque;
 
-use cgmath::{Vector2, Vector3};
 
-use crate::{bind_fn_detour, bind_fn_detour_ip, class};
-use crate::game::ped::Ped;
-use crate::game::vehicle::Vehicle;
-use crate::hash::Hash;
+
+use crate::{bind_fn_detour, class};
+
+
+
 use crate::win::input::InputEvent;
 
 class!(Event @EventVT {
@@ -31,7 +31,7 @@ impl Event {
     }
 }
 
-impl std::cmp::PartialEq for Event {
+impl PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
         (self.v_table.equals)(self as _, other as _)
     }

@@ -1,17 +1,15 @@
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::atomic::AtomicPtr;
 use std::time::Duration;
 
 use detour::RawDetour;
-use winapi::shared::guiddef::{REFGUID, REFIID};
-use winapi::shared::minwindef::FALSE;
+use winapi::shared::guiddef::REFIID;
 use winapi::shared::winerror::{HRESULT_CODE, SUCCEEDED};
 use winapi::um::libloaderapi::GetModuleHandleA;
 use winapi::um::winnt::HRESULT;
 
 use crate::bind_fn;
-use winapi::shared::dxgi::{IDXGISwapChain, IDXGIOutput, IDXGIDevice1, IDXGIResource};
+use winapi::shared::dxgi::IDXGISwapChain;
 use winapi::um::d3d11::{ID3D11Device, ID3D11DeviceContext, D3D11_PRIMITIVE_TOPOLOGY, ID3D11InputLayout, ID3D11BlendState, ID3D11DepthStencilState, ID3D11RasterizerState, ID3D11ShaderResourceView, ID3D11SamplerState, ID3D11VertexShader, ID3D11ClassInstance, ID3D11Buffer, ID3D11GeometryShader, ID3D11PixelShader, ID3D11HullShader, ID3D11DomainShader, ID3D11Texture2D, ID3D11RenderTargetView};
 use winapi::Interface;
 use winapi::um::d3dcommon::{D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_11_0};

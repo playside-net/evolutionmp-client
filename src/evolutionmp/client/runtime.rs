@@ -15,12 +15,12 @@ use crate::launcher_dir;
 use crate::native::{NativeCallContext, ThreadSafe};
 use crate::native::pool::Pool;
 use crate::win::input::{InputEvent, KeyboardEvent};
-use jni_dynamic::sys::{jint, jlong};
+use jni_dynamic::sys::jint;
 use jni_dynamic::signature::JavaType;
 use jni_dynamic::signature::Primitive::{Void, Int};
-use cgmath::Vector3;
-use crate::game::Rgba;
-use crate::game::streaming::Texture;
+
+
+
 
 java_static_method!(set_system_property, "java/lang/System", "setProperty", fn(property: &str, value: &str) -> Option<String>);
 
@@ -230,21 +230,6 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
                 <$handle>::from_handle(handle as u32).unwrap().$name(value)
             }
             NativeMethod::new($vm_name, $vm_sig, set as _)
-        })
-    }
-
-    macro_rules! i {
-        ($ret: ty, $vm_name: literal, $vm_sig: literal, $hash: literal) => ({
-            extern fn call(_env: &JNIEnv, _class: JClass, handle: u32) -> $ret {
-                crate::invoke!($ret, $hash, handle)
-            }
-            NativeMethod::new($vm_name, $vm_sig, call as _)
-        });
-        ($ret: ty, $vm_name: literal, $vm_sig: literal, $hash: literal, $($a:ident: $t:ty),+) => ({
-            extern fn call(_env: &JNIEnv, _class: JClass, handle: u32, $($a: $t),*) -> $ret {
-                crate::invoke!($ret, $hash, handle, $($a),+)
-            }
-            NativeMethod::new($vm_name, $vm_sig, call as _)
         })
     }
 

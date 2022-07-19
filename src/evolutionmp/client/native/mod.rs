@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 use cgmath::{Deg, Euler, Quaternion, Vector2, Vector3};
-use detour::{GenericDetour, RawDetour};
+
 
 use crate::client::native::pool::{CEntity, Native};
 use crate::client::pattern::{MemoryRegion, RageBox};
@@ -16,10 +16,10 @@ use crate::game::{Handle, Rgb, Rgba};
 use crate::game::ui::CursorSprite;
 use crate::hash::Hash;
 use crate::native::pool::Handleable;
-use std::sync::atomic::Ordering;
-use crate::client::jni::attach_thread;
-use crate::client::print_address_info;
-use backtrace::SymbolName;
+
+
+
+
 
 pub mod vehicle;
 pub mod pool;
@@ -51,9 +51,9 @@ impl<T> ThreadSafe<T> {
     }
 }
 
-unsafe impl<T> std::marker::Send for ThreadSafe<T> {}
+unsafe impl<T> Send for ThreadSafe<T> {}
 
-unsafe impl<T> std::marker::Sync for ThreadSafe<T> {}
+unsafe impl<T> Sync for ThreadSafe<T> {}
 
 impl<T> std::ops::Deref for ThreadSafe<T> {
     type Target = T;
@@ -75,7 +75,7 @@ macro_rules! bind_fn_detour {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
-                .expect(concat!("failed to find call for ", stringify!($name)))
+                .expect(concat!("failed to find call for ", stringify!($name), " at ", $pattern))
                     .offset($offset).detour($detour as _);
                 std::mem::transmute(d)
             };
@@ -89,7 +89,7 @@ macro_rules! bind_fn_detour_ip {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let d = $crate::mem!($pattern)
-                .expect(concat!("failed to find call for ", stringify!($name)))
+                .expect(concat!("failed to find call for ", stringify!($name), " at ", $pattern))
                     .offset($offset).detour_ip($detour as _);
                 std::mem::transmute(d)
             };
@@ -154,7 +154,7 @@ macro_rules! bind_fn {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let ptr = $crate::mem!($pattern)
-                .expect(concat!("failed to bind call for ", stringify!($name)))
+                .expect(concat!("failed to bind call for ", stringify!($name), " at ", $pattern))
                     .offset($offset).as_ptr();
                 std::mem::transmute(ptr)
             };
@@ -171,7 +171,7 @@ macro_rules! bind_fn_ip {
         lazy_static::lazy_static! {
             pub static ref $name: extern fn($($arg),*) -> $ret = unsafe {
                 let ptr = $crate::mem!($pattern)
-                    .expect(concat!("failed to bind call for ", stringify!($name)))
+                    .expect(concat!("failed to bind call for ", stringify!($name), " at ", $pattern))
                     .offset($offset).read_ptr($ptr_len).as_ptr();
                 std::mem::transmute(ptr)
             };
@@ -206,7 +206,7 @@ macro_rules! bind_field {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
                 $crate::mem!($pattern)
-                .expect(concat!("failed to bind field for ", stringify!($name)))
+                .expect(concat!("failed to bind field for ", stringify!($name), " at ", $pattern))
                     .offset($offset).get_box()
             };
         }
@@ -222,7 +222,7 @@ macro_rules! bind_field_ip {
         lazy_static::lazy_static! {
             pub static ref $name: crate::pattern::RageBox<$ty> = unsafe {
                 $crate::mem!($pattern)
-                    .expect(concat!("failed to bind field for ", stringify!($name)))
+                    .expect(concat!("failed to bind field for ", stringify!($name), " at ", $pattern))
                     .offset($offset).read_ptr($ptr_len).get_box()
             };
         }
@@ -583,7 +583,7 @@ impl Natives {
 
         for group in NATIVE_TABLE.groups.iter() {
             for (hash, handler) in group.iter() {
-                //warn!("0x{:016X}", hash);
+                // warn!("0x{:016X}", hash);
                 handlers.insert(hash, handler);
             }
         }
@@ -835,7 +835,7 @@ impl<A, T> NativeField<A, T> where A: Addressable, T: Sized {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C, packed(1))]
 pub struct NativeVector3 {
     pub x: f32,

@@ -118,9 +118,12 @@ pub fn print_menus() {
     for menu in unsafe { ACTIVE_MENU_POOL.as_mut() }.iter_mut() {
         if !menu.is_empty() {
             let name = menu.get_name();
-            warn!("{:p} menu \"{}\": {} with {} elements", menu.c_instance, name.to_string_lossy(), menu.id, menu.items.len());
+            let instance = menu.c_instance;
+            let id = menu.id;
+            // let items = &*menu.items;
+            // warn!("{:p} menu \"{}\": {} with {} elements", instance, name.to_string_lossy(), id, items.len());
             //if name == "PAUSE_MENU_PAGES_GAME" {
-                warn!("unk {:p} unk1 {} unk_flag {} scroll_flags {}", menu.unk, menu.unk1, menu.unk_flag, menu.scroll_flags);
+            //     warn!("unk {:p} unk1 {} unk_flag {} scroll_flags {}", menu.unk, menu.unk1, menu.unk_flag, menu.scroll_flags);
                 //menu.items = RageVec::empty();
             //}
         }

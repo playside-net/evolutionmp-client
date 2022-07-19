@@ -1,3 +1,4 @@
+use std::arch::asm;
 use winapi::um::winnt::{HANDLE, PEXCEPTION_POINTERS, LONG, EXCEPTION_RECORD};
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::processthreadsapi::{GetThreadId, SuspendThread, ResumeThread, GetThreadContext, OpenThread, SetThreadContext, GetExitCodeThread};
@@ -171,11 +172,11 @@ unsafe impl std::marker::Send for Fiber {}
 #[inline]
 pub unsafe fn __readgsqword(offset: DWORD) -> u64 {
     let out: u64;
-    llvm_asm!("mov $0, gs:[$1]"
-    : "=r"(out)
-    : "ri"(offset)
-    :
-    : "intel"
+    asm!(
+        "mov {}, gs:[{:e}]",
+        lateout(reg) out,
+        in(reg) offset,
+        options(nostack, pure, readonly),
     );
     out
 }

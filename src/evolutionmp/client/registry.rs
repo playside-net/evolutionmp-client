@@ -7,7 +7,6 @@ pub struct Registry {
     install_folder: PathBuf,
     game_type: String,
     game_version: String,
-    language: String,
     patch_version: String,
 }
 
@@ -22,7 +21,6 @@ impl Registry {
                 install_folder: PathBuf::from(&path[..path.len() - 5]),
                 game_type: String::new(),
                 game_version: String::new(),
-                language: String::new(),
                 patch_version: String::new(),
             })
         } else if let Some(gta_key) = rockstar_key.open_subkey("Grand Theft Auto V").ok() {
@@ -31,7 +29,6 @@ impl Registry {
                 install_folder: PathBuf::from(gta_key.get_value::<String, _>("InstallFolder").ok()?),
                 game_type: gta_key.get_value("Game Type").ok()?,
                 game_version: gta_key.get_value("Game Version").ok()?,
-                language: gta_key.get_value("Language").ok()?,
                 patch_version: gta_key.get_value("PatchVersion").ok()?,
             })
         } else {
@@ -49,9 +46,5 @@ impl Registry {
 
     pub fn get_install_path(&self) -> PathBuf {
         self.install_folder.clone()
-    }
-
-    pub fn get_language(&self) -> &String {
-        &self.language
     }
 }

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -50,7 +50,9 @@ fn start<P>(registry: Registry, launch_path: P, gta_exe: &str, args: &[&str]) wh
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    let client_dll = launcher_dir().join("evolutionmp.dll");
+    let dir = std::env::current_dir().unwrap();
+
+    let client_dll = dir.join("target").join("release").join("evolutionmp.dll");
 
     let access = PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE;
     let proc = get_process(gta_exe, access)

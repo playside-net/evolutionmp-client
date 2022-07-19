@@ -13,7 +13,7 @@ use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 use winapi::um::winbase::{FILE_BEGIN, FILE_CURRENT, FILE_END};
 use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
 
-use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip, class, launcher_dir};
+use crate::{bind_field_ip, bind_fn, bind_fn_detour, bind_fn_detour_ip, class};
 use crate::pattern::RageBox;
 
 bind_fn_detour_ip!(OPEN_PACK_FILES, "41 B0 01 BA 1B E6 DA 93 E8", -12, open_pack_files, () -> ());

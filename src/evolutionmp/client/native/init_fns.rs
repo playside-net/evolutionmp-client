@@ -6,9 +6,9 @@ use crate::win::thread::seh;
 use crate::native::alloc::{RageVec, ChainedBox};
 use winapi::vc::excpt::EXCEPTION_EXECUTE_HANDLER;
 use winapi::um::winnt::{PVOID, MEMORY_BASIC_INFORMATION};
-use winapi::shared::minwindef::{HMODULE, MAX_PATH};
-use winapi::um::libloaderapi::{GetModuleHandleExA, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_PIN, GetModuleFileNameW};
-use winapi::shared::ntdef::TRUE;
+use winapi::shared::minwindef::MAX_PATH;
+use winapi::um::libloaderapi::GetModuleFileNameW;
+
 use winapi::um::memoryapi::VirtualQuery;
 use std::ffi::OsString;
 use wio::wide::FromWide;
