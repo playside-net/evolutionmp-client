@@ -28,8 +28,8 @@ pub fn run<S>(name: &str, script: S) where S: Script + 'static {
 
 bind_field!(SCRIPT_TLS_OFFSET, "48 8B 04 D0 4A 8B 14 00 48 8B 01 F3 44 0F 2C 42 20", -4, u32);
 
-bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 48 8B CB 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
-bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B F9", 2, u32);
+bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 49 8B CD 48 8B 05", 11, RageVec<ManuallyDrop<Box<ScriptThread>>>);
+bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B D9 75", 2, u32);
 bind_field_ip!(SCRIPT_MANAGER, "74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D", 13, ScriptManager);
 
 bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, (&mut ScriptThread) -> ());
@@ -113,7 +113,6 @@ unsafe extern fn script_access(script: &'static mut RageThread, unk: *mut ()) ->
 pub(crate) fn hook() {
     info!("Hooking scripts...");
     lazy_static::initialize(&SCRIPT_TLS_OFFSET);
-
     lazy_static::initialize(&THREAD_COLLECTION);
     lazy_static::initialize(&THREAD_COUNT);
     lazy_static::initialize(&SCRIPT_MANAGER);
