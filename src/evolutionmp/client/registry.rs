@@ -5,9 +5,9 @@ use winreg::RegKey;
 pub struct Registry {
     is_steam: bool,
     install_folder: PathBuf,
-    game_type: String,
-    game_version: String,
-    patch_version: String,
+    game_type: Option<String>,
+    game_version: Option<String>,
+    patch_version: Option<String>,
 }
 
 impl Registry {
@@ -19,17 +19,17 @@ impl Registry {
             Some(Registry {
                 is_steam: true,
                 install_folder: PathBuf::from(&path[..path.len() - 5]),
-                game_type: String::new(),
-                game_version: String::new(),
-                patch_version: String::new(),
+                game_type: None,
+                game_version: None,
+                patch_version: None,
             })
         } else if let Some(gta_key) = rockstar_key.open_subkey("Grand Theft Auto V").ok() {
             Some(Registry {
                 is_steam: false,
                 install_folder: PathBuf::from(gta_key.get_value::<String, _>("InstallFolder").ok()?),
-                game_type: gta_key.get_value("Game Type").ok()?,
-                game_version: gta_key.get_value("Game Version").ok()?,
-                patch_version: gta_key.get_value("PatchVersion").ok()?,
+                game_type: gta_key.get_value("Game Type").ok(),
+                game_version: gta_key.get_value("Game Version").ok(),
+                patch_version: gta_key.get_value("PatchVersion").ok(),
             })
         } else {
             None
