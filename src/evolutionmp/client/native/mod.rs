@@ -349,7 +349,7 @@ impl NativeGroup {
     }
 
     pub fn set_hash(&self, index: usize, value: u64) {
-        let hash = unsafe { &mut *(&self.hashes[index] as *const _ as *mut PtrXorU64) };
+        let hash = unsafe { &mut *(&self.hashes[index] as *const _ as usize as *mut PtrXorU64) };
         hash.set(value);
     }
 
