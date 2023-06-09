@@ -269,8 +269,8 @@ unsafe fn initialize(window: &Window) {
     // mem!("70 6C 61 74 66 6F 72 6D 3A").expect("logos").write_bytes(&[RET]); //Disable movie
     /*mem!("72 1F E8 ? ? ? ? 8B 0D").expect("legals")
         .nop(2); //Disable legals*/
-    mem!("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
-        .add(8).nop(6);
+    /*mem!("48 83 3D ? ? ? ? 00 88 05 ? ? ? ? 75 0B").expect("force offline")
+        .add(8).nop(6);*/ // FIXME
     let focus_pause = mem!("0F 95 05 ? ? ? ? E8 ? ? ? ? 48 85 C0").expect("focus pause");
     focus_pause.add(3).read_ptr(4).write_bytes(&[0]);
     focus_pause.nop(7);

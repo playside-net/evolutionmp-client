@@ -32,14 +32,14 @@ bind_field_ip!(THREAD_COLLECTION, "48 8B C8 EB 03 49 8B CD 48 8B 05", 11, RageVe
 bind_field_ip!(THREAD_COUNT, "FF 0D ? ? ? ? 48 8B D9 75", 2, u32);
 bind_field_ip!(SCRIPT_MANAGER, "74 17 48 8B C8 E8 ? ? ? ? 48 8D 0D", 13, ScriptManager);
 
-bind_fn!(SCRIPT_THREAD_INIT, "83 89 38 01 00 00 FF 83 A1 50 01 00 00 F0", 0, (&mut ScriptThread) -> ());
-bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 10 01 00 00 00 48 8B D9 74 14", -6, (&mut ScriptThread) -> ());
-bind_fn!(SCRIPT_THREAD_TICK, "80 B9 46 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, (&mut ScriptThread, u32) -> RageThreadState);
+bind_fn!(SCRIPT_THREAD_INIT, "83 89 ? 01 00 00 FF 83 A1 ? 01 00 00 F0", 0, (&mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_KILL, "48 83 EC 20 48 83 B9 ? 01 00 00 00 48 8B D9 74 14", -6, (&mut ScriptThread) -> ());
+bind_fn!(SCRIPT_THREAD_TICK, "80 B9 ? 01 00 00 00 8B FA 48 8B D9 74 05", -0xF, (&mut ScriptThread, u32) -> RageThreadState);
 
 bind_fn_detour_ip!(SCRIPT_POST_INIT, "BA 2F 7B 2E 30 41 B8 0A", 11, script_post_init, (&(), Hash, u32) -> *mut u8);
 bind_fn_detour!(SCRIPT_STARTUP, "83 FB FF 0F 84 D6 00 00 00", -0x37, script_startup, () -> ());
 bind_fn_detour!(SCRIPT_RESET, "48 63 18 83 FB FF 0F 84 D6", -0x34, script_reset, () -> ());
-bind_fn_detour!(SCRIPT_RUN, "48 83 EC 20 80 B9 46 01 00 00 00 8B FA", -0xB, script_run, (&'static mut ScriptThread, u32) -> RageThreadState);
+bind_fn_detour!(SCRIPT_RUN, "48 83 EC 20 80 B9 ? 01 00 00 00 8B FA", -0xB, script_run, (&'static mut ScriptThread, u32) -> RageThreadState);
 bind_fn_detour!(SCRIPT_ACCESS, "74 3C 48 8B 01 FF 50 10 84 C0", -0x1A, script_access, (&'static mut ScriptThread, *mut ()) -> bool);
 
 
@@ -208,6 +208,8 @@ pub struct RageThreadContext {
     pad2: [u32; 17],
 }
 
+static _CTX_SIZE_ASSERT: [(); 168] = [(); std::mem::size_of::<RageThreadContext>()];
+
 class!(RageThread @RageThreadVTable {
     fn drop() -> (),
     fn reset(id: u32, args: *const (), len: u32) -> (),
@@ -222,6 +224,8 @@ class!(RageThread @RageThreadVTable {
     pad2: u64,
     sz_exit_message: *const c_char
 });
+
+static _RAGE_THREAD_SIZE_ASSERT: [(); 208] = [(); std::mem::size_of::<RageThread>()];
 
 #[repr(C)]
 pub struct ScriptThread {
@@ -238,7 +242,10 @@ pub struct ScriptThread {
     pad5: [u8; 12],
     can_remove_blips_from_other_scripts: bool,
     pad6: [u8; 7],
+    pad_b2699: [u8; 8],
 }
+
+static _THREAD_SIZE_ASSERT: [(); 352] = [(); std::mem::size_of::<ScriptThread>()];
 
 impl ScriptThread {
     pub fn new(name: &str, v_table: RageThreadVTable) -> ScriptThread {
@@ -269,6 +276,7 @@ impl ScriptThread {
             pad3: 0,
             net_id: 0,
             pad6: [0; 7],
+            pad_b2699: [0; 8],
         }
     }
 
@@ -309,7 +317,6 @@ macro_rules! vtable_fn {
 
 impl ScriptThreadRuntime {
     pub fn new(name: &str, script: Box<dyn Script>) -> (Sender<ScriptEvent>, ScriptThreadRuntime) {
-        assert_eq!(std::mem::size_of::<ScriptThread>(), 344, "script thread size is not 344 bytes");
         let (sender, receiver) = std::sync::mpsc::channel();
         (sender, ScriptThreadRuntime {
             parent: ThreadSafe::new(ScriptThread::new(&format!("emp:{}", name), RageThreadVTable {

@@ -89,7 +89,7 @@ impl<P> From<P> for RagePath where P: AsRef<OsStr> {
 
 pub(crate) fn hook() {
     info!("Hooking filesystem...");
-    lazy_static::initialize(&OPEN_PACK_FILES);
+    // lazy_static::initialize(&OPEN_PACK_FILES);
     //lazy_static::initialize(&ADD_COLLISION);
 
     //lazy_static::initialize(&SOME_FN);
