@@ -6,7 +6,7 @@ use jni_dynamic::errors::ErrorKind;
 use jni_dynamic::objects::{JClass, JObject, JString, JMethodID, JValue, JStaticFieldID, GlobalRef};
 use jni_dynamic::strings::JNIStr;
 
-use crate::{args, args_v, java_static_method};
+use crate::{args, args_v, call, java_static_method};
 use crate::events::ScriptEvent;
 use crate::game::vehicle::Vehicle;
 use crate::jni::{JavaObject, JavaValue};
@@ -38,10 +38,19 @@ pub(crate) fn get_last_exception(env: &JNIEnv) -> String {
         .unwrap())
 }
 
+static mut LOADER: Option<GlobalRef> = None;
+
+fn load_class<'a>(env: &'a JNIEnv, name: &str) -> JClass<'a> {
+    let name = name.to_java_value(&env);
+    let loader = unsafe { LOADER.as_ref().unwrap() };
+    call!(env, env.call_method(loader.as_obj(), "loadClass", "(Ljava/lang/String;Z)Ljava/lang/Class;", args![name, true]))
+        .l().unwrap().into()
+}
+
 lazy_static! {
     static ref RUNTIME: GlobalRef = {
         let env = attach_thread();
-        let cls = env.find_class("mp/evolution/runtime/Runtime").unwrap();
+        let cls = load_class(&env, "mp.evolution.runtime.Runtime");
         let runtime = env.get_static_field_unchecked_fast(cls, **INSTANCE, JavaType::Object(String::new()))
             .unwrap().l().unwrap();
         env.new_global_ref(runtime).unwrap()
@@ -53,7 +62,7 @@ macro_rules! class_id {
         lazy_static! {
             static ref $name: GlobalRef = {
                 let env = attach_thread();
-                let cls = env.find_class($cls).unwrap();
+                let cls = load_class(&env, $cls);
                 env.new_global_ref(*cls).unwrap()
             };
         }
@@ -65,7 +74,7 @@ macro_rules! static_field_id {
         lazy_static! {
             static ref $name: ThreadSafe<JStaticFieldID<'static>> = {
                 let env = attach_thread();
-                let cls = env.find_class($cls).unwrap();
+                let cls = load_class(&env, $cls);
                 ThreadSafe::new(env.get_static_field_id(cls, $f_name, $sig).unwrap())
             };
         }
@@ -77,23 +86,23 @@ macro_rules! method_id {
         lazy_static! {
             static ref $name: ThreadSafe<JMethodID<'static>> = {
                 let env = attach_thread();
-                let cls = env.find_class($cls).unwrap();
+                let cls = load_class(&env, $cls);
                 ThreadSafe::new(env.get_method_id(cls, $fn_name, $sig).unwrap())
             };
         }
     };
 }
 
-class_id!(KEY_EVENT, "mp/evolution/script/event/ScriptEventKeyboardKey");
-class_id!(CHAR_EVENT, "mp/evolution/script/event/ScriptEventKeyboardChar");
+class_id!(KEY_EVENT, "mp.evolution.script.event.ScriptEventKeyboardKey");
+class_id!(CHAR_EVENT, "mp.evolution.script.event.ScriptEventKeyboardChar");
 
-static_field_id!(INSTANCE, "mp/evolution/runtime/Runtime", "INSTANCE", "Lmp/evolution/runtime/Runtime;");
+static_field_id!(INSTANCE, "mp.evolution.runtime.Runtime", "INSTANCE", "Lmp/evolution/runtime/Runtime;");
 
-method_id!(SCRIPT_FRAME, "mp/evolution/runtime/Runtime", "frame", "()V");
-method_id!(SCRIPT_EVENT, "mp/evolution/runtime/Runtime", "event", "(Lmp/evolution/script/event/ScriptEvent;)V");
-method_id!(HANDLED_HANDLE, "mp/evolution/invoke/Handled", "handle", "()I");
-method_id!(NEW_KEY_EVENT, "mp/evolution/script/event/ScriptEventKeyboardKey", "<init>", "(ISBZZZZZZ)V");
-method_id!(NEW_CHAR_EVENT, "mp/evolution/script/event/ScriptEventKeyboardChar", "<init>", "(Ljava/lang/String;)V");
+method_id!(SCRIPT_FRAME, "mp.evolution.runtime.Runtime", "frame", "()V");
+method_id!(SCRIPT_EVENT, "mp.evolution.runtime.Runtime", "event", "(Lmp/evolution/script/event/ScriptEvent;)V");
+method_id!(HANDLED_HANDLE, "mp.evolution.invoke.Handled", "handle", "()I");
+method_id!(NEW_KEY_EVENT, "mp.evolution.script.event.ScriptEventKeyboardKey", "<init>", "(ISBZZZZZZ)V");
+method_id!(NEW_CHAR_EVENT, "mp.evolution.script.event.ScriptEventKeyboardChar", "<init>", "(Ljava/lang/String;)V");
 
 pub(crate) fn start(vm: Arc<JavaVM>) {
     unsafe { crate::jni::set_vm(vm); };
@@ -103,29 +112,37 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
     info!("setting user.dir");
 
     set_system_property("user.dir", &launcher_dir().display().to_string());
+    set_system_property("java.class.path", &LIBS.join(";"));
 
-    env.set_static_field("java/lang/ClassLoader", "sys_paths", "[Ljava/lang/String;", JObject::null()).unwrap();
-    let fs_holder_class = env.find_class("java/nio/file/FileSystems$DefaultFileSystemHolder").unwrap();
-    let fs = env.call_static_method(fs_holder_class, "defaultFileSystem", "()Ljava/nio/file/FileSystem;", &[])
-        .unwrap().l().unwrap();
-    env.set_static_field("java/nio/file/FileSystems$DefaultFileSystemHolder", "defaultFileSystem", "Ljava/nio/file/FileSystem;", fs)
-        .unwrap();
+    call!(env, env.call_static_method("jdk/internal/util/StaticProperty", "<clinit>", "()V", &[]));
+    call!(env, env.call_static_method("jdk/internal/loader/NativeLibraries$LibraryPaths", "<clinit>", "()V", &[]));
+
+    let dir = launcher_dir().display().to_string().to_java_value(&env);
+
+    let nio_fs_class = call!(env, env.find_class("java/nio/file/FileSystems$DefaultFileSystemHolder"));
+    let def_nio_fs = call!(env, env.get_static_field(nio_fs_class, "defaultFileSystem", "Ljava/nio/file/FileSystem;")).l().unwrap();
+    call!(env, env.set_field(def_nio_fs, "defaultDirectory", "Ljava/lang/String;", dir));
+    let file_class = call!(env, env.find_class("java/io/File"));
+    let def_io_fs = call!(env, env.get_static_field(file_class, "fs", "Ljava/io/FileSystem;")).l().unwrap();
+    let normalized_dir = call!(env, env.call_method(def_io_fs, "normalize", "(Ljava/lang/String;)Ljava/lang/String;", &[dir]));
+    call!(env, env.set_field(def_io_fs, "userDir", "Ljava/lang/String;", normalized_dir));
+    call!(env, env.call_static_method("java/io/FilePermission", "<clinit>", "()V", &[]));
 
     let thread_class = env.find_class("java/lang/Thread").unwrap();
 
-    let current_thread = env.call_static_method(thread_class, "currentThread", "()Ljava/lang/Thread;", &[])
-        .unwrap().l().unwrap();
+    let current_thread = call!(env, env.call_static_method(thread_class, "currentThread", "()Ljava/lang/Thread;", &[])).l().unwrap();
 
     let thread_name = "game".to_java_object(&env);
     env.call_method(current_thread, "setName", "(Ljava/lang/String;)V", args![thread_name])
         .expect("Unable to set game thread name");
 
-    let system_loader = env.call_static_method("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;", &[])
-        .unwrap().l().unwrap();
+    let system_loader = call!(env, env.call_static_method("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;", &[])).l().unwrap();
+    let urls = call!(env, env.new_object_array(0, "java/net/URL", JObject::null()));
+    let loader = call!(env, env.new_object("java/net/URLClassLoader", "([Ljava/net/URL;Ljava/lang/ClassLoader;)V", args![JObject::from(urls), system_loader]));
 
-    env.call_method(current_thread, "setContextClassLoader", "(Ljava/lang/ClassLoader;)V", args![system_loader]).unwrap();
-
-    let ucp = env.get_field(system_loader, "ucp", "Lsun/misc/URLClassPath;").unwrap().l().unwrap();
+    unsafe {
+        LOADER = Some(env.new_global_ref(loader).unwrap());
+    }
 
     let bin_dir = launcher_dir().join("bin");
 
@@ -142,17 +159,18 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         let file = env.new_object("java/io/File", "(Ljava/lang/String;)V", args![path]).unwrap();
         let uri = env.call_method(file, "toURI", "()Ljava/net/URI;", &[]).unwrap().l().unwrap();
         let url = env.call_method(uri, "toURL", "()Ljava/net/URL;", &[]).unwrap().l().unwrap();
-        env.call_method(ucp, "addURL", "(Ljava/net/URL;)V", args![url]).unwrap();
+        env.call_method(loader, "addURL", "(Ljava/net/URL;)V", args![url]).unwrap();
     }
 
     macro_rules! natives {
         ($env:expr,$class_name:literal,$($native:expr),*) => {{
-            let class = match env.find_class($class_name) {
+            let class = load_class(&env, $class_name);
+            /*let class = match env.find_class($class_name) {
                 Err(e) if matches!(e.kind(), ErrorKind::JavaException) => {
                     panic!("Unable to find class: {}", get_last_exception(&$env))
                 },
                 other => other.expect("Unable to find class")
-            };
+            };*/
             $env.register_natives(class, vec![$($native),*]).unwrap();
         }};
     }
@@ -185,24 +203,24 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         std::process::id() as _
     }
 
-    natives!(env, "mp/evolution/invoke/NativeArgs",
+    natives!(env, "mp.evolution.invoke.NativeArgs",
         NativeMethod::new("getStringUTFChars", "(Ljava/lang/String;)J", get_string_utf_chars as _)
     );
-    natives!(env, "mp/evolution/invoke/NativeResult",
+    natives!(env, "mp.evolution.invoke.NativeResult",
         NativeMethod::new("getStringFromUTFChars", "(J)Ljava/lang/String;", get_string_from_utf_chars as _)
     );
-    natives!(env, "mp/evolution/invoke/Native",
+    natives!(env, "mp.evolution.invoke.Native",
         NativeMethod::new("invoke", "(JJIJ)V", invoke as _)
     );
-    natives!(env, "mp/evolution/script/Script",
+    natives!(env, "mp.evolution.script.Script",
         //NativeMethod::new("yield", "(J)V", wait as _),
         NativeMethod::new("propagate", "(Lmp/evolution/script/event/ScriptEvent;)V", propagate as _)
     );
-    natives!(env, "mp/evolution/script/ScriptPrintStream",
+    natives!(env, "mp.evolution.script.ScriptPrintStream",
         NativeMethod::new("info", "(Ljava/lang/String;)V", info as _),
         NativeMethod::new("error", "(Ljava/lang/String;)V", error as _)
     );
-    natives!(env, "mp/evolution/game/entity/pool/Pool",
+    natives!(env, "mp.evolution.game.entity.pool.Pool",
         NativeMethod::new("isGlobalFull", "()Z", crate::native::pool::is_global_full as _),
         NativeMethod::new("requestHandle", "(J)I", crate::native::pool::request_handle as _),
         NativeMethod::new("getPosition", "(JJ)J", crate::native::pool::get_entity_pos as _)
@@ -233,7 +251,7 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         })
     }
 
-    natives!(env, "mp/evolution/game/entity/vehicle/Vehicle",
+    natives!(env, "mp.evolution.game.entity.vehicle.Vehicle",
         g!(Vehicle, u32, "getLightFlags", "(I)I", get_light_flags),
         s!(Vehicle, u32, "setLightFlags", "(II)V", set_light_flags),
         g!(Vehicle, bool, "isEngineStarting", "(I)Z", is_engine_starting),
@@ -274,16 +292,19 @@ pub(crate) fn start(vm: Arc<JavaVM>) {
         g!(Vehicle, f32, "getSteeringScale", "(I)F", get_steering_scale),
         s!(Vehicle, f32, "setSteeringScale", "(IF)V", set_steering_scale)
     );
-    pool!(env, crate::game::vehicle::get_pool(), "mp/evolution/game/entity/vehicle/VehiclePool");
-    pool!(env, crate::game::prop::get_pool(), "mp/evolution/game/entity/prop/PropPool");
-    pool!(env, crate::game::ped::get_pool(), "mp/evolution/game/entity/ped/PedPool");
+    pool!(env, crate::game::vehicle::get_pool(), "mp.evolution.game.entity.vehicle.VehiclePool");
+    pool!(env, crate::game::prop::get_pool(), "mp.evolution.game.entity.prop.PropPool");
+    pool!(env, crate::game::ped::get_pool(), "mp.evolution.game.entity.ped.PedPool");
 
-    natives!(env, "mp/evolution/runtime/Runtime",
+    natives!(env, "mp.evolution.runtime.Runtime",
         NativeMethod::new("restart", "()V", restart as _),
-        NativeMethod::new("pid", "()I", pid as _)
+        NativeMethod::new("pid", "()I", pid as _),
+        NativeMethod::new("unlockModule", "(Ljava/lang/Module;Ljava/lang/String;)V", unlock_module as _)
     );
 
     lazy_static::initialize(&RUNTIME);
+
+    warn!("Runtime thread exited!");
 }
 
 pub struct ScriptJava {}
@@ -341,6 +362,12 @@ impl Script for ScriptJava {
                 .expect("error calling `event`");
         }
     }
+}
+
+extern "C" fn unlock_module(_: &JNIEnv, _class: JClass, module: JObject, package: JString) {
+    let env = attach_thread();
+    call!(env, env.call_method(module, "implAddExportsToAllUnnamed", "(Ljava/lang/String;)V", args![*package]));
+    call!(env, env.call_method(module, "implAddOpensToAllUnnamed", "(Ljava/lang/String;)V", args![*package]));
 }
 
 unsafe extern fn get_string_utf_chars(_env: &JNIEnv, _class: JClass, value: JString) -> *const i8 {

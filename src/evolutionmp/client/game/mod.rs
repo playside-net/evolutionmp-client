@@ -177,6 +177,7 @@ fn done_loading_game() {
         .version(JNIVersion::V8)
         .option(&format!("-XX:ErrorFile={}\\hs_err_pid_%%p.log", launcher_dir().display()))
         .option(&format!("-Duser.dir={}", launcher_dir().display()))
+        .option("--enable-preview")
         .build().expect("failed to build jvm args");
     info!("Initializing VM... working dir is {:?}", std::env::current_dir());
 

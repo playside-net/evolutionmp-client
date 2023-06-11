@@ -16,7 +16,7 @@ use winapi::um::winbase::{
 };
 use winapi::um::winnt::{EXCEPTION_POINTERS, EXCEPTION_RECORD, LANG_NEUTRAL, LONG, LPCSTR, LPWSTR, MAKELANGID, MEMORY_BASIC_INFORMATION, STATUS_ACCESS_VIOLATION, STATUS_IN_PAGE_ERROR, SUBLANG_DEFAULT};
 use winapi::um::winuser::{GWLP_WNDPROC, IsWindow, IsWindowVisible, SetWindowLongPtrW, WNDPROC, HOOKPROC};
-use winapi::vc::excpt::EXCEPTION_CONTINUE_EXECUTION;
+use winapi::vc::excpt::{EXCEPTION_CONTINUE_EXECUTION, EXCEPTION_CONTINUE_SEARCH};
 use wio::wide::FromWide;
 
 use game::GameState;
@@ -117,6 +117,9 @@ extern "system" fn except(info: *mut EXCEPTION_POINTERS) -> LONG {
 
         if code == 0x80000003 {
             return EXCEPTION_CONTINUE_EXECUTION;
+        }
+        if code == 0xE06D7363 {
+            return EXCEPTION_CONTINUE_SEARCH;
         }
 
         let ntdll = LoadLibraryA(c_str!("ntdll.dll").as_ptr());

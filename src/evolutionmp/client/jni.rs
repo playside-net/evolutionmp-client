@@ -28,15 +28,67 @@ pub(crate) fn attach_thread() -> AttachGuard<'static> {
     }
 }
 
+pub(crate) fn get_env() -> JNIEnv<'static> {
+    unsafe {
+        VM.as_ref().expect("VM not initialized").get_env().expect("env missing")
+    }
+}
+
+#[macro_export]
+macro_rules! call {
+    ($env:expr,$r:expr) => {
+        match $r {
+            Err(e) if matches!(*e.kind(), jni_dynamic::errors::ErrorKind::JavaException) => {
+                let env = $env;
+                let exception = env.exception_occurred().unwrap();
+                env.exception_clear().unwrap();
+                let string_writer = env.new_object("java/io/StringWriter", "()V", &[]).unwrap();
+                let print_writer = env.new_object("java/io/PrintWriter", "(Ljava/io/Writer;)V", args![
+                    string_writer
+                ]).unwrap();
+                env.call_method(*exception, "printStackTrace", "(Ljava/io/PrintWriter;)V", args![
+                    print_writer
+                ]).unwrap();
+                let reason: jni_dynamic::objects::JString = env.call_method(string_writer, "toString", "()Ljava/lang/String;", &[])
+                    .unwrap().l().unwrap().into();
+                let reason = crate::jni::to_string_java(&env, *reason);
+                panic!("{}", reason)
+            }
+            other => {
+                other.expect("Error during checked call")
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! java_enum {
+    ($name:ident) => {
+        impl $crate::jni::JavaValue<$name> for $name {
+            fn get_signature() -> String {
+                String::from("I")
+            }
+
+            fn from_java_value(_env: &jni_dynamic::JNIEnv, _value: jni_dynamic::objects::JValue) -> $name {
+                unimplemented!()
+            }
+
+            fn to_java_value<'a>(&self, __env: &'a jni_dynamic::JNIEnv<'a>) -> jni_dynamic::objects::JValue<'a> {
+                jni_dynamic::objects::JValue::Int(*self as u32 as i32)
+            }
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! java_static_method {
-    ($name:ident, $class:literal, $java_name:literal, fn($($arg:ident: $arg_ty:ty),*)) => {
-        java_static_method!($name, $class, $java_name, fn($($arg: $arg_ty),*) -> ());
+    ($name:ident, $class:literal, $java_name:literal, fn $(<$( $lt:lifetime ),+>)? ($($arg:ident: $arg_ty:ty),*)) => {
+        java_static_method!($name, $class, $java_name, fn $(<$( $lt ),+>)? ($($arg: $arg_ty),*) -> ());
     };
-    ($name:ident, $class:literal, $java_name:literal, fn($($arg:ident: $arg_ty:ty),*) -> $ret:ty) => {
-        pub fn $name($($arg: $arg_ty),*) -> $ret {
+    ($name:ident, $class:literal, $java_name:literal, fn $(<$( $lt:lifetime ),+>)? ($($arg:ident: $arg_ty:ty),*) -> $ret:ty) => {
+        pub fn $name $(<$( $lt ),+>)?($($arg: $arg_ty),*) -> $ret {
             let env = $crate::jni::attach_thread();
-            let class = env.find_class($class).expect(concat!("Unable to find class ", $class));
+            let class = crate::call!(env, env.find_class($class));
             let args = &[
                 $($arg.to_java_value(&env)),*
             ];
@@ -52,7 +104,7 @@ macro_rules! java_static_method {
                 };
             }
             let result = match env.call_static_method(class, $java_name, &**SIGNATURE, args) {
-                Err(e) if matches!(*e.kind(), ErrorKind::JavaException) => {
+                Err(e) if matches!(*e.kind(), jni_dynamic::errors::ErrorKind::JavaException) => {
                     let reason = crate::runtime::get_last_exception(&env);
                     panic!(concat!("Error calling ", $class, ".", $java_name, "{}: {}"), &**SIGNATURE, reason);
                 },
@@ -127,89 +179,33 @@ impl<S> JavaObject<String> for S where S: AsRef<str> {
     }
 }
 
-impl JavaValue<i32> for i32 {
-    fn get_signature() -> String {
-        String::from("I")
-    }
+macro_rules! jni_primitive {
+    ($ty: ty, $sig: literal, $method: ident, $val: ident, $desc: literal) => {
+        jni_primitive!($ty, $sig, $method, $val, $desc, as $ty);
+    };
+    ($ty: ty, $sig: literal, $method: ident, $val: ident, $desc: literal, $($cast:tt)*) => {
+        impl JavaValue<$ty> for $ty {
+            fn get_signature() -> String {
+                String::from($sig)
+            }
 
-    fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> i32 {
-        value.i().expect("java value is not an integer") as _
-    }
+            fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> $ty {
+                value.$method().expect(concat!("java value is not ", $desc)) as _
+            }
 
-    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
-        JValue::Int(*self)
-    }
+            fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
+                JValue::$val(*self $($cast)*)
+            }
+        }
+    };
 }
 
-impl JavaValue<u32> for u32 {
-    fn get_signature() -> String {
-        String::from("I")
-    }
-
-    fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> u32 {
-        value.i().expect("java value is not an integer") as _
-    }
-
-    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
-        JValue::Int(*self as i32)
-    }
-}
-
-impl JavaValue<usize> for usize {
-    fn get_signature() -> String {
-        String::from("I")
-    }
-
-    fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> usize {
-        value.i().expect("java value is not an integer") as _
-    }
-
-    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
-        JValue::Int(*self as i64 as i32)
-    }
-}
-
-impl JavaValue<f32> for f32 {
-    fn get_signature() -> String {
-        String::from("F")
-    }
-
-    fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> f32 {
-        value.f().expect("java value is not a float") as _
-    }
-
-    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
-        JValue::Float(*self)
-    }
-}
-
-impl JavaValue<f64> for f64 {
-    fn get_signature() -> String {
-        String::from("D")
-    }
-
-    fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> f64 {
-        value.d().expect("java value is not a double") as _
-    }
-
-    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
-        JValue::Double(*self)
-    }
-}
-
-impl JavaValue<bool> for bool {
-    fn get_signature() -> String {
-        String::from("Z")
-    }
-
-    fn from_java_value<'a>(_env: &'a JNIEnv<'a>, value: JValue<'a>) -> bool {
-        value.z().expect("java value is not a boolean") as _
-    }
-
-    fn to_java_value<'a>(&self, _env: &'a JNIEnv<'a>) -> JValue<'a> {
-        JValue::Bool(*self as u8)
-    }
-}
+jni_primitive!(i32, "I", i, Int, "an integer");
+jni_primitive!(u32, "I", i, Int, "an integer", as i32);
+jni_primitive!(usize, "I", i, Int, "an integer", as i64 as i32);
+jni_primitive!(f32, "F", f, Float, "a float");
+jni_primitive!(f64, "D", d, Double, "a double");
+jni_primitive!(bool, "Z", z, Bool, "a boolean", as u8);
 
 impl JavaValue<()> for () {
     fn get_signature() -> String {
@@ -263,8 +259,7 @@ impl<T, R> JavaObject<Vec<R>> for [T] where T: JavaObject<R> {
     }
 
     fn to_java_object<'a>(&self, env: &JNIEnv<'a>) -> JObject<'a> {
-        let arr = env.new_object_array(self.len() as _, T::get_class_name(), JObject::null())
-            .expect("java array creation failed");
+        let arr = call!(env, env.new_object_array(self.len() as _, T::get_class_name(), JObject::null()));
         for (i, e) in self.iter().enumerate() {
             env.set_object_array_element(arr, i as _, e.to_java_object(env))
                 .expect(&format!("unable to set array element at index {}", i));
@@ -313,7 +308,7 @@ impl JavaObject<URL> for URL {
     }
 
     fn from_java_object<'a>(env: &'a JNIEnv<'a>, obj: JObject<'a>) -> URL {
-        let inner = String::from_java_value(env, env.call_method(obj, "toString", "()Ljava/lang/String;", &[]).unwrap());
+        let inner = String::from_java_value(env, call!(env, env.call_method(obj, "toString", "()Ljava/lang/String;", &[])));
         URL {
             inner
         }
@@ -321,7 +316,7 @@ impl JavaObject<URL> for URL {
 
     fn to_java_object<'a>(&self, env: &JNIEnv<'a>) -> JObject<'a> {
         let inner = self.inner.to_java_object(env);
-        env.new_object(Self::get_class_name(), "(Ljava/lang/String;)V", args![inner]).unwrap()
+        call!(env, env.new_object(Self::get_class_name(), "(Ljava/lang/String;)V", args![inner]))
     }
 }
 
