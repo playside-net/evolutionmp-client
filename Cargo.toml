@@ -2,12 +2,12 @@
 name = "evolutionmp-client"
 version = "0.1.0"
 authors = ["Radviger"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-detour = { git = "https://github.com/Radviger/detour-rs" }
+detour = { git = "https://github.com/Radviger/detour-rs", default-features = false }
 winapi = { git = "https://github.com/Radviger/winapi-rs", branch = "0.3", features = ["winuser", "psapi", "excpt", "libloaderapi", "winnt", "tlhelp32", "impl-default", "synchapi", "processthreadsapi", "winbase", "handleapi", "securitybaseapi", "memoryapi", "errhandlingapi", "std", "sysinfoapi", "fibersapi", "winerror", "consoleapi", "minwindef", "windef", "basetsd", "fileapi", "wincon", "d3d11", "d3d11_1", "d3dcommon", "dxgiformat", "dxgi", "ntdef"] }
 winreg = "*"
 serde = "*"

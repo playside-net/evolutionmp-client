@@ -348,8 +348,9 @@ impl NativeGroup {
         self.hashes[index].get()
     }
 
-    pub fn set_hash(&self, index: usize, value: u64) {
-        let hash = unsafe { &mut *(&self.hashes[index] as *const _ as usize as *mut PtrXorU64) };
+    pub fn set_hash(&mut self, index: usize, value: u64) {
+        let ptr = &mut self.hashes[index] as *mut _ as usize as *mut PtrXorU64;
+        let hash = unsafe { &mut *ptr };
         hash.set(value);
     }
 
@@ -374,7 +375,7 @@ impl<'a> Iterator for NativeGroupIterator<'a> {
         if index < self.group.len() {
             self.index += 1;
             let hash = self.group.get_hash(index);
-            self.group.set_hash(index, hash ^ u64::MAX);
+            // self.group.set_hash(index, hash ^ u64::MAX);
             //info!("Native: 0x{:016X}", hash);
             let handler = self.group.handlers[index];
             Some((hash, handler))
